@@ -1,7 +1,7 @@
 // src/pages/Invoices.jsx
 import { useState } from "react";
 import { Card, Badge, AgingBadge } from "../components/Shared.jsx";
-import { STATUS_STYLES } from "../data/masterData.js"; // Correct import path here
+import { STATUS_STYLES } from "../data/masterData.js";
 
 const translations = {
   en: {
