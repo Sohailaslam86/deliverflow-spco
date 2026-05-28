@@ -95,7 +95,7 @@ export default function Login({ onLogin, lang, setLang }) {
           </div>
         </div>
       </div>
-    </div>
+    </div>1
   );
 }
 
