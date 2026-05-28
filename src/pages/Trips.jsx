@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Card, CardTitle, Btn, Input, Select, SuccessMsg } from "../components/Shared.jsx";
-import { DRIVERS_BY_DC, VEHICLES_BY_DC, STORAGE_CONDITIONS, CITIES, genId } from "../data/masterData.js";
+import { DRIVERS_BY_DC, STORAGE_CONDITIONS, CITIES, genId } from "../data/masterData.js";
 
 const VEHICLES_BY_DC = {
   Riyadh:["Dyna 5784","BUS 2632","BUS 2630","BUS 2629","BUS 4295","Bus 4294","BUS 2631","Bus 2633","Dyna 5789","Dyna 5788"],
