@@ -1,7 +1,7 @@
+// src/pages/Invoices.jsx
 import { useState } from "react";
-import { Card, CardTitle, Badge, AgingBadge, Btn } from "../components/Shared.jsx";
+import { Card, CardTitle, Badge, AgingBadge, SectionTitle } from "../components/Shared.jsx";
 
-// Arabic aur English translations
 const translations = {
   en: {
     searchPlaceholder: "Search by Invoice # or Customer...",
@@ -17,12 +17,8 @@ const translations = {
     institution: "Institution",
     dcLocation: "DC Location",
     statusLabel: "Status",
-    aging: "Aging",
     noInvoices: "No invoices found matching your criteria.",
-    details: "Details & History",
-    actions: "Actions",
     changeStatusAdmin: "Change Status (Admin):",
-    customerAddress: "Customer Location / Address",
     dateAdded: "Date Added"
   },
   ar: {
@@ -39,12 +35,8 @@ const translations = {
     institution: "المنشأة / المستشفى",
     dcLocation: "مركز التوزيع",
     statusLabel: "الحالة",
-    aging: "المدة الزمنية",
     noInvoices: "لم يتم العثور على فواتير تطابق البحث.",
-    details: "التفاصيل والسجل",
-    actions: "الإجراءات",
     changeStatusAdmin: "تغيير الحالة (مدير النظام):",
-    customerAddress: "موقع العميل / العنوان",
     dateAdded: "تاريخ الإضافة"
   }
 };
@@ -75,18 +67,20 @@ export default function Invoices({ user, invoices, setInvoices, lang }) {
   });
 
   const updateStatus = (id, newStatus) => {
-    setInvoices(prev => prev.map(i => i.id === id ? { ...i, status: newStatus, updatedAt: new Date().toLocaleString() } : i));
+    setInvoices(prev => prev.map(i => i.id === id ? { ...i, status: newStatus } : i));
   };
 
   return (
-    <div>
+    <div style={{ direction: rtl ? "rtl" : "ltr" }}>
+      <SectionTitle>{rtl ? "إدارة الفواتير" : "Invoice Management"}</SectionTitle>
+      
       <Card style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
         <input
           type="text"
           placeholder={t.searchPlaceholder}
           value={search}
           onChange={e => setSearch(e.target.value)}
-          style={{ flex: 1, padding: "10px 14px", borderRadius: 8, border: "1px solid #cbd5e1", fontSize: 14, direction: rtl ? "rtl" : "ltr" }}
+          style={{ flex: 1, padding: "10px 14px", borderRadius: 8, border: "1px solid #cbd5e1", fontSize: 14 }}
         />
         <select
           value={statusF}
@@ -104,54 +98,55 @@ export default function Invoices({ user, invoices, setInvoices, lang }) {
       </Card>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {filtered.map(inv => {
-          return (
-            <Card key={inv.id} style={{ borderRight: rtl ? `4px solid ${STATUS_STYLES[inv.status]?.c || "#64748b"}` : "none", borderLeft: !rtl ? `4px solid ${STATUS_STYLES[inv.status]?.c || "#64748b"}` : "none" }}>
-              <div onClick={() => setExpanded(expanded === inv.id ? null : inv.id)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", flexWrap: "wrap", gap: 8 }}>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: "#1e293b" }}>{t.invoiceNo}: {inv.id}</div>
-                  <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}><b>{t.customer}:</b> {inv.customer}</div>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <AgingBadge days={2} lang={lang} />
-                  <Badge status={inv.status} lang={lang} />
-                </div>
+        {filtered.map(inv => (
+          <Card key={inv.id} style={{ 
+            borderRight: rtl ? `4px solid ${STATUS_STYLES[inv.status]?.c || "#64748b"}` : "none", 
+            borderLeft: !rtl ? `4px solid ${STATUS_STYLES[inv.status]?.c || "#64748b"}` : "none" 
+          }}>
+            <div onClick={() => setExpanded(expanded === inv.id ? null : inv.id)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", flexWrap: "wrap", gap: 8 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: "#1e293b" }}>{t.invoiceNo}: {inv.id}</div>
+                <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}><b>{t.customer}:</b> {inv.customer}</div>
               </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <AgingBadge days={2} lang={lang} />
+                <Badge status={inv.status} lang={lang} />
+              </div>
+            </div>
 
-              {expanded === inv.id && (
-                <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #e2e8f0", fontSize: 13, color: "#334155" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8, marginBottom: 12 }}>
-                    <div>🏢 <b>{t.institution}:</b> {inv.institution || "SPCO Hospital Center"}</div>
-                    <div>📍 <b>{t.dcLocation}:</b> {inv.dc} DC</div>
-                    <div>📅 <b>{t.dateAdded}:</b> {inv.date || "2026-05-28"}</div>
-                  </div>
-
-                  {user.role === "admin" && (
-                    <div style={{ marginTop: 12, padding: 12, background: "#f8fafc", borderRadius: 8 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: "#64748b", marginBottom: 8 }}>{t.changeStatusAdmin}</div>
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        {Object.entries(STATUS_STYLES).map(([k, v]) => (
-                          <button
-                            key={k}
-                            onClick={() => updateStatus(inv.id, k)}
-                            style={{
-                              padding: "6px 12px", borderRadius: 6,
-                              border: `1px solid ${v.c}`,
-                              background: inv.status === k ? v.bg : "white",
-                              color: v.c, cursor: "pointer", fontSize: 12, fontWeight: 600
-                            }}
-                          >
-                            {v.icon} {rtl && v.lblAr ? v.lblAr : v.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+            {expanded === inv.id && (
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #e2e8f0", fontSize: 13, color: "#334155" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8, marginBottom: 12 }}>
+                  <div>🏢 <b>{t.institution}:</b> {inv.institution || "SPCO Hospital Center"}</div>
+                  <div>📍 <b>{t.dcLocation}:</b> {inv.dc} DC</div>
+                  <div>📅 <b>{t.dateAdded}:</b> {inv.date || "2026-05-28"}</div>
                 </div>
-              )}
-            </Card>
-          );
-        })}
+
+                {user.role === "admin" && (
+                  <div style={{ marginTop: 12, padding: 12, background: "#f8fafc", borderRadius: 8 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "#64748b", marginBottom: 8 }}>{t.changeStatusAdmin}</div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {Object.entries(STATUS_STYLES).map(([k, v]) => (
+                        <button
+                          key={k}
+                          onClick={() => updateStatus(inv.id, k)}
+                          style={{
+                            padding: "6px 12px", borderRadius: 6,
+                            border: `1px solid ${v.c}`,
+                            background: inv.status === k ? v.bg : "white",
+                            color: v.c, cursor: "pointer", fontSize: 12, fontWeight: 600
+                          }}
+                        >
+                          {v.icon} {rtl && v.lblAr ? v.lblAr : v.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
+        ))}
 
         {filtered.length === 0 && (
           <div style={{ textAlign: "center", padding: 40, color: "#94a3b8", fontSize: 14 }}>{t.noInvoices}</div>
