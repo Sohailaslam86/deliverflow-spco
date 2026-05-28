@@ -1,6 +1,7 @@
 // src/pages/Invoices.jsx
 import { useState } from "react";
-import { Card, CardTitle, Badge, AgingBadge, SectionTitle } from "../components/Shared.jsx";
+import { Card, Badge, AgingBadge } from "../components/Shared.jsx";
+import { STATUS_STYLES } from "../data/masterData.js"; // Correct import path here
 
 const translations = {
   en: {
@@ -41,15 +42,6 @@ const translations = {
   }
 };
 
-const STATUS_STYLES = {
-  pending:     { label: "Pending",     lblAr: "قيد الانتظار", icon: "⏳", bg: "#f1f5f9", c: "#475569" },
-  assigned:    { label: "Assigned",    lblAr: "تم التعيين",  icon: "👤", bg: "#e0e7ff", c: "#4338ca" },
-  intransit:   { label: "In Transit",  lblAr: "في الطريق",   icon: "🚚", bg: "#fef3c7", c: "#b45309" },
-  delivered:   { label: "Delivered",   lblAr: "تم التسليم",  icon: "✅", bg: "#d1fae5", c: "#065f46" },
-  outstanding: { label: "Outstanding", lblAr: "معلقة",      icon: "⚠️", bg: "#ffedd5", c: "#c2410c" },
-  failed:      { label: "Failed",      lblAr: "فاشلة",       icon: "❌", bg: "#fee2e2", c: "#b91c1c" }
-};
-
 export default function Invoices({ user, invoices, setInvoices, lang }) {
   const [search, setSearch]   = useState("");
   const [statusF, setStatusF] = useState("all");
@@ -72,7 +64,9 @@ export default function Invoices({ user, invoices, setInvoices, lang }) {
 
   return (
     <div style={{ direction: rtl ? "rtl" : "ltr" }}>
-      <SectionTitle>{rtl ? "إدارة الفواتير" : "Invoice Management"}</SectionTitle>
+      <h2 style={{ fontSize: 16, fontWeight: 700, color: "#1e293b", marginBottom: 14, marginTop: 6 }}>
+        {rtl ? "إدارة الفواتير" : "Invoice Management"}
+      </h2>
       
       <Card style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
         <input
