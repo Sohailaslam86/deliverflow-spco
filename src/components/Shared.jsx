@@ -1,5 +1,12 @@
 // src/components/Shared.jsx
-import { STATUS_STYLES } from "../data/masterData.js";
+const STATUS_STYLES = {
+  pending:     { label: "Pending",     lblAr: "قيد الانتظار", icon: "⏳", bg: "#f1f5f9", c: "#475569" },
+  assigned:    { label: "Assigned",    lblAr: "تم التعيين",  icon: "👤", bg: "#e0e7ff", c: "#4338ca" },
+  intransit:   { label: "In Transit",  lblAr: "في الطريق",   icon: "🚚", bg: "#fef3c7", c: "#b45309" },
+  delivered:   { label: "Delivered",   lblAr: "تم التسليم",  icon: "✅", bg: "#d1fae5", c: "#065f46" },
+  outstanding: { label: "Outstanding", lblAr: "معلقة",      icon: "⚠️", bg: "#ffedd5", c: "#c2410c" },
+  failed:      { label: "Failed",      lblAr: "فاشلة",       icon: "❌", bg: "#fee2e2", c: "#b91c1c" }
+};
 
 export function Badge({ status, lang }) {
   const s = STATUS_STYLES[status] || STATUS_STYLES.pending;
@@ -82,7 +89,7 @@ export function AgingBadge({ days, lang }) {
     ? { bg: "#d1fae5", c: "#065f46", label: isAr ? "جديد" : "Fresh" }
     : days <= 3
     ? { bg: "#fef3c7", c: "#92400e", label: isAr ? "قيد الانتظار" : "Aging" }
-    : { bg: "#fee2e2", c: "#991b1b", label: isAr ? `${days} أيام — حرج` : `${days}d — Critical` };
+    : { bg: "#fee2e2", c: "#991b1b", label: isAr ? `${days} أيام` : `${days}d — Critical` };
   return (
     <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px",
       borderRadius: 99, background: color.bg, color: color.c }}>
