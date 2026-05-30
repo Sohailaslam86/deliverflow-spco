@@ -45,10 +45,10 @@ export default function App() {
   };
 
   const pages = {
-    dashboard:    <Dashboard  {...props} />,
+    dashboard:    <Dashboard  {...props} users={users} />,
     invoices:     <Invoices   {...props} />,
     upload:       <Upload     {...props} />,
-    assign:       <Assign     {...props} />,
+    assign:       <Assign     {...props} users={users} />,
     trips:        <Trips      {...props} />,
     users:        <Users      {...props} />,
     masterdata:   <MasterData {...props} />,
