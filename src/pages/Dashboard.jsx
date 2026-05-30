@@ -1,506 +1,281 @@
-// src/pages/Dashboard.jsx - v2 Complete with Arabic
 import { useState } from "react";
-import { Card, CardTitle, StatCard, Badge, AgingBadge, SectionTitle, Btn, Modal, Select, Textarea } from "../components/Shared.jsx";
-import { daysSince, ALERT_DISMISS_REASONS } from "../data/masterData.js";
+import { Card, CardTitle, StatCard } from "../components/Shared.jsx";
 
 const T = {
   en: {
-    dashboard: "Dashboard",
-    totalInvoices: "Total Invoices",
-    delivered: "Delivered",
-    pending: "Pending",
-    assigned: "Assigned",
-    failed: "Failed",
-    outstanding: "Outstanding",
-    inTransit: "In Transit",
-    activeVehicles: "Active Vehicles",
-    activeDrivers: "Active Drivers",
-    deliveryRate: "Delivery Rate",
-    vehicleUtil: "Vehicle Utilization",
-    driverUtil: "Driver Utilization",
-    dcOverview: "Distribution Center Overview",
-    overallPerformance: "Overall Performance — All DCs",
-    systemAlerts: "System Alerts & Notifications",
-    alertCategories: { all:"All", vehicle:"Vehicle", driver:"Driver", delivery:"Delivery", maintenance:"Maintenance", access:"Access" },
-    alertTypes: { vehicle:"🚗 Vehicle", driver:"👤 Driver", delivery:"📦 Delivery", maintenance:"🔧 Maintenance", access:"🔑 Access" },
-    resolve: "Resolve",
-    dismiss: "Action",
-    tentativeDate: "Tentative Closure Date",
-    reason: "Reason",
-    submitAction: "Submit Action",
-    cancel: "Cancel",
-    daysAgo: "days ago",
-    noAction: "No action taken",
-    agingReport: "Invoice Aging Report",
-    fresh: "Fresh",
-    aging: "Aging",
-    critical: "Critical",
-    todaySummary: "Today's Summary",
-    institution: "Institution Breakdown",
-    government: "Government",
-    private: "Private",
-    howCalc: "How calculated",
-    deliveryRateFormula: "Delivered ÷ Total × 100",
-    vehicleUtilFormula: "Active Vehicles ÷ Total Vehicles × 100",
-    driverUtilFormula: "Assigned Drivers ÷ Total Drivers × 100",
-    inMaint: "in maintenance",
-    onLeave: "on leave",
+    welcome:"Welcome back", adminTitle:"Operations Overview — All Distribution Centers",
+    planningTitle:"Upload & Invoice Overview", todaySummary:"Today's Summary",
+    totalUploaded:"Total Invoices Uploaded", totalBatches:"Total Batches Posted",
+    byDC:"Distribution Center Breakdown", byInstitution:"Institution Breakdown",
+    govt:"Government", priv:"Private", pending:"Pending",
+    delivered:"Delivered", assigned:"Assigned", failed:"Failed",
+    outstanding:"Outstanding", inTransit:"In Transit", scheduled:"Scheduled",
+    total:"Total", deliveryRate:"Delivery Rate", vehicleUtil:"Vehicle Utilization",
+    driverUtil:"Driver Utilization", activeVeh:"Active Vehicles",
+    totalVeh:"Total Vehicles", assignedDrv:"Assigned Drivers",
+    totalDrv:"Total Drivers", alerts:"Active Alerts",
+    riyadhDC:"Riyadh Distribution Center", jeddahDC:"Jeddah Distribution Center",
+    dammamDC:"Dammam Distribution Center", allDC:"All Distribution Centers",
+    howCalc:"How calculated", uploadedBy:"Uploaded by", postedAt:"Posted at",
+    invoices:"invoices", batches:"batches today"
   },
   ar: {
-    dashboard: "لوحة التحكم",
-    totalInvoices: "إجمالي الفواتير",
-    delivered: "تم التسليم",
-    pending: "معلق",
-    assigned: "تم التعيين",
-    failed: "فشل",
-    outstanding: "متأخر",
-    inTransit: "في الطريق",
-    activeVehicles: "المركبات النشطة",
-    activeDrivers: "السائقون النشطون",
-    deliveryRate: "معدل التسليم",
-    vehicleUtil: "استخدام المركبات",
-    driverUtil: "استخدام السائقين",
-    dcOverview: "نظرة عامة على مراكز التوزيع",
-    overallPerformance: "الأداء الإجمالي — جميع المستودعات",
-    systemAlerts: "تنبيهات النظام والإشعارات",
-    alertCategories: { all:"الكل", vehicle:"مركبة", driver:"سائق", delivery:"توصيل", maintenance:"صيانة", access:"وصول" },
-    alertTypes: { vehicle:"🚗 مركبة", driver:"👤 سائق", delivery:"📦 توصيل", maintenance:"🔧 صيانة", access:"🔑 وصول" },
-    resolve: "حل",
-    dismiss: "إجراء",
-    tentativeDate: "تاريخ الإغلاق المتوقع",
-    reason: "السبب",
-    submitAction: "تأكيد الإجراء",
-    cancel: "إلغاء",
-    daysAgo: "أيام مضت",
-    noAction: "لم يتخذ إجراء",
-    agingReport: "تقرير أعمار الفواتير",
-    fresh: "جديد",
-    aging: "متأخر",
-    critical: "حرج",
-    todaySummary: "ملخص اليوم",
-    institution: "تصنيف حسب المؤسسة",
-    government: "حكومي",
-    private: "خاص",
-    howCalc: "طريقة الحساب",
-    deliveryRateFormula: "المسلّمة ÷ الإجمالي × 100",
-    vehicleUtilFormula: "المركبات النشطة ÷ إجمالي المركبات × 100",
-    driverUtilFormula: "السائقون المعيّنون ÷ إجمالي السائقين × 100",
-    inMaint: "في الصيانة",
-    onLeave: "في إجازة",
+    welcome:"\u0645\u0631\u062d\u0628\u0627\u064b \u0628\u0639\u0648\u062f\u062a\u0643",
+    adminTitle:"\u0646\u0638\u0631\u0629 \u0639\u0627\u0645\u0629 \u0639\u0644\u0649 \u0627\u0644\u0639\u0645\u0644\u064a\u0627\u062a",
+    planningTitle:"\u0646\u0638\u0631\u0629 \u0639\u0627\u0645\u0629 \u0639\u0644\u0649 \u0627\u0644\u0631\u0641\u0639 \u0648\u0627\u0644\u0641\u0648\u0627\u062a\u064a\u0631",
+    todaySummary:"\u0645\u0644\u062e\u0635 \u0627\u0644\u064a\u0648\u0645",
+    totalUploaded:"\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0641\u0648\u0627\u062a\u064a\u0631 \u0627\u0644\u0645\u0631\u0641\u0648\u0639\u0629",
+    totalBatches:"\u0625\u062c\u0645\u0627\u0644\u064a \u062f\u0641\u0639\u0627\u062a \u0627\u0644\u062a\u0631\u062d\u064a\u0644",
+    byDC:"\u062a\u0648\u0632\u064a\u0639 \u0645\u0631\u0627\u0643\u0632 \u0627\u0644\u062a\u0648\u0632\u064a\u0639",
+    byInstitution:"\u062a\u0648\u0632\u064a\u0639 \u0627\u0644\u0645\u0624\u0633\u0633\u0627\u062a",
+    govt:"\u062d\u0643\u0648\u0645\u064a", priv:"\u062e\u0627\u0635",
+    pending:"\u0645\u0639\u0644\u0642\u0629", delivered:"\u0645\u0633\u0644\u0645\u0629",
+    assigned:"\u0645\u062e\u0635\u0635\u0629", failed:"\u0641\u0627\u0634\u0644\u0629",
+    outstanding:"\u0645\u062a\u0623\u062e\u0631\u0629", inTransit:"\u0641\u064a \u0627\u0644\u0637\u0631\u064a\u0642",
+    scheduled:"\u0645\u062c\u062f\u0648\u0644\u0629", total:"\u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a",
+    deliveryRate:"\u0645\u0639\u062f\u0644 \u0627\u0644\u062a\u0633\u0644\u064a\u0645",
+    vehicleUtil:"\u0627\u0633\u062a\u062e\u062f\u0627\u0645 \u0627\u0644\u0645\u0631\u0643\u0628\u0627\u062a",
+    driverUtil:"\u0627\u0633\u062a\u062e\u062f\u0627\u0645 \u0627\u0644\u0633\u0627\u0626\u0642\u064a\u0646",
+    activeVeh:"\u0645\u0631\u0643\u0628\u0627\u062a \u0646\u0634\u0637\u0629",
+    totalVeh:"\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0645\u0631\u0643\u0628\u0627\u062a",
+    assignedDrv:"\u0633\u0627\u0626\u0642\u0648\u0646 \u0645\u062e\u0635\u0635\u0648\u0646",
+    totalDrv:"\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0633\u0627\u0626\u0642\u064a\u0646",
+    alerts:"\u062a\u0646\u0628\u064a\u0647\u0627\u062a \u0646\u0634\u0637\u0629",
+    riyadhDC:"\u0645\u0631\u0643\u0632 \u062a\u0648\u0632\u064a\u0639 \u0627\u0644\u0631\u064a\u0627\u0636",
+    jeddahDC:"\u0645\u0631\u0643\u0632 \u062a\u0648\u0632\u064a\u0639 \u062c\u062f\u0629",
+    dammamDC:"\u0645\u0631\u0643\u0632 \u062a\u0648\u0632\u064a\u0639 \u0627\u0644\u062f\u0645\u0627\u0645",
+    allDC:"\u062c\u0645\u064a\u0639 \u0645\u0631\u0627\u0643\u0632 \u0627\u0644\u062a\u0648\u0632\u064a\u0639",
+    howCalc:"\u0637\u0631\u064a\u0642\u0629 \u0627\u0644\u062d\u0633\u0627\u0628",
+    uploadedBy:"\u0631\u0641\u0639 \u0628\u0648\u0627\u0633\u0637\u0629",
+    postedAt:"\u0648\u0642\u062a \u0627\u0644\u062a\u0631\u062d\u064a\u0644",
+    invoices:"\u0641\u0648\u0627\u062a\u064a\u0631", batches:"\u062f\u0641\u0639\u0627\u062a \u0627\u0644\u064a\u0648\u0645"
   }
 };
 
-export default function Dashboard({ user, invoices, vehicles, alerts, setAlerts, users, lang }) {
-  const t = T[lang] || T.en;
-  const rtl = lang === "ar";
-  const dc = user.dc;
+function dcLabel(dc, t) {
+  if (dc === "Riyadh") return t.riyadhDC;
+  if (dc === "Jeddah") return t.jeddahDC;
+  if (dc === "Dammam") return t.dammamDC;
+  return dc;
+}
 
-  const myInvoices = dc ? invoices.filter(i => i.dc === dc) : invoices;
-  const myVehicles = dc ? vehicles.filter(v => v.dc === dc) : vehicles;
-  const myAlerts   = dc ? alerts.filter(a => a.dc === dc && a.status === "active") : alerts.filter(a => a.status === "active");
-  const myDrivers  = users.filter(u => u.role === "driver" && (!dc || u.dc === dc));
-
-  const stats = {
-    total:       myInvoices.length,
-    delivered:   myInvoices.filter(i => i.status === "delivered").length,
-    pending:     myInvoices.filter(i => i.status === "pending").length,
-    assigned:    myInvoices.filter(i => i.status === "assigned").length,
-    failed:      myInvoices.filter(i => i.status === "failed").length,
-    outstanding: myInvoices.filter(i => i.status === "outstanding").length,
-    intransit:   myInvoices.filter(i => i.status === "intransit").length,
-  };
-
-  const activeVehicles = myVehicles.filter(v => v.status === "Active").length;
-  const maintVehicles  = myVehicles.filter(v => v.status === "Maintenance").length;
-  const assignedDrivers = myDrivers.filter(u => u.status === "Active").length;
-
-  const deliveryRate = stats.total > 0 ? Math.round(stats.delivered / stats.total * 100) : 0;
-  const vehicleUtil  = myVehicles.length > 0 ? Math.round(activeVehicles / myVehicles.length * 100) : 0;
-  const driverUtil   = myDrivers.length > 0 ? Math.round(assignedDrivers / myDrivers.length * 100) : 0;
-
-  // DC breakdown
-  const dcStats = ["Riyadh", "Jeddah", "Dammam"].map(d => {
-    const di = invoices.filter(i => i.dc === d);
-    const dv = vehicles.filter(v => v.dc === d);
-    const dd = users.filter(u => u.role === "driver" && u.dc === d);
-    const del = di.filter(i => i.status === "delivered").length;
-    const activeV = dv.filter(v => v.status === "Active").length;
-    const activeD = dd.filter(u => u.status === "Active").length;
-    return {
-      dc: d,
-      color: d === "Riyadh" ? "#ef4444" : d === "Jeddah" ? "#3b82f6" : "#10b981",
-      total: di.length,
-      delivered: del,
-      pending: di.filter(i => i.status === "pending").length,
-      assigned: di.filter(i => i.status === "assigned").length,
-      failed: di.filter(i => i.status === "failed").length,
-      outstanding: di.filter(i => i.status === "outstanding").length,
-      intransit: di.filter(i => i.status === "intransit").length,
-      deliveryRate: di.length > 0 ? Math.round(del / di.length * 100) : 0,
-      activeVehicles: activeV,
-      totalVehicles: dv.length,
-      maintVehicles: dv.filter(v => v.status === "Maintenance").length,
-      vehicleUtil: dv.length > 0 ? Math.round(activeV / dv.length * 100) : 0,
-      totalDrivers: dd.length,
-      activeDrivers: activeD,
-      driverUtil: dd.length > 0 ? Math.round(activeD / dd.length * 100) : 0,
-      dcAlerts: alerts.filter(a => a.dc === d && a.status === "active").length,
-    };
-  });
-
-  const agingInvoices = myInvoices
-    .filter(i => ["pending", "assigned", "outstanding"].includes(i.status))
-    .map(i => ({ ...i, days: daysSince(i.date) }))
-    .sort((a, b) => b.days - a.days);
+function DCBox({ dc, invoices, vehicles, t, color }) {
+  const inv = invoices.filter(i => i.dc === dc);
+  const countable = inv.filter(i => !["scheduled","hold_await","hold_ship","intransit"].includes(i.status));
+  const del = inv.filter(i => i.status === "delivered").length;
+  const rate = countable.length > 0 ? Math.round(del / countable.length * 100) : 0;
+  const veh = vehicles.filter(v => v.dc === dc);
+  const activeV = veh.filter(v => v.status === "Active").length;
 
   return (
-    <div dir={rtl ? "rtl" : "ltr"}>
-      {/* Overall Stats */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))", gap:10, marginBottom:16 }}>
-        <StatCard icon="📋" label={t.totalInvoices}   value={stats.total}       color="#6366f1" />
-        <StatCard icon="✅" label={t.delivered}       value={stats.delivered}   color="#10b981" sub={deliveryRate + "%"} />
-        <StatCard icon="⏳" label={t.pending}         value={stats.pending}     color="#f59e0b" />
-        <StatCard icon="🔵" label={t.assigned}        value={stats.assigned}    color="#3b82f6" />
-        <StatCard icon="❌" label={t.failed}          value={stats.failed}      color="#ef4444" />
-        <StatCard icon="🟠" label={t.outstanding}     value={stats.outstanding} color="#f97316" />
-        <StatCard icon="🔄" label={t.inTransit}       value={stats.intransit}   color="#8b5cf6" />
-        <StatCard icon="🚗" label={t.activeVehicles}  value={activeVehicles}    color="#0891b2" sub={maintVehicles > 0 ? maintVehicles + " " + t.inMaint : ""} />
-        <StatCard icon="👤" label={t.activeDrivers}   value={assignedDrivers}   color="#059669" />
+    <Card style={{ borderTop:`4px solid ${color}` }}>
+      <CardTitle style={{ color }}>{dcLabel(dc, t)}</CardTitle>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:12 }}>
+        {[
+          { icon:"\ud83d\udccb", label:t.total, value:inv.length, color:"#6366f1" },
+          { icon:"\u2705", label:t.delivered, value:del, color:"#10b981" },
+          { icon:"\u23f3", label:t.pending, value:inv.filter(i=>i.status==="pending").length, color:"#f59e0b" },
+          { icon:"\ud83d\ude9a", label:t.activeVeh, value:activeV, color:"#0891b2" },
+        ].map((s,i) => <StatCard key={i} {...s} />)}
       </div>
+      <div style={{ marginBottom:4, fontSize:13, display:"flex", justifyContent:"space-between" }}>
+        <span style={{ fontWeight:600 }}>{t.deliveryRate}</span>
+        <span style={{ fontWeight:800, color:rate>=80?"#10b981":rate>=50?"#f59e0b":"#ef4444" }}>{rate}%</span>
+      </div>
+      <div style={{ background:"#f1f5f9", borderRadius:99, height:8, overflow:"hidden" }}>
+        <div style={{ width:`${rate}%`, height:"100%", background:rate>=80?"#10b981":rate>=50?"#f59e0b":"#ef4444", borderRadius:99 }} />
+      </div>
+      <div style={{ fontSize:11, color:"#94a3b8", marginTop:4 }}>{t.howCalc}: Delivered \u00f7 (Total - Scheduled) \u00d7 100</div>
+    </Card>
+  );
+}
 
-      {/* Performance KPIs */}
-      <Card>
-        <CardTitle>📊 {t.overallPerformance}</CardTitle>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:12 }}>
-          {[
-            { label: t.deliveryRate,  value: deliveryRate,  formula: t.deliveryRateFormula,  color:"#10b981", icon:"📦" },
-            { label: t.vehicleUtil,   value: vehicleUtil,   formula: t.vehicleUtilFormula,   color:"#0891b2", icon:"🚗" },
-            { label: t.driverUtil,    value: driverUtil,    formula: t.driverUtilFormula,    color:"#6366f1", icon:"👤" },
-          ].map(kpi => (
-            <div key={kpi.label} style={{ background:"#f8fafc", borderRadius:10, padding:14, borderTop:`3px solid ${kpi.color}` }}>
-              <div style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>{kpi.icon} {kpi.label}</div>
-              <div style={{ fontWeight:900, fontSize:28, color:kpi.color, marginBottom:6 }}>{kpi.value}%</div>
-              <div style={{ background:"#e2e8f0", borderRadius:99, height:6, overflow:"hidden", marginBottom:6 }}>
-                <div style={{ width:`${kpi.value}%`, height:"100%", background:kpi.color, borderRadius:99 }} />
-              </div>
-              <div style={{ fontSize:10, color:"#94a3b8" }}>
-                <span style={{ fontWeight:600 }}>📐 {t.howCalc}:</span> {kpi.formula}
-              </div>
-            </div>
-          ))}
+export default function Dashboard({ user, lang, invoices, vehicles, alerts, uploads }) {
+  const rtl = lang === "ar";
+  const t = T[lang] || T.en;
+  const role = user.role;
+
+  // ── PLANNING DASHBOARD ──
+  if (role === "planning") {
+    const today = new Date().toISOString().split("T")[0];
+    const todayUploads = (uploads||[]).filter(u => u.date === today);
+    const todayInvoices = invoices.filter(i => i.date === today);
+    const totalInvoices = invoices.length;
+    const totalBatches = (uploads||[]).length;
+
+    const govTotal = invoices.filter(i => i.inst === "Government").length;
+    const govDel = invoices.filter(i => i.inst === "Government" && i.status === "delivered").length;
+    const privTotal = invoices.filter(i => i.inst === "Private").length;
+    const privDel = invoices.filter(i => i.inst === "Private" && i.status === "delivered").length;
+
+    return (
+      <div style={{ direction: rtl ? "rtl" : "ltr" }}>
+        <div style={{ marginBottom:20 }}>
+          <h2 style={{ fontSize:22, fontWeight:900, color:"#0f172a", margin:"0 0 4px" }}>{t.welcome}, {user.displayName||user.name}!</h2>
+          <p style={{ fontSize:14, color:"#64748b", margin:0 }}>{t.planningTitle}</p>
         </div>
-      </Card>
 
-      {/* DC Breakdown - Admin Only */}
-      {user.role === "admin" && (
-        <>
-          <SectionTitle>📍 {t.dcOverview}</SectionTitle>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", gap:12, marginBottom:16 }}>
-            {dcStats.map(d => (
-              <DCCard key={d.dc} d={d} t={t} rtl={rtl} />
-            ))}
-          </div>
-        </>
-      )}
+        {/* Overall KPIs */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:12, marginBottom:16 }}>
+          <StatCard icon="\ud83d\udccb" label={t.totalUploaded} value={totalInvoices} color="#6366f1" />
+          <StatCard icon="\ud83d\udce4" label={t.totalBatches} value={totalBatches} color="#7c3aed" />
+          <StatCard icon="\ud83d\udcc5" label="Today Invoices" value={todayInvoices.length} color="#0891b2" />
+          <StatCard icon="\ud83d\udce6" label={t.batches} value={todayUploads.length} color="#10b981" />
+        </div>
 
-      {/* Alerts Panel */}
-      {myAlerts.length > 0 && (
-        <AlertsPanel alerts={myAlerts} setAlerts={setAlerts} user={user} t={t} rtl={rtl} />
-      )}
-
-      {/* Invoice Aging */}
-      {agingInvoices.length > 0 && (
+        {/* Today's Summary */}
         <Card>
-          <CardTitle>⏱️ {t.agingReport}</CardTitle>
-          <div style={{ display:"flex", gap:16, marginBottom:12, flexWrap:"wrap" }}>
-            {[
-              { label: `🟢 ${t.fresh} (≤1d)`,  count: agingInvoices.filter(i => i.days <= 1).length,              color:"#10b981" },
-              { label: `🟡 ${t.aging} (2-3d)`, count: agingInvoices.filter(i => i.days > 1 && i.days <= 3).length, color:"#f59e0b" },
-              { label: `🔴 ${t.critical} (4+d)`,count: agingInvoices.filter(i => i.days > 3).length,               color:"#ef4444" },
-            ].map(s => (
-              <div key={s.label} style={{ fontSize:13, fontWeight:600, color:s.color }}>{s.label}: <b>{s.count}</b></div>
-            ))}
-          </div>
-          {agingInvoices.slice(0, 8).map(inv => (
-            <div key={inv.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
-              <span style={{ fontWeight:700, fontSize:13, color:"#6366f1", minWidth:130 }}>{inv.id}</span>
-              <span style={{ flex:1, fontSize:13, minWidth:140 }}>{inv.customer}</span>
-              <span style={{ fontSize:12, color:"#64748b" }}>{inv.dc} DC</span>
-              <Badge status={inv.status} />
-              <AgingBadge days={inv.days} />
+          <CardTitle>\ud83d\udcc5 {t.todaySummary}</CardTitle>
+          {todayUploads.length === 0 && <div style={{ textAlign:"center", padding:20, color:"#94a3b8" }}>No uploads today yet</div>}
+          {todayUploads.map(u => (
+            <div key={u.batchId} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontWeight:700, fontSize:13, color:"#6366f1" }}>{u.batchId}</div>
+                <div style={{ fontSize:12, color:"#64748b" }}>{t.uploadedBy}: {u.uploadedBy} | {t.postedAt}: {u.postedAt}</div>
+              </div>
+              <span style={{ fontWeight:700, color:"#10b981" }}>{u.invoiceCount} {t.invoices}</span>
+              <span style={{ fontSize:12, fontWeight:600, padding:"3px 10px", borderRadius:99, background:"#d1fae5", color:"#065f46" }}>POSTED</span>
             </div>
           ))}
         </Card>
-      )}
 
-      {/* Today Summary + Institution */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))", gap:12 }}>
+        {/* DC Breakdown */}
         <Card>
-          <CardTitle>📊 {t.todaySummary}</CardTitle>
-          {[
-            { icon:"📋", text: `${myInvoices.length} ${lang === "ar" ? "فاتورة إجمالية" : "total invoices"}` },
-            { icon:"✅", text: `${stats.delivered} ${lang === "ar" ? "تم تسليمها" : "delivered"} (${deliveryRate}%)` },
-            { icon:"🔄", text: `${stats.intransit} ${lang === "ar" ? "في الطريق" : "in transit"}` },
-            { icon:"⏳", text: `${stats.pending} ${lang === "ar" ? "بانتظار التعيين" : "awaiting assignment"}` },
-            { icon:"🚗", text: `${activeVehicles} ${lang === "ar" ? "مركبة نشطة" : "vehicles active"}, ${maintVehicles} ${t.inMaint}` },
-          ].map((s, i) => (
-            <div key={i} style={{ display:"flex", gap:8, padding:"7px 0", borderBottom:"1px solid #f1f5f9", fontSize:13, color:"#374151" }}>
-              <span>{s.icon}</span><span>{s.text}</span>
-            </div>
-          ))}
-        </Card>
-        <Card>
-          <CardTitle>🏭 {t.institution}</CardTitle>
-          {[
-            { label: t.government, key:"Government", color:"#1e40af" },
-            { label: t.private,    key:"Private",    color:"#6d28d9" },
-          ].map(inst => {
-            const n = myInvoices.filter(i => i.inst === inst.key).length;
-            const d = myInvoices.filter(i => i.inst === inst.key && i.status === "delivered").length;
-            const rate = n > 0 ? Math.round(d / n * 100) : 0;
+          <CardTitle>\ud83c\udfe2 {t.byDC}</CardTitle>
+          {["Riyadh","Jeddah","Dammam"].map(dc => {
+            const dcInv = invoices.filter(i => i.dc === dc);
+            const dcDel = dcInv.filter(i => i.status === "delivered").length;
             return (
-              <div key={inst.key} style={{ marginBottom:14 }}>
+              <div key={dc} style={{ marginBottom:14 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4, fontSize:13 }}>
-                  <span style={{ fontWeight:600 }}>{inst.key === "Government" ? "🏛️" : "🏥"} {inst.label}</span>
-                  <span style={{ color:"#64748b" }}>{d}/{n} — {rate}%</span>
+                  <span style={{ fontWeight:600 }}>\ud83d\udccd {dcLabel(dc, t)}</span>
+                  <span style={{ color:"#64748b" }}>{dcDel}/{dcInv.length} {t.invoices}</span>
                 </div>
                 <div style={{ background:"#f1f5f9", borderRadius:99, height:8, overflow:"hidden" }}>
-                  <div style={{ width:`${rate}%`, height:"100%", background:inst.color, borderRadius:99 }} />
-                </div>
-                <div style={{ fontSize:10, color:"#94a3b8", marginTop:2 }}>
-                  📐 {t.howCalc}: {lang === "ar" ? "المسلّمة ÷ الإجمالي × 100" : "Delivered ÷ Total × 100"}
+                  <div style={{ width:`${dcInv.length>0?Math.round(dcDel/dcInv.length*100):0}%`, height:"100%", background:"#6366f1", borderRadius:99 }} />
                 </div>
               </div>
             );
           })}
         </Card>
+
+        {/* Institution Breakdown */}
+        <Card>
+          <CardTitle>\ud83c\udfe5 {t.byInstitution}</CardTitle>
+          {[["Government","\ud83c\udfd9\ufe0f "+t.govt,"#1e40af",govTotal,govDel],["Private","\ud83c\udfe5 "+t.priv,"#6d28d9",privTotal,privDel]].map(([key,label,color,total,del]) => (
+            <div key={key} style={{ marginBottom:14 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4, fontSize:13 }}>
+                <span style={{ fontWeight:600 }}>{label}</span>
+                <span style={{ color:"#64748b" }}>{del}/{total}</span>
+              </div>
+              <div style={{ background:"#f1f5f9", borderRadius:99, height:8, overflow:"hidden" }}>
+                <div style={{ width:`${total>0?Math.round(del/total*100):0}%`, height:"100%", background:color, borderRadius:99 }} />
+              </div>
+            </div>
+          ))}
+        </Card>
       </div>
-    </div>
-  );
-}
-
-// ── DC Card ──────────────────────────────────────────────
-function DCCard({ d, t, rtl }) {
-  const [showFormula, setShowFormula] = useState(false);
-  return (
-    <Card style={{ borderLeft: rtl ? "none" : `4px solid ${d.color}`, borderRight: rtl ? `4px solid ${d.color}` : "none", marginBottom:0 }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-        <div style={{ fontWeight:700, fontSize:15 }}>📍 {d.dc} DC</div>
-        <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-          {d.dcAlerts > 0 && <span style={{ background:"#fee2e2", color:"#991b1b", fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:99 }}>🔔 {d.dcAlerts}</span>}
-          <button onClick={() => setShowFormula(!showFormula)} style={{ background:"none", border:"1px solid #e2e8f0", borderRadius:6, padding:"3px 8px", cursor:"pointer", fontSize:11, color:"#64748b" }}>
-            📐 {t.howCalc}
-          </button>
-        </div>
-      </div>
-
-      {showFormula && (
-        <div style={{ background:"#f0f9ff", borderRadius:8, padding:"10px 12px", fontSize:11, color:"#0369a1", marginBottom:10 }}>
-          <div>📦 {t.deliveryRateFormula}: {d.delivered}/{d.total} = <b>{d.deliveryRate}%</b></div>
-          <div>🚗 {t.vehicleUtilFormula}: {d.activeVehicles}/{d.totalVehicles} = <b>{d.vehicleUtil}%</b></div>
-          <div>👤 {t.driverUtilFormula}: {d.activeDrivers}/{d.totalDrivers} = <b>{d.driverUtil}%</b></div>
-        </div>
-      )}
-
-      {/* Delivery Stats */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:6, marginBottom:10 }}>
-        {[
-          { label: t.delivered,    value: d.delivered,   color:"#10b981" },
-          { label: t.pending,      value: d.pending,     color:"#f59e0b" },
-          { label: t.assigned,     value: d.assigned,    color:"#3b82f6" },
-          { label: t.failed,       value: d.failed,      color:"#ef4444" },
-          { label: t.outstanding,  value: d.outstanding, color:"#f97316" },
-          { label: t.inTransit,    value: d.intransit,   color:"#8b5cf6" },
-        ].map(s => (
-          <div key={s.label} style={{ textAlign:"center", background:"#f8fafc", borderRadius:6, padding:"6px 4px" }}>
-            <div style={{ fontWeight:800, fontSize:16, color:s.color }}>{s.value}</div>
-            <div style={{ fontSize:9, color:"#94a3b8" }}>{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Delivery Rate Bar */}
-      <div style={{ marginBottom:10 }}>
-        <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:"#64748b", marginBottom:3 }}>
-          <span>📦 {t.deliveryRate}</span>
-          <span style={{ fontWeight:700, color: d.deliveryRate >= 80 ? "#10b981" : d.deliveryRate >= 60 ? "#f59e0b" : "#ef4444" }}>{d.deliveryRate}%</span>
-        </div>
-        <div style={{ background:"#f1f5f9", borderRadius:99, height:6, overflow:"hidden" }}>
-          <div style={{ width:`${d.deliveryRate}%`, height:"100%", background: d.deliveryRate >= 80 ? "#10b981" : d.deliveryRate >= 60 ? "#f59e0b" : "#ef4444", borderRadius:99 }} />
-        </div>
-      </div>
-
-      {/* Vehicle Utilization */}
-      <div style={{ marginBottom:10 }}>
-        <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:"#64748b", marginBottom:3 }}>
-          <span>🚗 {t.vehicleUtil} ({d.activeVehicles}/{d.totalVehicles})</span>
-          <span style={{ fontWeight:700, color:"#0891b2" }}>{d.vehicleUtil}%</span>
-        </div>
-        <div style={{ background:"#f1f5f9", borderRadius:99, height:6, overflow:"hidden" }}>
-          <div style={{ width:`${d.vehicleUtil}%`, height:"100%", background:"#0891b2", borderRadius:99 }} />
-        </div>
-        {d.maintVehicles > 0 && <div style={{ fontSize:10, color:"#f59e0b", marginTop:2 }}>🔧 {d.maintVehicles} {t.inMaint}</div>}
-      </div>
-
-      {/* Driver Utilization */}
-      <div>
-        <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:"#64748b", marginBottom:3 }}>
-          <span>👤 {t.driverUtil} ({d.activeDrivers}/{d.totalDrivers})</span>
-          <span style={{ fontWeight:700, color:"#6366f1" }}>{d.driverUtil}%</span>
-        </div>
-        <div style={{ background:"#f1f5f9", borderRadius:99, height:6, overflow:"hidden" }}>
-          <div style={{ width:`${d.driverUtil}%`, height:"100%", background:"#6366f1", borderRadius:99 }} />
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-// ── Alerts Panel ─────────────────────────────────────────────
-function AlertsPanel({ alerts, setAlerts, user, t, rtl }) {
-  const [activeTab, setActiveTab]     = useState("all");
-  const [dismissing, setDismissing]   = useState(null);
-  const [dismissForm, setDismissForm] = useState({ reason:"", manualReason:"", tentativeDate:"" });
-
-  const categories = ["all", "vehicle", "driver", "delivery", "maintenance", "access"];
-
-  const alertTypeMap = {
-    undelivered:      "delivery",
-    license_expiry:   "driver",
-    fahas:            "vehicle",
-    istimara:         "vehicle",
-    insurance:        "vehicle",
-    oil_change:       "maintenance",
-    access_request:   "access",
-    fuel_discrepancy: "vehicle",
-  };
-
-  const alertIcon = {
-    undelivered:"📦", license_expiry:"🪪", fahas:"🔧",
-    istimara:"📋", insurance:"🛡️", oil_change:"🔩",
-    access_request:"👤", fuel_discrepancy:"⛽"
-  };
-
-  const alertColor = {
-    delivery:"#ef4444", vehicle:"#f59e0b",
-    driver:"#3b82f6", maintenance:"#f97316",
-    access:"#8b5cf6"
-  };
-
-  const filtered = activeTab === "all" ? alerts : alerts.filter(a => alertTypeMap[a.type] === activeTab);
-
-  function submitDismiss(alt) {
-    setAlerts(prev => prev.map(a => a.id === alt.id ? {
-      ...a,
-      status: user.role === "admin" ? "resolved" : "pending_approval",
-      dismissedBy: user.name,
-      dismissReason: dismissForm.reason,
-      manualReason: dismissForm.manualReason,
-      tentativeDate: dismissForm.tentativeDate,
-      dismissedAt: new Date().toLocaleString(),
-      adminApproved: user.role === "admin" ? "approved" : "pending"
-    } : a));
-    setDismissing(null);
-    setDismissForm({ reason:"", manualReason:"", tentativeDate:"" });
+    );
   }
 
-  return (
-    <Card style={{ border:"1px solid #fbbf24", marginBottom:16 }}>
-      <CardTitle>⚠️ {t.systemAlerts} ({alerts.length})</CardTitle>
+  // ── DRIVER DASHBOARD — redirect to deliveries ──
+  if (role === "driver") {
+    return (
+      <div style={{ textAlign:"center", padding:60, color:"#94a3b8" }}>
+        <div style={{ fontSize:48, marginBottom:16 }}>\ud83d\ude9a</div>
+        <div style={{ fontSize:18, fontWeight:700, color:"#0f172a", marginBottom:8 }}>
+          {t.welcome}, {user.displayName||user.name}!
+        </div>
+        <div style={{ fontSize:14 }}>Go to My Deliveries to start your route.</div>
+      </div>
+    );
+  }
 
-      {/* Category Tabs */}
-      <div style={{ display:"flex", gap:6, marginBottom:14, flexWrap:"wrap" }}>
-        {categories.map(cat => {
-          const count = cat === "all" ? alerts.length : alerts.filter(a => alertTypeMap[a.type] === cat).length;
-          return (
-            <button key={cat} onClick={() => setActiveTab(cat)}
-              style={{ padding:"5px 12px", borderRadius:99, border:"none",
-                background: activeTab === cat ? (alertColor[cat] || "#1A3A5C") : "#f1f5f9",
-                color: activeTab === cat ? "white" : "#374151",
-                cursor:"pointer", fontSize:12, fontWeight:600 }}>
-              {t.alertCategories[cat]} {count > 0 && `(${count})`}
-            </button>
-          );
-        })}
+  // ── ADMIN / DC MANAGER DASHBOARD ──
+  const dc = user.dc;
+  const myInv = dc ? invoices.filter(i => i.dc === dc) : invoices;
+  const myVeh = dc ? vehicles.filter(v => v.dc === dc) : vehicles;
+  const myAlerts = (alerts||[]).filter(a => a.status === "active" && (!dc || a.dc === dc));
+
+  const countable = myInv.filter(i => !["scheduled","hold_await","hold_ship","intransit"].includes(i.status));
+  const del = myInv.filter(i => i.status === "delivered").length;
+  const deliveryRate = countable.length > 0 ? Math.round(del / countable.length * 100) : 0;
+  const activeV = myVeh.filter(v => v.status === "Active").length;
+  const assignedD = myInv.filter(i => i.status === "assigned").length;
+
+  return (
+    <div style={{ direction: rtl ? "rtl" : "ltr" }}>
+      <div style={{ marginBottom:20 }}>
+        <h2 style={{ fontSize:22, fontWeight:900, color:"#0f172a", margin:"0 0 4px" }}>{t.welcome}, {user.displayName||user.name}!</h2>
+        <p style={{ fontSize:14, color:"#64748b", margin:0 }}>{dc ? dcLabel(dc,t) : t.adminTitle}</p>
       </div>
 
-      {filtered.length === 0 && (
-        <div style={{ textAlign:"center", padding:20, color:"#94a3b8" }}>
-          {lang === "ar" ? "لا توجد تنبيهات في هذه الفئة" : "No alerts in this category"}
+      {/* Overall KPIs */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))", gap:12, marginBottom:16 }}>
+        {[
+          { icon:"\ud83d\udccb", label:t.total, value:myInv.length, color:"#6366f1" },
+          { icon:"\u2705", label:t.delivered, value:del, color:"#10b981" },
+          { icon:"\u23f3", label:t.pending, value:myInv.filter(i=>i.status==="pending").length, color:"#f59e0b" },
+          { icon:"\ud83d\udc64", label:t.assigned, value:myInv.filter(i=>i.status==="assigned").length, color:"#3b82f6" },
+          { icon:"\u274c", label:t.failed, value:myInv.filter(i=>i.status==="failed").length, color:"#ef4444" },
+          { icon:"\u26a0\ufe0f", label:t.outstanding, value:myInv.filter(i=>i.status==="outstanding").length, color:"#f97316" },
+          { icon:"\ud83d\ude9a", label:t.inTransit, value:myInv.filter(i=>i.status==="intransit").length, color:"#8b5cf6" },
+          { icon:"\ud83d\udcc5", label:t.scheduled, value:myInv.filter(i=>["scheduled","hold_await","hold_ship"].includes(i.status)).length, color:"#a855f7" },
+          { icon:"\ud83d\udd14", label:t.alerts, value:myAlerts.length, color:"#ef4444" },
+        ].map((s,i) => <StatCard key={i} {...s} />)}
+      </div>
+
+      {/* Overall Performance Box */}
+      <Card style={{ borderTop:"4px solid #1A3A5C" }}>
+        <CardTitle>\ud83d\udcca {t.allDC} — {t.deliveryRate}</CardTitle>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:16 }}>
+          <div>
+            <div style={{ fontSize:13, color:"#64748b", marginBottom:4 }}>{t.deliveryRate}</div>
+            <div style={{ fontSize:36, fontWeight:900, color:deliveryRate>=80?"#10b981":deliveryRate>=50?"#f59e0b":"#ef4444" }}>{deliveryRate}%</div>
+            <div style={{ background:"#f1f5f9", borderRadius:99, height:10, overflow:"hidden", marginTop:6 }}>
+              <div style={{ width:`${deliveryRate}%`, height:"100%", background:deliveryRate>=80?"#10b981":deliveryRate>=50?"#f59e0b":"#ef4444", borderRadius:99 }} />
+            </div>
+            <div style={{ fontSize:11, color:"#94a3b8", marginTop:4 }}>{t.howCalc}: Delivered \u00f7 (Total - Scheduled) \u00d7 100</div>
+          </div>
+          <div>
+            <div style={{ fontSize:13, color:"#64748b", marginBottom:4 }}>{t.vehicleUtil}</div>
+            <div style={{ fontSize:36, fontWeight:900, color:"#0891b2" }}>{myVeh.length>0?Math.round(activeV/myVeh.length*100):0}%</div>
+            <div style={{ fontSize:12, color:"#64748b" }}>{activeV} / {myVeh.length} {t.activeVeh}</div>
+            <div style={{ fontSize:11, color:"#94a3b8" }}>{t.howCalc}: Active \u00f7 Total \u00d7 100</div>
+          </div>
+          <div>
+            <div style={{ fontSize:13, color:"#64748b", marginBottom:4 }}>{t.driverUtil}</div>
+            <div style={{ fontSize:36, fontWeight:900, color:"#6366f1" }}>
+              {myInv.filter(i=>i.driverId).length > 0 ? Math.min(100, Math.round(assignedD / Math.max(myInv.filter(i=>i.driverId).length,1) * 100)) : 0}%
+            </div>
+            <div style={{ fontSize:12, color:"#64748b" }}>{assignedD} {t.assignedDrv}</div>
+            <div style={{ fontSize:11, color:"#94a3b8" }}>{t.howCalc}: Assigned \u00f7 Total Drivers \u00d7 100</div>
+          </div>
+        </div>
+      </Card>
+
+      {/* DC Boxes — Admin only */}
+      {!dc && (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", gap:16 }}>
+          <DCBox dc="Riyadh" invoices={invoices} vehicles={vehicles} t={t} color="#1A3A5C" />
+          <DCBox dc="Jeddah" invoices={invoices} vehicles={vehicles} t={t} color="#0f766e" />
+          <DCBox dc="Dammam" invoices={invoices} vehicles={vehicles} t={t} color="#7c3aed" />
         </div>
       )}
 
-      {filtered.map(alt => {
-        const cat = alertTypeMap[alt.type] || "delivery";
-        const daysOld = daysSince(alt.raisedAt?.split(" ")[0] || new Date().toISOString().split("T")[0]);
-        return (
-          <div key={alt.id} style={{ border:`1px solid ${alertColor[cat]}33`, borderRadius:8,
-            padding:"10px 14px", marginBottom:8, borderLeft:`4px solid ${alertColor[cat]}` }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:6 }}>
-              <div style={{ flex:1 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
-                  <span style={{ background: alertColor[cat] + "22", color: alertColor[cat], fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:99 }}>
-                    {alertIcon[alt.type] || "🔔"} {t.alertTypes[cat]}
-                  </span>
-                  {alt.dc && <span style={{ fontSize:11, color:"#64748b" }}>📍 {alt.dc} DC</span>}
-                </div>
-                <div style={{ fontSize:13, fontWeight:600, color:"#0f172a", marginBottom:2 }}>{alt.message}</div>
-                <div style={{ fontSize:11, color:"#94a3b8" }}>
-                  🕐 {alt.raisedAt} •
-                  <span style={{ color: daysOld > 2 ? "#ef4444" : "#f59e0b", fontWeight:600 }}> {daysOld} {t.daysAgo}</span>
-                  {daysOld > 1 && <span style={{ color:"#ef4444" }}> — {t.noAction}</span>}
-                </div>
-                {alt.tentativeDate && (
-                  <div style={{ fontSize:11, color:"#6366f1", fontWeight:600, marginTop:2 }}>
-                    📅 {t.tentativeDate}: {alt.tentativeDate}
-                  </div>
-                )}
-                {alt.dismissedBy && (
-                  <div style={{ fontSize:11, color:"#10b981", marginTop:2 }}>
-                    ✅ {alt.dismissedBy} — {alt.dismissReason}
-                    {alt.adminApproved === "pending" && <span style={{ color:"#f59e0b" }}> (Pending Admin Approval)</span>}
-                  </div>
-                )}
-              </div>
-              <Btn small onClick={() => { setDismissing(alt); setDismissForm({ reason:"", manualReason:"", tentativeDate:"" }); }}
-                color={user.role === "admin" ? "#10b981" : "#6366f1"}>
-                {user.role === "admin" ? t.resolve : t.dismiss}
-              </Btn>
+      {/* Alerts */}
+      {myAlerts.length > 0 && (
+        <Card style={{ borderLeft:"4px solid #ef4444" }}>
+          <CardTitle>\ud83d\udd14 {t.alerts} ({myAlerts.length})</CardTitle>
+          {myAlerts.slice(0,5).map(a => (
+            <div key={a.id} style={{ padding:"8px 0", borderBottom:"1px solid #f1f5f9", fontSize:13 }}>
+              <span style={{ fontWeight:600, color:"#ef4444" }}>{a.title}</span>
+              <span style={{ color:"#64748b", marginLeft:8 }}>{a.desc}</span>
+              <span style={{ color:"#94a3b8", fontSize:11, marginLeft:8 }}>{a.days}d ago</span>
             </div>
-          </div>
-        );
-      })}
-
-      {dismissing && (
-        <Modal title={`${t.dismiss} — ${dismissing.message?.slice(0, 40)}...`} onClose={() => setDismissing(null)}>
-          <Select label={t.reason} value={dismissForm.reason}
-            onChange={v => setDismissForm({ ...dismissForm, reason:v })}
-            options={ALERT_DISMISS_REASONS} required />
-          {dismissForm.reason === "Other (Manual Reason)" && (
-            <Textarea label={rtl ? "السبب يدوياً" : "Manual Reason"} value={dismissForm.manualReason}
-              onChange={v => setDismissForm({ ...dismissForm, manualReason:v })} required />
-          )}
-          <div style={{ marginBottom:12 }}>
-            <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#374151", marginBottom:5 }}>
-              📅 {t.tentativeDate}
-            </label>
-            <input type="date" value={dismissForm.tentativeDate}
-              onChange={e => setDismissForm({ ...dismissForm, tentativeDate:e.target.value })}
-              style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", boxSizing:"border-box" }} />
-          </div>
-          {user.role !== "admin" && (
-            <div style={{ background:"#fef3c7", padding:"8px 12px", borderRadius:6, fontSize:12, color:"#92400e", marginBottom:12 }}>
-              ⚠️ {rtl ? "سيتم إرسال هذا الإجراء للمدير للموافقة النهائية." : "This action will be sent to Admin for final approval."}
-            </div>
-          )}
-          <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-            <Btn onClick={() => setDismissing(null)} color="#64748b">{t.cancel}</Btn>
-            <Btn onClick={() => submitDismiss(dismissing)}
-              disabled={!dismissForm.reason || (dismissForm.reason === "Other (Manual Reason)" && !dismissForm.manualReason)}
-              color="#10b981">{t.submitAction}</Btn>
-          </div>
-        </Modal>
+          ))}
+        </Card>
       )}
-    </Card>
+    </div>
   );
 }
