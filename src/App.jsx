@@ -35,45 +35,36 @@ export default function App() {
   const [alerts,   setAlerts]   = useState(INITIAL_ALERTS);
 
   if (!user) return (
-    <Login
-      onLogin={u => { setUser(u); setPage("dashboard"); }}
-      lang={lang}
-      setLang={setLang}
-    />
+    <Login onLogin={u=>{setUser(u);setPage("dashboard");}} lang={lang} setLang={setLang} />
   );
 
   const props = {
     user, lang, invoices, setInvoices, vehicles, setVehicles,
     trips, setTrips, fuelLogs, setFuelLogs, uploads, setUploads,
-    users, setUsers, requests, setRequests, alerts, setAlerts,
-    setPage
+    users, setUsers, requests, setRequests, alerts, setAlerts, setPage
   };
 
   const pages = {
-    dashboard:   <Dashboard  {...props} />,
-    invoices:    <Invoices   {...props} />,
-    upload:      <Upload     {...props} />,
-    assign:      <Assign     {...props} />,
-    trips:       <Trips      {...props} />,
-    users:       <Users      {...props} />,
-    masterdata:  <MasterData {...props} />,
-    fleet:       <Fleet      {...props} />,
-    fuel:        <Fuel       {...props} />,
-    reports:     <Reports    {...props} />,
-    mydeliveries:<Driver     {...props} />,
-    odometer:    <Odometer   {...props} />,
-    search:      <Search     {...props} />,
-    download:    <Download   {...props} />,
+    dashboard:    <Dashboard  {...props} />,
+    invoices:     <Invoices   {...props} />,
+    upload:       <Upload     {...props} />,
+    assign:       <Assign     {...props} />,
+    trips:        <Trips      {...props} />,
+    users:        <Users      {...props} />,
+    masterdata:   <MasterData {...props} />,
+    fleet:        <Fleet      {...props} />,
+    fuel:         <Fuel       {...props} />,
+    reports:      <Reports    {...props} />,
+    mydeliveries: <Driver     {...props} />,
+    odometer:     <Odometer   {...props} />,
+    search:       <Search     {...props} />,
+    download:     <Download   {...props} />,
   };
 
   return (
-    <Shell
-      user={user} lang={lang} setLang={setLang}
-      page={page} setPage={setPage}
-      onLogout={() => { setUser(null); setPage("dashboard"); }}
-      alerts={alerts}
-    >
-      {pages[page] || pages.dashboard}
+    <Shell user={user} lang={lang} setLang={setLang} page={page} setPage={setPage}
+      onLogout={()=>{setUser(null);setPage("dashboard");}} alerts={alerts}>
+      {pages[page]||pages.dashboard}
     </Shell>
   );
 }
