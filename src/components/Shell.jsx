@@ -3,21 +3,21 @@ import { RC, RA, RI } from "../data/masterData.js";
 
 const T = {
   en: {
-    dashboard:"Dashboard", invoices:"All Invoices", dcinvoices:"DC Invoices",
-    upload:"Invoice Processing", trips:"Trips", users:"User Management",
+    dashboard:"Dashboard", invoices:"All Invoices", dcinvoices:"Invoice Management",
+    upload:"Invoice Upload & Post", trips:"Trips", users:"User Management",
     masterdata:"System Configuration", fleet:"Fleet Management", fuel:"Fuel Tracking",
     reports:"Reports", download:"POD Management", assign:"Dispatch Management",
-    mydeliveries:"Delivery Route", odometer:"Trip Log", search:"Search Invoices",
+    mydeliveries:"My Deliveries", odometer:"Daily Mileage Log", search:"Search Invoices",
     alerts:"Alerts", logout:"Logout",
     admin:"System Administrator", planning:"Planning",
     manager:"Distribution Center Manager", driver:"Delivery Driver", viewonly:"View Only"
   },
   ar: {
-    dashboard:"لوحة القيادة", invoices:"جميع الفواتير", dcinvoices:"فواتير المركز",
-    upload:"معالجة الفواتير", trips:"الرحلات", users:"إدارة المستخدمين",
+    dashboard:"لوحة القيادة", invoices:"جميع الفواتير", dcinvoices:"إدارة الفواتير",
+    upload:"رفع وترحيل الفواتير", trips:"الرحلات", users:"إدارة المستخدمين",
     masterdata:"إعدادات النظام", fleet:"إدارة الأسطول", fuel:"تتبع الوقود",
     reports:"التقارير", download:"إدارة وثائق التسليم", assign:"إدارة الإرسال",
-    mydeliveries:"مسار التسليم", odometer:"سجل الرحلة", search:"البحث عن الفواتير",
+    mydeliveries:"تسليماتي", odometer:"سجل المسافات اليومي", search:"البحث عن الفواتير",
     alerts:"تنبيهات", logout:"تسجيل الخروج",
     admin:"مدير النظام", planning:"التخطيط",
     manager:"مدير مركز التوزيع", driver:"سائق التسليم", viewonly:"عرض فقط"
