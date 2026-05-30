@@ -8,11 +8,13 @@ const T = {
     addLog:"Add Fuel Log", totalLiters:"Total Liters", totalCost:"Total Cost",
     totalKM:"Total KM", avgEff:"Avg Efficiency", vehicle:"Vehicle", driver:"Driver",
     date:"Date", liters:"Liters Added", cost:"Cost (SAR)", tripKM:"Trip KM",
-    save:"Save", cancel:"Cancel", currentFuel:"Current Fuel", lastRefill:"Last Refill",
+    save:"Save", cancel:"Cancel", currentFuel:"Current Fuel",
     effTrend:"Efficiency", expected:"Expected Fuel", actual:"Actual Used",
-    deviation:"Deviation", fraudAlert:"FRAUD ALERT", normal:"Normal",
+    deviation:"Deviation", deviationAlert:"DEVIATION ALERT", normal:"Normal",
     noData:"No fuel data yet", refillHistory:"Refill History",
-    allVehicles:"All Vehicles Summary", calcEff:"Calculated efficiency"
+    allVehicles:"All Vehicles — Fuel Overview", calcEff:"Calculated efficiency",
+    overall:"Overall — All DCs", riyadhDC:"Riyadh Distribution Center",
+    jeddahDC:"Jeddah Distribution Center", dammamDC:"Dammam Distribution Center"
   },
   ar: {
     vehicleWise:"حسب المركبة", fuelLogs:"سجلات الوقود", efficiency:"الكفاءة",
@@ -20,13 +22,46 @@ const T = {
     totalKM:"إجمالي الكيلومترات", avgEff:"متوسط الكفاءة", vehicle:"المركبة",
     driver:"السائق", date:"التاريخ", liters:"اللترات المضافة", cost:"التكلفة (SAR)",
     tripKM:"كيلومترات الرحلة", save:"حفظ", cancel:"إلغاء",
-    currentFuel:"الوقود الحالي", lastRefill:"آخر تعبئة", effTrend:"الكفاءة",
+    currentFuel:"الوقود الحالي", effTrend:"الكفاءة",
     expected:"الوقود المتوقع", actual:"الوقود الفعلي", deviation:"الانحراف",
-    fraudAlert:"تحذير احتيال", normal:"طبيعي", noData:"لا توجد بيانات وقود",
-    refillHistory:"سجل التعبئة", allVehicles:"ملخص جميع المركبات",
-    calcEff:"كفاءة محسوبة"
+    deviationAlert:"تنبيه انحراف", normal:"طبيعي",
+    noData:"لا توجد بيانات وقود", refillHistory:"سجل التعبئة",
+    allVehicles:"جميع المركبات — نظرة عامة على الوقود", calcEff:"كفاءة محسوبة",
+    overall:"إجمالي — جميع مراكز التوزيع",
+    riyadhDC:"مركز توزيع الرياض", jeddahDC:"مركز توزيع جدة",
+    dammamDC:"مركز توزيع الدمام"
   }
 };
+
+const DC_COLORS = { Riyadh:"#1A3A5C", Jeddah:"#0f766e", Dammam:"#7c3aed" };
+
+function dcLabel(dc, t) {
+  if (dc==="Riyadh") return t.riyadhDC;
+  if (dc==="Jeddah") return t.jeddahDC;
+  return t.dammamDC;
+}
+
+function DCFuelBox({ dc, fuelLogs, vehicles, t }) {
+  const color = DC_COLORS[dc];
+  const logs = fuelLogs.filter(l=>l.dc===dc);
+  const veh = vehicles.filter(v=>v.dc===dc);
+  const tL = logs.reduce((s,l)=>s+l.liters,0);
+  const tKM = logs.reduce((s,l)=>s+l.tripKM,0);
+  const tSAR = logs.reduce((s,l)=>s+l.sar,0);
+  const avgFuel = veh.length>0?Math.round(veh.reduce((s,v)=>s+(v.fuelLevel||0),0)/veh.length):0;
+  return (
+    <Card style={{ borderTop:`4px solid ${color}` }}>
+      <CardTitle style={{ color }}>📍 {dcLabel(dc,t)}</CardTitle>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8, marginBottom:8 }}>
+        <StatCard icon="⛽" label={t.totalLiters} value={tL+"L"} color="#f59e0b" />
+        <StatCard icon="💰" label={t.totalCost} value={"SAR "+tSAR} color="#ef4444" />
+        <StatCard icon="🛣️" label={t.totalKM} value={tKM+"km"} color="#6366f1" />
+        <StatCard icon="📊" label={t.avgEff} value={tL>0?(tKM/tL).toFixed(1)+" km/L":"-"} color="#10b981" />
+      </div>
+      <div style={{ fontSize:12, color:"#64748b" }}>⛽ Avg Fuel Level: {avgFuel}L</div>
+    </Card>
+  );
+}
 
 export default function Fuel({ user, fuelLogs, setFuelLogs, vehicles, setVehicles, lang }) {
   const [tab, setTab] = useState("vehicleWise");
@@ -49,7 +84,7 @@ export default function Fuel({ user, fuelLogs, setFuelLogs, vehicles, setVehicle
     if (!form.vehicle||!form.liters) return;
     const id = genId("FUEL");
     setFuelLogs(prev=>[...prev,{id,...form,liters:Number(form.liters),sar:Number(form.sar),tripKM:Number(form.tripKM),dc}]);
-    setVehicles(prev=>prev.map(v=>v.plate===form.vehicle?{...v,fuelLevel:Math.min((v.fuelLevel||0)+Number(form.liters),v.fuelCapacity||80),totalKM:(v.totalKM||0)+Number(form.tripKM),lastRefillDate:form.date,lastRefillLiters:Number(form.liters)}:v));
+    setVehicles(prev=>prev.map(v=>v.plate===form.vehicle?{...v,fuelLevel:Math.min((v.fuelLevel||0)+Number(form.liters),v.fuelCapacity||80),totalKM:(v.totalKM||0)+Number(form.tripKM)}:v));
     setDone(id+" added!"); setShowForm(false);
     setForm({date:new Date().toISOString().split("T")[0],vehicle:"",driver:"",liters:"",sar:"",tripKM:""});
     setTimeout(()=>setDone(""),3000);
@@ -69,12 +104,30 @@ export default function Fuel({ user, fuelLogs, setFuelLogs, vehicles, setVehicle
   return (
     <div style={{ direction:rtl?"rtl":"ltr" }}>
       {done&&<SuccessMsg msg={done} />}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:12, marginBottom:16 }}>
-        <StatCard icon="⛽" label={t.totalLiters} value={totLiters+"L"} color="#f59e0b" />
-        <StatCard icon="💰" label={t.totalCost} value={"SAR "+totSAR} color="#ef4444" />
-        <StatCard icon="🛣️" label={t.totalKM} value={totKM+" km"} color="#6366f1" />
-        <StatCard icon="📊" label={t.avgEff} value={totKM&&totLiters?(totKM/totLiters).toFixed(1)+" km/L":"-"} color="#10b981" />
-      </div>
+
+      {/* Overall Summary */}
+      <Card style={{ borderTop:"4px solid #1A3A5C", marginBottom:16 }}>
+        <CardTitle>⛽ {t.overall}</CardTitle>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:12 }}>
+          <StatCard icon="⛽" label={t.totalLiters} value={totLiters+"L"} color="#f59e0b" />
+          <StatCard icon="💰" label={t.totalCost} value={"SAR "+totSAR} color="#ef4444" />
+          <StatCard icon="🛣️" label={t.totalKM} value={totKM+" km"} color="#6366f1" />
+          <StatCard icon="📊" label={t.avgEff} value={totKM&&totLiters?(totKM/totLiters).toFixed(1)+" km/L":"-"} color="#10b981" />
+        </div>
+      </Card>
+
+      {/* DC Boxes — Admin sees all 3, Manager sees own */}
+      {isAdmin && (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:16, marginBottom:16 }}>
+          <DCFuelBox dc="Riyadh" fuelLogs={fuelLogs} vehicles={vehicles} t={t} />
+          <DCFuelBox dc="Jeddah" fuelLogs={fuelLogs} vehicles={vehicles} t={t} />
+          <DCFuelBox dc="Dammam" fuelLogs={fuelLogs} vehicles={vehicles} t={t} />
+        </div>
+      )}
+      {!isAdmin && (
+        <DCFuelBox dc={dc} fuelLogs={fuelLogs} vehicles={vehicles} t={t} />
+      )}
+
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:8 }}>
         <TabBar tabs={tabs} active={tab} onChange={setTab} />
         <Btn small onClick={()=>setShowForm(!showForm)}>⛽ {t.addLog}</Btn>
@@ -108,13 +161,13 @@ export default function Fuel({ user, fuelLogs, setFuelLogs, vehicles, setVehicle
 
       {tab==="vehicleWise"&&(
         <div>
-          <Card style={{ borderTop:"4px solid #1A3A5C", marginBottom:16 }}>
+          <Card style={{ marginBottom:16 }}>
             <CardTitle>🚗 {t.allVehicles}</CardTitle>
             <div style={{ overflowX:"auto" }}>
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
                 <thead>
                   <tr style={{ background:"#f8fafc" }}>
-                    {[t.vehicle,"DC",t.currentFuel,t.lastRefill,t.effTrend].map(h=>(
+                    {[t.vehicle,"DC",t.currentFuel,"Last Refill",t.effTrend].map(h=>(
                       <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontWeight:700, color:"#374151", borderBottom:"2px solid #e2e8f0" }}>{h}</th>
                     ))}
                   </tr>
@@ -140,7 +193,7 @@ export default function Fuel({ user, fuelLogs, setFuelLogs, vehicles, setVehicle
               </table>
             </div>
           </Card>
-          {vStats.filter(s=>s.logs.length>0).map(({v,logs,tL,tKM,tSAR,eff,expectedFuel,deviation,lastLog})=>(
+          {vStats.filter(s=>s.logs.length>0).map(({v,logs,tL,tKM,tSAR,eff,expectedFuel,deviation})=>(
             <Card key={v.plate}>
               <CardTitle>🚗 {v.plate} <span style={{ fontSize:12, color:"#64748b", fontWeight:400 }}>({v.type}) {v.dc} DC</span></CardTitle>
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:8, marginBottom:12 }}>
@@ -151,7 +204,7 @@ export default function Fuel({ user, fuelLogs, setFuelLogs, vehicles, setVehicle
               </div>
               {deviation!==null&&(
                 <div style={{ background:Math.abs(Number(deviation))>5?"#fee2e2":"#d1fae5", borderRadius:8, padding:"8px 14px", fontSize:13, fontWeight:600, color:Math.abs(Number(deviation))>5?"#991b1b":"#065f46", marginBottom:12 }}>
-                  {Math.abs(Number(deviation))>5?"⚠️ "+t.fraudAlert+": "+t.expected+" "+expectedFuel+"L vs "+t.actual+" "+tL+"L":"✅ "+t.normal+" ("+t.deviation+": "+Number(deviation).toFixed(1)+"L)"}
+                  {Math.abs(Number(deviation))>5?"⚠️ "+t.deviationAlert+": "+t.expected+" "+expectedFuel+"L vs "+t.actual+" "+tL+"L":"✅ "+t.normal+" ("+t.deviation+": "+Number(deviation).toFixed(1)+"L)"}
                 </div>
               )}
               <div style={{ fontWeight:600, fontSize:13, marginBottom:6 }}>📜 {t.refillHistory}</div>
@@ -178,8 +231,7 @@ export default function Fuel({ user, fuelLogs, setFuelLogs, vehicles, setVehicle
             <div key={log.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
               <span style={{ fontWeight:700, fontSize:13, color:"#6366f1", minWidth:90 }}>{log.vehicle}</span>
               <span style={{ fontSize:13, flex:1, minWidth:100 }}>{log.driver||"-"}</span>
-              <span>⛽ {log.liters}L</span>
-              <span>💰 SAR {log.sar}</span>
+              <span>⛽ {log.liters}L</span><span>💰 SAR {log.sar}</span>
               <span>🛣️ {log.tripKM}km</span>
               <span style={{ fontWeight:700, color:"#10b981" }}>{log.liters>0?(log.tripKM/log.liters).toFixed(1):"-"} km/L</span>
               <span style={{ color:"#94a3b8", fontSize:12 }}>📅 {log.date}</span>
@@ -190,7 +242,7 @@ export default function Fuel({ user, fuelLogs, setFuelLogs, vehicles, setVehicle
 
       {tab==="efficiency"&&(
         <Card>
-          <CardTitle>📊 {t.efficiency} & Fraud Detection</CardTitle>
+          <CardTitle>📊 {t.efficiency} & {t.deviationAlert}</CardTitle>
           {vStats.filter(s=>s.tL>0).length===0&&<div style={{ textAlign:"center", padding:20, color:"#94a3b8" }}>{t.noData}</div>}
           {vStats.filter(s=>s.tL>0).map(({v,tL,tKM,tSAR,eff,expectedFuel,deviation})=>(
             <div key={v.plate} style={{ padding:"12px 0", borderBottom:"1px solid #f1f5f9" }}>
@@ -204,7 +256,7 @@ export default function Fuel({ user, fuelLogs, setFuelLogs, vehicles, setVehicle
               </div>
               {deviation!==null&&(
                 <div style={{ fontSize:12, fontWeight:600, padding:"6px 10px", borderRadius:6, background:Math.abs(Number(deviation))>5?"#fee2e2":"#d1fae5", color:Math.abs(Number(deviation))>5?"#991b1b":"#065f46" }}>
-                  {Math.abs(Number(deviation))>5?"⚠️ "+t.fraudAlert+": "+Number(deviation).toFixed(1)+"L discrepancy":"✅ "+t.normal+" ("+t.deviation+": "+Number(deviation).toFixed(1)+"L)"}
+                  {Math.abs(Number(deviation))>5?"⚠️ "+t.deviationAlert+": "+Number(deviation).toFixed(1)+"L difference — Review Needed":"✅ "+t.normal+" ("+t.deviation+": "+Number(deviation).toFixed(1)+"L)"}
                 </div>
               )}
             </div>

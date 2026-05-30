@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Card, CardTitle, Btn, Input, Select, SuccessMsg, Badge } from "../components/Shared.jsx";
+import { Card, CardTitle, Btn, Input, Select, SuccessMsg } from "../components/Shared.jsx";
 import { STORAGE_CONDITIONS, DRIVERS_BY_DC, TRIP_DESTINATIONS } from "../data/masterData.js";
 
 const VEHICLES_BY_DC = {
@@ -24,7 +24,8 @@ const T = {
     dcRiyadh:"Distribution Center - Riyadh",
     dcJeddah:"Distribution Center - Jeddah",
     dcDammam:"Distribution Center - Dammam",
-    distCenters:"Distribution Centers", delivCities:"Delivery Cities"
+    distCenters:"Distribution Centers", delivCities:"Delivery Cities",
+    printTrip:"Print Trip Report"
   },
   ar: {
     newTrip:"رحلة جديدة", cancel:"إلغاء", allTrips:"جميع الرحلات",
@@ -41,9 +42,88 @@ const T = {
     dcRiyadh:"مركز توزيع الرياض",
     dcJeddah:"مركز توزيع جدة",
     dcDammam:"مركز توزيع الدمام",
-    distCenters:"مراكز التوزيع", delivCities:"مدن التسليم"
+    distCenters:"مراكز التوزيع", delivCities:"مدن التسليم",
+    printTrip:"طباعة تقرير الرحلة"
   }
 };
+
+function printTripReport(trip, t) {
+  const content = `<html><head><style>
+    body{font-family:Arial,sans-serif;padding:30px;color:#1a1a1a;}
+    .header{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #1A3A5C;padding-bottom:15px;margin-bottom:20px;}
+    h1{color:#1A3A5C;margin:0;font-size:22px;}
+    .logo{font-size:28px;}
+    .section{margin-bottom:20px;}
+    .label{font-weight:700;color:#64748b;font-size:12px;text-transform:uppercase;margin-bottom:4px;}
+    .value{font-size:14px;color:#1a1a1a;}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;}
+    table{width:100%;border-collapse:collapse;margin-top:10px;}
+    th{background:#1A3A5C;color:white;padding:8px 12px;text-align:left;font-size:12px;}
+    td{padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:13px;}
+    .status{display:inline-block;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:700;}
+    .dispatched{background:#ede9fe;color:#6d28d9;}
+    .received{background:#d1fae5;color:#065f46;}
+    .footer{margin-top:30px;border-top:1px solid #e2e8f0;padding-top:15px;font-size:11px;color:#94a3b8;text-align:center;}
+    .sig-box{border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin-top:20px;min-height:80px;}
+  </style></head><body>
+  <div class="header">
+    <div>
+      <h1>🚚 DeliverFlow — Trip Report</h1>
+      <div style="font-size:13px;color:#64748b;margin-top:4px;">Saudi Pharmaceutical Co. (SPCO)</div>
+    </div>
+    <div style="text-align:right;font-size:13px;color:#64748b;">
+      <div>Generated: ${new Date().toLocaleString()}</div>
+      <div>Trip #: <b>${trip.tripNumber||trip.id}</b></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div><div class="label">Trip Number</div><div class="value">${trip.tripNumber||trip.id}</div></div>
+    <div><div class="label">Status</div><div class="value"><span class="status ${trip.status}">${trip.status.toUpperCase()}</span></div></div>
+    <div><div class="label">From</div><div class="value">📍 ${trip.fromDC} Distribution Center</div></div>
+    <div><div class="label">To</div><div class="value">📍 ${trip.toCityLabel||trip.toCity}</div></div>
+    <div><div class="label">Trip Date</div><div class="value">📅 ${trip.date}</div></div>
+    <div><div class="label">Driver</div><div class="value">👤 ${trip.driver}</div></div>
+    <div><div class="label">Vehicle</div><div class="value">🚗 ${trip.vehicle}</div></div>
+    <div><div class="label">Storage</div><div class="value">🌡️ ${trip.storage||"-"}</div></div>
+    <div><div class="label">Created By</div><div class="value">${trip.createdBy}</div></div>
+    <div><div class="label">Created At</div><div class="value">${trip.createdAt}</div></div>
+    ${trip.receivedBy?`<div><div class="label">Received By</div><div class="value">${trip.receivedBy}</div></div>`:""}
+    ${trip.receivedAt?`<div><div class="label">Received At</div><div class="value">${trip.receivedAt}</div></div>`:""}
+  </div>
+
+  ${trip.notes?`<div class="section"><div class="label">Notes</div><div class="value">${trip.notes}</div></div>`:""}
+
+  ${trip.invoiceIds&&trip.invoiceIds.length>0?`
+  <div class="section">
+    <div class="label">Transit Invoices (${trip.invoiceIds.length})</div>
+    <table>
+      <thead><tr><th>#</th><th>Invoice ID</th></tr></thead>
+      <tbody>${trip.invoiceIds.map((id,i)=>`<tr><td>${i+1}</td><td>${id}</td></tr>`).join("")}</tbody>
+    </table>
+  </div>`:""}
+
+  <div style="margin-top:30px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:30px;">
+      <div>
+        <div class="label">Dispatched By (Signature)</div>
+        <div class="sig-box"></div>
+        <div style="font-size:12px;margin-top:8px;color:#64748b;">Name: ${trip.createdBy} | Date: ${trip.date}</div>
+      </div>
+      <div>
+        <div class="label">Received By (Signature)</div>
+        <div class="sig-box"></div>
+        <div style="font-size:12px;margin-top:8px;color:#64748b;">Name: ${trip.receivedBy||"_____________"} | Date: ${trip.receivedAt||"_____________"}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">DeliverFlow — Logistics & Delivery Management System | Saudi Pharmaceutical Co. (SPCO) | Internal Use Only</div>
+  </body></html>`;
+  const w = window.open("","_blank");
+  w.document.write(content); w.document.close();
+  setTimeout(()=>w.print(),500);
+}
 
 export default function Trips({ user, trips, setTrips, invoices, setInvoices, lang }) {
   const [showForm, setShowForm] = useState(false);
@@ -59,7 +139,7 @@ export default function Trips({ user, trips, setTrips, invoices, setInvoices, la
   const dc = user.dc||"Riyadh";
   const isAdmin = user.role==="admin";
 
-  const myTrips = isAdmin ? trips : trips.filter(tr=>tr.fromDC===dc||tr.toCity==="DC-"+dc||tr.toCity===dc);
+  const myTrips = isAdmin?trips:trips.filter(tr=>tr.fromDC===dc||tr.toCity==="DC-"+dc||tr.toCity===dc);
 
   const getPendingShipInvoices = (destDC) => {
     if (!destDC||!destDC.startsWith("DC-")) return [];
@@ -107,14 +187,11 @@ export default function Trips({ user, trips, setTrips, invoices, setInvoices, la
 
   const statusColor = { dispatched:"#8b5cf6", received:"#10b981", closed:"#64748b" };
   const storageOptions = STORAGE_CONDITIONS.map(s=>s.name+" ("+s.range+")");
-
-  // Build destination options — DC list excludes current DC
   const dcDestinations = [
     { label:t.dcRiyadh, value:"DC-Riyadh" },
     { label:t.dcJeddah, value:"DC-Jeddah" },
     { label:t.dcDammam, value:"DC-Dammam" },
   ].filter(d=>isAdmin||d.value!=="DC-"+dc);
-
   const cityDestinations = TRIP_DESTINATIONS.filter(d=>d.type==="city");
 
   return (
@@ -200,9 +277,12 @@ export default function Trips({ user, trips, setTrips, invoices, setInvoices, la
           <div key={trip.id} style={{ border:"1px solid #e2e8f0", borderRadius:8, padding:14, marginBottom:8 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8, flexWrap:"wrap", gap:6 }}>
               <span style={{ fontWeight:800, color:"#6366f1", fontSize:15 }}>{trip.tripNumber||trip.id}</span>
-              <span style={{ fontSize:12, fontWeight:600, padding:"3px 10px", borderRadius:99, background:statusColor[trip.status]+"22", color:statusColor[trip.status] }}>
-                {trip.status==="dispatched"?t.dispatched:t.received}
-              </span>
+              <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                <span style={{ fontSize:12, fontWeight:600, padding:"3px 10px", borderRadius:99, background:(statusColor[trip.status]||"#64748b")+"22", color:statusColor[trip.status]||"#64748b" }}>
+                  {trip.status==="dispatched"?t.dispatched:t.received}
+                </span>
+                <Btn small onClick={()=>printTripReport(trip,t)} color="#6366f1">🖨️ {t.printTrip}</Btn>
+              </div>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:6, fontSize:13, color:"#374151" }}>
               <div>📦 <b>{t.from}</b> {trip.fromDC} DC</div>

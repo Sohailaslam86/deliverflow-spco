@@ -10,7 +10,8 @@ const T = {
     invoice:"Invoice #", date:"Date", customer:"Customer", dc:"DC",
     driver:"Driver", vehicle:"Vehicle", viewPOD:"View POD",
     back:"Back to List", noPOD:"No POD photo available",
-    noInvoices:"No delivered invoices found", dateFrom:"From", dateTo:"To"
+    noInvoices:"No delivered invoices found",
+    fromDate:"From Date", toDate:"To Date", clearDates:"Clear Dates"
   },
   ar: {
     title:"إدارة وثائق التسليم", subtitle:"تصدير بيانات تأكيد التسليم",
@@ -21,7 +22,7 @@ const T = {
     dc:"المركز", driver:"السائق", vehicle:"المركبة",
     viewPOD:"عرض وثيقة التسليم", back:"العودة للقائمة",
     noPOD:"لا توجد صورة وثيقة تسليم", noInvoices:"لا توجد فواتير مسلمة",
-    dateFrom:"من", dateTo:"إلى"
+    fromDate:"من تاريخ", toDate:"إلى تاريخ", clearDates:"مسح التواريخ"
   }
 };
 
@@ -37,7 +38,10 @@ export default function Download({ user, lang, invoices }) {
   const isAdmin = user.role==="admin";
   const isPlanning = user.role==="planning";
   const dcs = [...new Set(invoices.map(i=>i.dc))];
+
+  // Only delivered invoices
   const delivered = invoices.filter(inv=>inv.status==="delivered");
+
   const filtered = delivered.filter(inv=>{
     const matchDC = filter==="all"||inv.dc===filter;
     const matchSearch = !search||inv.id.toLowerCase().includes(search.toLowerCase())||inv.customer.toLowerCase().includes(search.toLowerCase());
@@ -51,7 +55,7 @@ export default function Download({ user, lang, invoices }) {
   function downloadCSV() {
     const data = selected.length>0?filtered.filter(i=>selected.includes(i.id)):filtered;
     const headers = ["Invoice#","Date","Customer","Institution","DC","Driver","Vehicle","DeliveredAt","Status"];
-    const rows = data.map(inv=>[inv.id,inv.date,inv.customer,inv.inst||"",inv.dc,inv.driver||"",inv.vehicle||"",inv.deliveredAt||inv.date,"Delivered"]);
+    const rows = data.map(inv=>[inv.id,inv.date,inv.customer,inv.inst||"",inv.dc,inv.driverName||inv.driver||"",inv.vehicle||"",inv.deliveredAt||inv.date,"Delivered"]);
     const csv = [headers,...rows].map(r=>r.join(",")).join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
@@ -72,14 +76,14 @@ export default function Download({ user, lang, invoices }) {
       .footer{margin-top:30px;font-size:11px;color:#94a3b8;text-align:center;}
     </style></head><body>
     <h1>DeliverFlow — POD Report</h1>
-    <p style="color:#64748b;font-size:13px;">Generated: ${new Date().toLocaleString()} | Total: ${data.length} invoices</p>
+    <p style="color:#64748b;font-size:13px;">Generated: ${new Date().toLocaleString()} | Total: ${data.length} invoices${dateFrom||dateTo?" | Period: "+(dateFrom||"")+" → "+(dateTo||""):""}</p>
     <table>
       <thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th>DC</th><th>Driver</th><th>Delivered At</th><th>POD</th></tr></thead>
       <tbody>
         ${data.map(inv=>`<tr>
           <td><b style="color:#6366f1">${inv.id}</b></td>
           <td>${inv.date}</td><td>${inv.customer}</td>
-          <td>${inv.dc} DC</td><td>${inv.driver||"-"}</td>
+          <td>${inv.dc} DC</td><td>${inv.driverName||inv.driver||"-"}</td>
           <td>${inv.deliveredAt||inv.date}</td>
           <td>${inv.podImage&&inv.podImage!=="demo_pod"?`<img src="${inv.podImage}" class="pod-img"/>`:inv.podImage==="demo_pod"?"<span style='color:#10b981'>✓ Available</span>":"<span style='color:#94a3b8'>-</span>"}</td>
         </tr>`).join("")}
@@ -103,7 +107,7 @@ export default function Download({ user, lang, invoices }) {
           <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:10,marginBottom:16,fontSize:13 }}>
             <div><b>{t.customer}:</b> {viewInv.customer}</div>
             <div><b>{t.dc}:</b> {viewInv.dc}</div>
-            <div><b>{t.driver}:</b> {viewInv.driver||"-"}</div>
+            <div><b>{t.driver}:</b> {viewInv.driverName||viewInv.driver||"-"}</div>
             <div><b>{t.vehicle}:</b> {viewInv.vehicle||"-"}</div>
             <div><b>{t.date}:</b> {viewInv.date}</div>
             <div><b>Delivered:</b> {viewInv.deliveredAt||"-"}</div>
@@ -131,7 +135,8 @@ export default function Download({ user, lang, invoices }) {
         <p style={{ fontSize:14,color:"#64748b",margin:0 }}>{t.subtitle}</p>
       </div>
       <Card>
-        <div style={{ display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:12 }}>
+        {/* Search + DC Filter */}
+        <div style={{ display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:10 }}>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={t.search}
             style={{ flex:1,minWidth:180,border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none" }} />
           <select value={filter} onChange={e=>setFilter(e.target.value)}
@@ -139,11 +144,25 @@ export default function Download({ user, lang, invoices }) {
             <option value="all">{t.allDCs}</option>
             {dcs.map(dc=><option key={dc} value={dc}>{dc}</option>)}
           </select>
-          <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
-            style={{ border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none" }} />
-          <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
-            style={{ border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none" }} />
         </div>
+
+        {/* Date Range Filter */}
+        <div style={{ display:"flex",gap:8,alignItems:"center",marginBottom:12,flexWrap:"wrap" }}>
+          <span style={{ fontSize:13,color:"#64748b" }}>📅 {t.fromDate}:</span>
+          <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
+            style={{ border:"1.5px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:13,outline:"none" }} />
+          <span style={{ fontSize:13,color:"#64748b" }}>{t.toDate}:</span>
+          <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
+            style={{ border:"1.5px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:13,outline:"none" }} />
+          {(dateFrom||dateTo)&&(
+            <button onClick={()=>{setDateFrom("");setDateTo("");}}
+              style={{ background:"#f1f5f9",border:"none",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontSize:12,color:"#64748b",fontWeight:600 }}>
+              ✕ {t.clearDates}
+            </button>
+          )}
+        </div>
+
+        {/* Actions */}
         <div style={{ display:"flex",gap:8,flexWrap:"wrap",marginBottom:12,alignItems:"center" }}>
           <span style={{ fontSize:13,color:"#64748b" }}>{filtered.length} {t.delivered}</span>
           <div style={{ flex:1 }} />
@@ -154,6 +173,7 @@ export default function Download({ user, lang, invoices }) {
             <Btn small onClick={downloadCSV} color="#065f46">⬇ {t.downloadCSV}</Btn>
           </>}
         </div>
+
         {filtered.length===0?<EmptyState icon="📥" title={t.noInvoices} />:(
           <div style={{ overflowX:"auto" }}>
             <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
@@ -176,7 +196,7 @@ export default function Download({ user, lang, invoices }) {
                     <td style={{ padding:"10px 12px",color:"#64748b" }}>{inv.date}</td>
                     <td style={{ padding:"10px 12px" }}>{inv.customer}</td>
                     <td style={{ padding:"10px 12px" }}>{inv.dc}</td>
-                    <td style={{ padding:"10px 12px",color:"#64748b" }}>{inv.driver||"-"}</td>
+                    <td style={{ padding:"10px 12px",color:"#64748b" }}>{inv.driverName||inv.driver||"-"}</td>
                     <td style={{ padding:"10px 12px",color:"#64748b" }}>{inv.vehicle||"-"}</td>
                     <td style={{ padding:"10px 12px" }} onClick={e=>{e.stopPropagation();setViewInv(inv);}}>
                       <span style={{ color:"#6366f1",fontWeight:600,cursor:"pointer",fontSize:12 }}>
