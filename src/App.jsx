@@ -1,4 +1,4 @@
-import { useState } from "react"; 
+import { useState } from "react";
 import Login from "./components/Login.jsx";
 import Shell from "./components/Shell.jsx";
 import Dashboard  from "./pages/Dashboard.jsx";
@@ -34,30 +34,45 @@ export default function App() {
   const [requests, setRequests] = useState(INITIAL_USER_REQUESTS);
   const [alerts,   setAlerts]   = useState(INITIAL_ALERTS);
 
-  if (!user) return <Login onLogin={u=>{setUser(u);setPage("dashboard");}} lang={lang} setLang={setLang} />;
+  if (!user) return (
+    <Login
+      onLogin={u => { setUser(u); setPage("dashboard"); }}
+      lang={lang}
+      setLang={setLang}
+    />
+  );
 
-  const props = { user, lang, invoices, setInvoices, vehicles, setVehicles, trips, setTrips, fuelLogs, setFuelLogs, uploads, setUploads, users, setUsers, requests, setRequests, alerts, setAlerts };
+  const props = {
+    user, lang, invoices, setInvoices, vehicles, setVehicles,
+    trips, setTrips, fuelLogs, setFuelLogs, uploads, setUploads,
+    users, setUsers, requests, setRequests, alerts, setAlerts,
+    setPage
+  };
 
   const pages = {
-    dashboard:  <Dashboard  {...props} />,
-    invoices:   <Invoices   {...props} />,
-    upload:     <Upload     {...props} />,
-    assign:     <Assign     {...props} />,
-    trips:      <Trips      {...props} />,
-    users:      <Users      {...props} />,
-    requests:   <Users      {...props} tab="requests" />,
-    masterdata: <MasterData {...props} />,
-    fleet:      <Fleet      {...props} />,
-    fuel:       <Fuel       {...props} />,
-    reports:    <Reports    {...props} />,
-    mydeliveries:<Driver    {...props} />,
-    odometer:   <Odometer   {...props} />,
-    search:     <Search     {...props} />,
-    download:   <Download   {...props} />,
+    dashboard:   <Dashboard  {...props} />,
+    invoices:    <Invoices   {...props} />,
+    upload:      <Upload     {...props} />,
+    assign:      <Assign     {...props} />,
+    trips:       <Trips      {...props} />,
+    users:       <Users      {...props} />,
+    masterdata:  <MasterData {...props} />,
+    fleet:       <Fleet      {...props} />,
+    fuel:        <Fuel       {...props} />,
+    reports:     <Reports    {...props} />,
+    mydeliveries:<Driver     {...props} />,
+    odometer:    <Odometer   {...props} />,
+    search:      <Search     {...props} />,
+    download:    <Download   {...props} />,
   };
 
   return (
-    <Shell user={user} lang={lang} setLang={setLang} page={page} setPage={setPage} onLogout={()=>{setUser(null);setPage("dashboard");}} alerts={alerts}>
+    <Shell
+      user={user} lang={lang} setLang={setLang}
+      page={page} setPage={setPage}
+      onLogout={() => { setUser(null); setPage("dashboard"); }}
+      alerts={alerts}
+    >
       {pages[page] || pages.dashboard}
     </Shell>
   );
