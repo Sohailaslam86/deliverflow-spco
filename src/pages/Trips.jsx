@@ -113,7 +113,7 @@ export default function Trips({ user, trips, setTrips, invoices, setInvoices, la
     { label:t.dcRiyadh, value:"DC-Riyadh" },
     { label:t.dcJeddah, value:"DC-Jeddah" },
     { label:t.dcDammam, value:"DC-Dammam" },
-  ].filter(d=>d.value!=="DC-"+dc);
+  ].filter(d=>isAdmin||d.value!=="DC-"+dc);
 
   const cityDestinations = TRIP_DESTINATIONS.filter(d=>d.type==="city");
 
