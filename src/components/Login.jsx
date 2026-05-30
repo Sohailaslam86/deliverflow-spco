@@ -4,6 +4,75 @@ import { Input, Select, Textarea, Btn } from "./Shared.jsx";
 
 const EMPTY = "";
 
+const T = {
+  en: {
+    company: "Saudi Pharmaceutical Co.",
+    companyAr: "الشركة السعودية للأدوية",
+    welcome: "Welcome Back",
+    signin: "Sign in to continue",
+    emailPhone: "Email or Phone",
+    password: "Password",
+    signInBtn: "Sign In",
+    requestAccess: "Request Access",
+    driverAccess: "Driver Access Request",
+    demoAccounts: "Demo Accounts",
+    invalidCreds: "Invalid email or password",
+    requestTitle: "Request System Access",
+    driverTitle: "Driver Access Request",
+    back: "Back",
+    submitted: "Request Submitted!",
+    submittedMsg: "Your request has been sent for approval.",
+    backToLogin: "Back to Login",
+    submitBtn: "Submit Request",
+    fullName: "Full Name",
+    displayName: "Display Name in System",
+    empId: "Employee ID",
+    mobile: "Mobile Number",
+    email: "Email Address",
+    dept: "Department",
+    location: "Location",
+    dcAccess: "DC Access",
+    licNo: "License Number",
+    licExp: "License Expiry",
+    reason: "Reason for Access",
+    refNote: "Your request will receive a unique reference number upon approval.",
+    footer: "2026 Saudi Pharmaceutical Co. SPCO"
+  },
+  ar: {
+    company: "الشركة السعودية للأدوية",
+    companyAr: "Saudi Pharmaceutical Co.",
+    welcome: "مرحباً بك",
+    signin: "سجّل دخولك للمتابعة",
+    emailPhone: "البريد أو الهاتف",
+    password: "كلمة المرور",
+    signInBtn: "تسجيل الدخول",
+    requestAccess: "طلب الوصول",
+    driverAccess: "طلب وصول سائق",
+    demoAccounts: "الحسابات التجريبية",
+    invalidCreds: "بيانات غير صحيحة",
+    requestTitle: "طلب الوصول للنظام",
+    driverTitle: "طلب وصول سائق",
+    back: "رجوع",
+    submitted: "تم إرسال الطلب!",
+    submittedMsg: "تم إرسال طلبك للموافقة.",
+    backToLogin: "العودة لتسجيل الدخول",
+    submitBtn: "إرسال الطلب",
+    fullName: "الاسم الكامل",
+    displayName: "اسم العرض في النظام",
+    empId: "رقم الموظف",
+    mobile: "رقم الجوال",
+    email: "البريد الإلكتروني",
+    dept: "القسم",
+    location: "الموقع",
+    dcAccess: "صلاحية المركز",
+    licNo: "رقم الرخصة",
+    licExp: "انتهاء الرخصة",
+    reason: "سبب الوصول",
+    refNote: "سيحصل طلبك على رقم مرجعي فريد عند الموافقة.",
+    footer: "2026 الشركة السعودية للأدوية SPCO"
+  }
+};
+
 export default function Login({ onLogin, lang, setLang }) {
   const [screen, setScreen] = useState("login");
   const [email, setEmail] = useState(EMPTY);
@@ -11,31 +80,39 @@ export default function Login({ onLogin, lang, setLang }) {
   const [err, setErr] = useState(EMPTY);
   const [demo, setDemo] = useState(false);
   const rtl = lang === "ar";
+  const t = T[lang] || T.en;
 
   function doLogin() {
     const u = DEMO_USERS.find(
       u => (u.email === email.trim().toLowerCase() || u.phone === email.trim()) && pass === DEMO_PW
     );
     if (u) onLogin(u);
-    else setErr(rtl ? "\u0628\u064a\u0627\u0646\u0627\u062a \u063a\u064a\u0631 \u0635\u062d\u064a\u062d\u0629" : "Invalid email or password");
+    else setErr(t.invalidCreds);
   }
 
   return (
     <div style={{ minHeight:"100vh", display:"flex", background:"#0a0a0f", direction:rtl?"rtl":"ltr", fontFamily:"Segoe UI,sans-serif" }}>
       <div style={{ position:"fixed", top:0, left:0, width:"50%", height:"100%", background:"linear-gradient(135deg,#0d1b2a,#1a3a5c)", zIndex:0 }} />
       <div style={{ position:"fixed", top:0, right:0, width:"50%", height:"100%", background:"#f8fafc", zIndex:0 }} />
+
+      {/* Language Toggle */}
       <div style={{ position:"fixed", top:16, [rtl?"left":"right"]:16, zIndex:100, display:"flex", gap:4, background:"rgba(255,255,255,0.1)", borderRadius:20, padding:4 }}>
-        {[["en","EN"],["ar","\u0639\u0631\u0628\u064a"]].map(([l,lbl]) => (
+        {[["en","EN"],["ar","عربي"]].map(([l,lbl]) => (
           <button key={l} onClick={() => setLang(l)}
             style={{ background:lang===l?"white":"none", color:lang===l?"#1A3A5C":"rgba(255,255,255,0.6)", border:"none", padding:"6px 14px", borderRadius:16, cursor:"pointer", fontSize:13, fontWeight:600 }}>
             {lbl}
           </button>
         ))}
       </div>
+
       <div style={{ display:"flex", width:"100%", maxWidth:960, margin:"0 auto", minHeight:"100vh", position:"relative", zIndex:10 }}>
+
+        {/* Left Panel */}
         <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center", padding:"40px 32px", color:"white" }}>
           <div style={{ width:72, height:72, marginBottom:24, background:"linear-gradient(135deg,#c0392b,#e74c3c)", clipPath:"polygon(50% 0%,0% 100%,100% 100%)" }} />
-          <div style={{ fontSize:20, fontWeight:700 }}>\u0627\u0644\u0634\u0631\u0643\u0629 \u0627\u0644\u0633\u0639\u0648\u062f\u064a\u0629 \u0644\u0644\u0623\u062f\u0648\u064a\u0629</div>
+          <div style={{ fontSize:20, fontWeight:700 }}>
+            {rtl ? "الشركة السعودية للأدوية" : "الشركة السعودية للأدوية"}
+          </div>
           <div style={{ fontSize:13, color:"rgba(255,255,255,0.55)", marginBottom:16 }}>Saudi Pharmaceutical Co.</div>
           <div style={{ width:50, height:3, background:"#e74c3c", borderRadius:2, marginBottom:14 }} />
           <div style={{ fontSize:36, fontWeight:900, letterSpacing:"-1px", marginBottom:6 }}>DeliverFlow</div>
@@ -46,32 +123,30 @@ export default function Login({ onLogin, lang, setLang }) {
             </div>
           ))}
         </div>
+
+        {/* Right Panel */}
         <div style={{ flex:1, background:"#f8fafc", display:"flex", flexDirection:"column", justifyContent:"center", padding:"40px 32px" }}>
           {screen === "login" ? (
             <div style={{ maxWidth:380, width:"100%" }}>
-              <h1 style={{ fontSize:26, fontWeight:900, color:"#0f172a", margin:"0 0 6px" }}>
-                {rtl ? "\u0645\u0631\u062d\u0628\u0627\u064b \u0628\u0643" : "Welcome Back"}
-              </h1>
-              <p style={{ fontSize:14, color:"#64748b", marginBottom:24 }}>
-                {rtl ? "\u0633\u062c\u0651\u0644 \u062f\u062e\u0648\u0644\u0643 \u0644\u0644\u0645\u062a\u0627\u0628\u0639\u0629" : "Sign in to continue"}
-              </p>
-              <Input label={rtl?"\u0627\u0644\u0628\u0631\u064a\u062f \u0623\u0648 \u0627\u0644\u0647\u0627\u062a\u0641":"Email or Phone"} value={email} onChange={setEmail} placeholder="email@spco.sa" />
-              <Input label={rtl?"\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631":"Password"} value={pass} onChange={setPass} type="password" placeholder="........" />
+              <h1 style={{ fontSize:26, fontWeight:900, color:"#0f172a", margin:"0 0 6px" }}>{t.welcome}</h1>
+              <p style={{ fontSize:14, color:"#64748b", marginBottom:24 }}>{t.signin}</p>
+              <Input label={t.emailPhone} value={email} onChange={setEmail} placeholder="email@spco.sa" />
+              <Input label={t.password} value={pass} onChange={setPass} type="password" placeholder="........" />
               {err && <div style={{ background:"#fee2e2", color:"#991b1b", borderRadius:8, padding:"10px 14px", fontSize:13, marginBottom:12 }}>{err}</div>}
               <Btn onClick={doLogin} style={{ width:"100%", marginBottom:10, padding:13, fontSize:15 }}>
-                {rtl ? "\u062a\u0633\u062c\u064a\u0644 \u0627\u0644\u062f\u062e\u0648\u0644" : "Sign In"}
+                {t.signInBtn}
               </Btn>
               <button onClick={() => setScreen("request")}
                 style={{ width:"100%", background:"white", border:"1.5px solid #e2e8f0", color:"#374151", padding:11, borderRadius:8, fontWeight:600, fontSize:14, cursor:"pointer", marginBottom:10 }}>
-                {rtl ? "\u0637\u0644\u0628 \u0627\u0644\u0648\u0635\u0648\u0644" : "Request Access"}
+                {t.requestAccess}
               </button>
               <button onClick={() => setScreen("driver")}
                 style={{ width:"100%", background:"white", border:"1.5px solid #10b981", color:"#065f46", padding:11, borderRadius:8, fontWeight:600, fontSize:14, cursor:"pointer", marginBottom:16 }}>
-                {rtl ? "\u0637\u0644\u0628 \u0648\u0635\u0648\u0644 \u0633\u0627\u0626\u0642" : "Driver Access Request"}
+                {t.driverAccess}
               </button>
               <button onClick={() => setDemo(!demo)}
                 style={{ width:"100%", background:"none", border:"1px solid #e2e8f0", borderRadius:8, padding:"8px", cursor:"pointer", fontSize:13, color:"#64748b" }}>
-                Demo Accounts {demo ? "\u25b2" : "\u25bc"}
+                {t.demoAccounts} {demo ? "▲" : "▼"}
               </button>
               {demo && (
                 <div style={{ marginTop:10 }}>
@@ -82,7 +157,7 @@ export default function Login({ onLogin, lang, setLang }) {
                       <span style={{ width:28, height:28, borderRadius:"50%", background:RC[u.role], display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, flexShrink:0 }}>{RI[u.role]}</span>
                       <div style={{ flex:1, textAlign:"left" }}>
                         <div style={{ fontWeight:600, fontSize:13, color:"#0f172a" }}>{u.name}</div>
-                        <div style={{ fontSize:11, color:"#94a3b8" }}>{u.role} {u.location}</div>
+                        <div style={{ fontSize:11, color:"#94a3b8" }}>{u.role} — {u.location}</div>
                       </div>
                     </button>
                   ))}
@@ -90,22 +165,20 @@ export default function Login({ onLogin, lang, setLang }) {
               )}
             </div>
           ) : (
-            <AccessRequestForm type={screen === "driver" ? "driver" : "authority"} onBack={() => setScreen("login")} rtl={rtl} />
+            <AccessRequestForm type={screen === "driver" ? "driver" : "authority"} onBack={() => setScreen("login")} t={t} />
           )}
-          <div style={{ marginTop:24, textAlign:"center", fontSize:11, color:"#94a3b8" }}>
-            2026 Saudi Pharmaceutical Co. SPCO
-          </div>
+          <div style={{ marginTop:24, textAlign:"center", fontSize:11, color:"#94a3b8" }}>{t.footer}</div>
         </div>
       </div>
     </div>
   );
 }
 
-function AccessRequestForm({ type, onBack, rtl }) {
+function AccessRequestForm({ type, onBack, t }) {
   const [sent, setSent] = useState(false);
   const [form, setForm] = useState({
     name:EMPTY, displayName:EMPTY, empId:EMPTY, mobile:EMPTY,
-    email:EMPTY, dept:EMPTY, role: type==="driver"?"driver":"viewonly",
+    email:EMPTY, dept:EMPTY, role:type==="driver"?"driver":"viewonly",
     location:EMPTY, dc:EMPTY, reason:EMPTY, licNo:EMPTY, licExp:EMPTY
   });
   const isDriver = type === "driver";
@@ -113,43 +186,43 @@ function AccessRequestForm({ type, onBack, rtl }) {
   if (sent) return (
     <div style={{ maxWidth:380, width:"100%" }}>
       <div style={{ background:"#d1fae5", color:"#065f46", borderRadius:10, padding:20, textAlign:"center" }}>
-        <div style={{ fontSize:40, marginBottom:10 }}>{"\u2705"}</div>
-        <div style={{ fontWeight:700, fontSize:16, marginBottom:8 }}>Request Submitted!</div>
-        <div style={{ fontSize:13, marginBottom:16 }}>Your request has been sent for approval.</div>
-        <button onClick={onBack} style={{ background:"#065f46", color:"white", border:"none", padding:"10px 24px", borderRadius:8, cursor:"pointer", fontWeight:700, fontSize:13 }}>Back to Login</button>
+        <div style={{ fontSize:40, marginBottom:10 }}>✅</div>
+        <div style={{ fontWeight:700, fontSize:16, marginBottom:8 }}>{t.submitted}</div>
+        <div style={{ fontSize:13, marginBottom:16 }}>{t.submittedMsg}</div>
+        <button onClick={onBack} style={{ background:"#065f46", color:"white", border:"none", padding:"10px 24px", borderRadius:8, cursor:"pointer", fontWeight:700, fontSize:13 }}>{t.backToLogin}</button>
       </div>
     </div>
   );
 
   return (
     <div style={{ maxWidth:480, width:"100%", maxHeight:"80vh", overflowY:"auto" }}>
-      <button onClick={onBack} style={{ background:"none", border:"none", color:"#1A3A5C", cursor:"pointer", fontSize:14, fontWeight:600, marginBottom:16, padding:0 }}>Back</button>
+      <button onClick={onBack} style={{ background:"none", border:"none", color:"#1A3A5C", cursor:"pointer", fontSize:14, fontWeight:600, marginBottom:16, padding:0 }}>{t.back}</button>
       <h1 style={{ fontSize:22, fontWeight:900, color:"#0f172a", margin:"0 0 20px" }}>
-        {isDriver ? "Driver Access Request" : "Request System Access"}
+        {isDriver ? t.driverTitle : t.requestTitle}
       </h1>
-      <Input label="Full Name" value={form.name} onChange={v=>setForm({...form,name:v})} required />
-      {!isDriver && <Input label="Display Name in System" value={form.displayName} onChange={v=>setForm({...form,displayName:v})} required />}
-      <Input label="Employee ID" value={form.empId} onChange={v=>setForm({...form,empId:v})} />
-      <Input label="Mobile Number" value={form.mobile} onChange={v=>setForm({...form,mobile:v})} required />
-      <Input label="Email Address" value={form.email} onChange={v=>setForm({...form,email:v})} type="email" />
+      <Input label={t.fullName} value={form.name} onChange={v=>setForm({...form,name:v})} required />
+      {!isDriver && <Input label={t.displayName} value={form.displayName} onChange={v=>setForm({...form,displayName:v})} required />}
+      <Input label={t.empId} value={form.empId} onChange={v=>setForm({...form,empId:v})} />
+      <Input label={t.mobile} value={form.mobile} onChange={v=>setForm({...form,mobile:v})} required />
+      <Input label={t.email} value={form.email} onChange={v=>setForm({...form,email:v})} type="email" />
       {isDriver ? (
         <>
-          <Select label="DC Assignment" value={form.dc} onChange={v=>setForm({...form,dc:v})} options={DCS} required />
-          <Input label="License Number" value={form.licNo} onChange={v=>setForm({...form,licNo:v})} required />
-          <Input label="License Expiry" value={form.licExp} onChange={v=>setForm({...form,licExp:v})} type="date" required />
+          <Select label={t.dcAccess} value={form.dc} onChange={v=>setForm({...form,dc:v})} options={DCS} required />
+          <Input label={t.licNo} value={form.licNo} onChange={v=>setForm({...form,licNo:v})} required />
+          <Input label={t.licExp} value={form.licExp} onChange={v=>setForm({...form,licExp:v})} type="date" required />
         </>
       ) : (
         <>
-          <Select label="Department" value={form.dept} onChange={v=>setForm({...form,dept:v})} options={DEPARTMENTS} required />
-          <Select label="Location" value={form.location} onChange={v=>setForm({...form,location:v})} options={LOCATIONS} />
-          <Select label="DC Access" value={form.dc} onChange={v=>setForm({...form,dc:v})} options={["All",...DCS]} />
+          <Select label={t.dept} value={form.dept} onChange={v=>setForm({...form,dept:v})} options={DEPARTMENTS} required />
+          <Select label={t.location} value={form.location} onChange={v=>setForm({...form,location:v})} options={LOCATIONS} />
+          <Select label={t.dcAccess} value={form.dc} onChange={v=>setForm({...form,dc:v})} options={["All",...DCS]} />
         </>
       )}
-      <Textarea label="Reason for Access" value={form.reason} onChange={v=>setForm({...form,reason:v})} required />
+      <Textarea label={t.reason} value={form.reason} onChange={v=>setForm({...form,reason:v})} required />
       <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:8, padding:"10px 14px", fontSize:12, color:"#0369a1", marginBottom:16 }}>
-        Your request will receive a unique reference number upon approval.
+        {t.refNote}
       </div>
-      <Btn onClick={() => setSent(true)} style={{ width:"100%" }}>Submit Request</Btn>
+      <Btn onClick={() => setSent(true)} style={{ width:"100%" }}>{t.submitBtn}</Btn>
     </div>
   );
 }
