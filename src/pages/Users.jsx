@@ -139,8 +139,26 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
   const [done, setDone] = useState("");
   const [form, setForm] = useState(EMPTY_FORM);
   const [reqEditForm, setReqEditForm] = useState(null);
-  const [permissions, setPermissions] = useState(DEFAULT_PERMISSIONS);
-  const [roles, setRoles] = useState(ROLES_ORDER);
+  const [permissions, setPermissions] = useState(() => {
+    try {
+      const saved = localStorage.getItem("deliverflow_permissions");
+      return saved ? JSON.parse(saved) : DEFAULT_PERMISSIONS;
+    } catch { return DEFAULT_PERMISSIONS; }
+  });
+  const [roles, setRoles] = useState(() => {
+    try {
+      const saved = localStorage.getItem("deliverflow_roles");
+      return saved ? JSON.parse(saved) : ROLES_ORDER;
+    } catch { return ROLES_ORDER; }
+  });
+  const [roleLabels, setRoleLabels] = useState(() => {
+    try {
+      const saved = localStorage.getItem("deliverflow_roleLabels");
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
+  const [editRoleName, setEditRoleName] = useState(null);
+  const [editRoleValue, setEditRoleValue] = useState("");
   const [newRoleName, setNewRoleName] = useState("");
   const [showAddRole, setShowAddRole] = useState(false);
 
@@ -195,8 +213,10 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
 
   function addRole() {
     if(!newRoleName.trim()) return;
-    const roleKey = newRoleName.trim().toLowerCase().replace(/\s+/g,"_");
+    const roleKey = "custom_"+Date.now();
+    const displayName = newRoleName.trim();
     setRoles(prev=>[...prev,roleKey]);
+    setRoleLabels(prev=>({...prev,[roleKey]:displayName}));
     const updated = {...permissions};
     Object.keys(updated).forEach(cat=>{
       Object.keys(updated[cat]).forEach(perm=>{
@@ -208,10 +228,29 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
     flash(t.roleAdded);
   }
 
+  function renameRole(roleKey, newName) {
+    setRoleLabels(prev=>({...prev,[roleKey]:newName}));
+    setEditRoleName(null); setEditRoleValue("");
+  }
+
+  function deleteRole(roleKey) {
+    if (!window.confirm("Delete this authorization level?")) return;
+    setRoles(prev=>prev.filter(r=>r!==roleKey));
+    setRoleLabels(prev=>{const n={...prev};delete n[roleKey];return n;});
+    const updated = {...permissions};
+    Object.keys(updated).forEach(cat=>{
+      Object.keys(updated[cat]).forEach(perm=>{
+        delete updated[cat][perm][roleKey];
+      });
+    });
+    setPermissions(updated);
+    flash("Authorization level deleted.");
+  }
+
   const isDriver = form.empType==="driver";
 
   // Role label helper
-  function getRoleLabel(r) { return rl[r]||r.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase()); }
+  function getRoleLabel(r) { return roleLabels[r]||rl[r]||r.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase()); }
 
   return (
     <div style={{ direction:rtl?"rtl":"ltr" }}>
@@ -366,7 +405,14 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                 ):(
                   <Btn small onClick={()=>setShowAddRole(true)} color="#6366f1">{t.addRole}</Btn>
                 )}
-                <Btn small onClick={()=>flash(t.matrixSaved)} color="#10b981">💾 {t.saveMatrix}</Btn>
+                <Btn small onClick={()=>{
+                  try {
+                    localStorage.setItem("deliverflow_permissions", JSON.stringify(permissions));
+                    localStorage.setItem("deliverflow_roles", JSON.stringify(roles));
+                    localStorage.setItem("deliverflow_roleLabels", JSON.stringify(roleLabels));
+                  } catch(e) {}
+                  flash(t.matrixSaved);
+                }} color="#10b981">💾 {t.saveMatrix}</Btn>
               </div>
             </div>
 
@@ -376,8 +422,28 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                   <tr style={{ background:"#1A3A5C" }}>
                     <th style={{ padding:"12px 14px", textAlign:"left", color:"white", fontWeight:700, minWidth:200, position:"sticky", left:0, background:"#1A3A5C" }}>{t.permission}</th>
                     {roles.map(r=>(
-                      <th key={r} style={{ padding:"12px 10px", color:"white", fontWeight:700, textAlign:"center", minWidth:100, whiteSpace:"nowrap" }}>
-                        {getRoleLabel(r)}
+                      <th key={r} style={{ padding:"12px 10px", color:"white", fontWeight:700, textAlign:"center", minWidth:120, whiteSpace:"nowrap" }}>
+                        {editRoleName===r ? (
+                          <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+                            <input value={editRoleValue} onChange={e=>setEditRoleValue(e.target.value)}
+                              style={{ border:"none", borderRadius:4, padding:"3px 6px", fontSize:12, width:80 }}
+                              onKeyDown={e=>e.key==="Enter"&&renameRole(r,editRoleValue)} />
+                            <button onClick={()=>renameRole(r,editRoleValue)} style={{ background:"#10b981", border:"none", color:"white", borderRadius:4, padding:"2px 6px", cursor:"pointer", fontSize:11 }}>✓</button>
+                            <button onClick={()=>setEditRoleName(null)} style={{ background:"#64748b", border:"none", color:"white", borderRadius:4, padding:"2px 6px", cursor:"pointer", fontSize:11 }}>✕</button>
+                          </div>
+                        ) : (
+                          <div>
+                            <div>{getRoleLabel(r)}</div>
+                            <div style={{ display:"flex", gap:4, justifyContent:"center", marginTop:4 }}>
+                              <button onClick={()=>{setEditRoleName(r);setEditRoleValue(getRoleLabel(r));}}
+                                style={{ background:"rgba(255,255,255,0.2)", border:"none", color:"white", borderRadius:4, padding:"2px 8px", cursor:"pointer", fontSize:10 }}>✎</button>
+                              {!ROLES_ORDER.includes(r) && (
+                                <button onClick={()=>deleteRole(r)}
+                                  style={{ background:"rgba(239,68,68,0.6)", border:"none", color:"white", borderRadius:4, padding:"2px 8px", cursor:"pointer", fontSize:10 }}>🗑</button>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </th>
                     ))}
                   </tr>
