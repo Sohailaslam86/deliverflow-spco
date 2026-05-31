@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "../firebase";
 import { DEMO_USERS, DEMO_PW, RC, RI, DEPARTMENTS, LOCATIONS, DCS } from "../data/masterData.js";
 import { Input, Select, Textarea, Btn } from "./Shared.jsx";
 
@@ -52,14 +55,39 @@ export default function Login({ onLogin, lang, setLang }) {
   const [email, setEmail] = useState(EMPTY);
   const [pass, setPass] = useState(EMPTY);
   const [err, setErr] = useState(EMPTY);
+  const [loading, setLoading] = useState(false);
   const [demo, setDemo] = useState(false);
   const rtl = lang === "ar";
   const t = T[lang] || T.en;
 
-  function doLogin() {
-    const u = DEMO_USERS.find(u => (u.email===email.trim().toLowerCase()||u.phone===email.trim()) && pass===DEMO_PW);
-    if (u) onLogin(u);
-    else setErr(t.invalidCreds);
+  async function doLogin() {
+    if (!email.trim() || !pass.trim()) {
+      setErr(t.invalidCreds);
+      return;
+    }
+    setLoading(true);
+    setErr(EMPTY);
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), pass);
+      const firebaseUser = userCredential.user;
+
+      // Firestore se profile load karo
+      const docSnap = await getDoc(doc(db, 'users', firebaseUser.uid));
+      if (docSnap.exists()) {
+        onLogin({ uid: firebaseUser.uid, email: firebaseUser.email, ...docSnap.data() });
+      } else {
+        // Firestore profile nahi — demo users se dhundho (temporary)
+        const demoUser = DEMO_USERS.find(u => u.email === firebaseUser.email);
+        if (demoUser) {
+          onLogin({ uid: firebaseUser.uid, ...demoUser });
+        } else {
+          onLogin({ uid: firebaseUser.uid, email: firebaseUser.email, name: firebaseUser.email, role: 'viewonly', dc: 'All' });
+        }
+      }
+    } catch (e) {
+      setErr(t.invalidCreds);
+    }
+    setLoading(false);
   }
 
   return (
@@ -77,7 +105,6 @@ export default function Login({ onLogin, lang, setLang }) {
         ))}
       </div>
 
-      {/* Always: Left = Logo, Right = Form — no RTL flip on outer layout */}
       <div style={{ display:"flex", width:"100%", maxWidth:960, margin:"0 auto", minHeight:"100vh", position:"relative", zIndex:10 }}>
 
         {/* Left Panel — Logo */}
@@ -104,7 +131,9 @@ export default function Login({ onLogin, lang, setLang }) {
               <Input label={t.emailPhone} value={email} onChange={setEmail} placeholder="email@spco.sa" />
               <Input label={t.password} value={pass} onChange={setPass} type="password" placeholder="........" />
               {err && <div style={{ background:"#fee2e2", color:"#991b1b", borderRadius:8, padding:"10px 14px", fontSize:13, marginBottom:12 }}>{err}</div>}
-              <Btn onClick={doLogin} style={{ width:"100%", marginBottom:10, padding:13, fontSize:15 }}>{t.signInBtn}</Btn>
+              <Btn onClick={doLogin} style={{ width:"100%", marginBottom:10, padding:13, fontSize:15 }}>
+                {loading ? "Signing in..." : t.signInBtn}
+              </Btn>
               <button onClick={() => setScreen("request")}
                 style={{ width:"100%", background:"white", border:"1.5px solid #e2e8f0", color:"#374151", padding:11, borderRadius:8, fontWeight:600, fontSize:14, cursor:"pointer", marginBottom:10 }}>
                 {t.requestAccess}
