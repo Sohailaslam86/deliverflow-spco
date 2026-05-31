@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "./firebase";
 import Login from "./components/Login.jsx";
 import Shell from "./components/Shell.jsx";
 import Dashboard  from "./pages/Dashboard.jsx";
@@ -16,13 +19,14 @@ import Odometer   from "./pages/Odometer.jsx";
 import Search     from "./pages/Search.jsx";
 import Download   from "./pages/Download.jsx";
 import {
-  DEMO_USERS, INITIAL_INVOICES, INITIAL_VEHICLES,
+  INITIAL_INVOICES, INITIAL_VEHICLES,
   INITIAL_TRIPS, INITIAL_FUEL_LOGS, INITIAL_UPLOADS,
-  INITIAL_USER_REQUESTS, INITIAL_ALERTS
+  INITIAL_USER_REQUESTS, INITIAL_ALERTS, DEMO_USERS
 } from "./data/masterData.js";
 
 export default function App() {
   const [user,     setUser]     = useState(null);
+  const [loading,  setLoading]  = useState(true);
   const [lang,     setLang]     = useState("en");
   const [page,     setPage]     = useState("dashboard");
   const [invoices, setInvoices] = useState(INITIAL_INVOICES);
@@ -34,37 +38,13 @@ export default function App() {
   const [requests, setRequests] = useState(INITIAL_USER_REQUESTS);
   const [alerts,   setAlerts]   = useState(INITIAL_ALERTS);
 
-  if (!user) return (
-    <Login onLogin={u=>{setUser(u);setPage("dashboard");}} lang={lang} setLang={setLang} />
-  );
-
-  const props = {
-    user, lang, invoices, setInvoices, vehicles, setVehicles,
-    trips, setTrips, fuelLogs, setFuelLogs, uploads, setUploads,
-    users, setUsers, requests, setRequests, alerts, setAlerts, setPage
-  };
-
-  const pages = {
-    dashboard:    <Dashboard  {...props} users={users} />,
-    invoices:     <Invoices   {...props} />,
-    upload:       <Upload     {...props} />,
-    assign:       <Assign     {...props} users={users} />,
-    trips:        <Trips      {...props} vehicles={vehicles} users={users} />,
-    users:        <Users      {...props} />,
-    masterdata:   <MasterData {...props} />,
-    fleet:        <Fleet      {...props} setUsers={setUsers} />,
-    fuel:         <Fuel       {...props} />,
-    reports:      <Reports    {...props} users={users} />,
-    mydeliveries: <Driver     {...props} />,
-    odometer:     <Odometer   {...props} />,
-    search:       <Search     {...props} />,
-    download:     <Download   {...props} />,
-  };
-
-  return (
-    <Shell user={user} lang={lang} setLang={setLang} page={page} setPage={setPage}
-      onLogout={()=>{setUser(null);setPage("dashboard");}} alerts={alerts}>
-      {pages[page]||pages.dashboard}
-    </Shell>
-  );
-}
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          const docRef = doc(db, 'users', firebaseUser.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            setUser({ uid: firebaseUser.uid, email: firebaseUser.email, ...docSnap.data() });
+          } else {
+            // Firestore profil
