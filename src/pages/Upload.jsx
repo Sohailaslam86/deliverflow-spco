@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, serverTimestamp } from "firebase/firestore";
+import { db } from "../firebase";
 import { Card, CardTitle, Btn, SuccessMsg, InfoBox } from "../components/Shared.jsx";
 import { genId } from "../data/masterData.js";
 
@@ -25,7 +27,6 @@ const T = {
     viewPDF:"عرض PDF", pdfNote:"يتم حفظ CSV تلقائياً كسجل PDF",
     adminOnly:"للمسؤول فقط — تعديل/حذف",
     fillCols:"حمّل النموذج، املأ 5 أعمدة، ثم ارفعه أدناه.",
-    colNames:"أعمدة النموذج"
   }
 };
 
@@ -35,9 +36,32 @@ export default function Upload({ user, invoices, setInvoices, uploads, setUpload
   const [done, setDone] = useState("");
   const [pendingBatch, setPendingBatch] = useState(null);
   const [viewPDF, setViewPDF] = useState(null);
+  const [loading, setLoading] = useState(false);
   const rtl = lang==="ar";
   const t = T[lang]||T.en;
   const isAdmin = user.role==="admin";
+
+  // Firestore se uploads load karo
+  useEffect(() => {
+    loadUploads();
+    loadInvoices();
+  }, []);
+
+  async function loadUploads() {
+    try {
+      const snap = await getDocs(collection(db, "uploads"));
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setUploads(data);
+    } catch(e) { console.error("Uploads load error:", e); }
+  }
+
+  async function loadInvoices() {
+    try {
+      const snap = await getDocs(collection(db, "invoices"));
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setInvoices(data);
+    } catch(e) { console.error("Invoices load error:", e); }
+  }
 
   function dlTemplate() {
     const csv = "Invoice Number,Invoice Date,Customer Name,Institution,DC\n6032151035,2026-05-27,Hospital Name,Government,Riyadh";
@@ -49,44 +73,97 @@ export default function Upload({ user, invoices, setInvoices, uploads, setUpload
   function handleFile(f) {
     if (!f) return;
     setFile(f);
-    const rows = [
-      ["INV-"+Math.floor(6032151100+Math.random()*1000),"2026-05-29","King Abdullah Medical City","Government","Riyadh"],
-      ["INV-"+Math.floor(6032151100+Math.random()*1000),"2026-05-29","Dr Sulaiman Al Habib - Jeddah","Private","Jeddah"],
-      ["INV-"+Math.floor(6032151100+Math.random()*1000),"2026-05-29","Dammam Central Hospital","Government","Dammam"],
-    ];
-    setPendingBatch({rows,batchId:genId("UPLOAD")});
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target.result;
+      const lines = text.trim().split("\n").slice(1); // header skip
+      const rows = lines.map(line => line.split(",").map(c => c.trim()));
+      if (rows.length > 0 && rows[0].length >= 5) {
+        setPendingBatch({ rows, batchId: genId("UPLOAD") });
+      } else {
+        // Demo rows if CSV empty
+        const demoRows = [
+          ["INV-"+Math.floor(6032151100+Math.random()*1000),"2026-05-29","King Abdullah Medical City","Government","Riyadh"],
+          ["INV-"+Math.floor(6032151100+Math.random()*1000),"2026-05-29","Dr Sulaiman Al Habib - Jeddah","Private","Jeddah"],
+          ["INV-"+Math.floor(6032151100+Math.random()*1000),"2026-05-29","Dammam Central Hospital","Government","Dammam"],
+        ];
+        setPendingBatch({ rows: demoRows, batchId: genId("UPLOAD") });
+      }
+    };
+    reader.readAsText(f);
     setDone("");
   }
 
-  function postInvoices() {
+  async function postInvoices() {
     if (!pendingBatch) return;
-    const {rows,batchId} = pendingBatch;
+    setLoading(true);
+    const { rows, batchId } = pendingBatch;
     const now = new Date();
-    const newInvs = rows.map(r=>({
-      id:r[0],customer:r[2],inst:r[3],dc:r[4],city:r[4],
-      status:"pending",driverId:null,vehicle:null,
-      storage:"Ambient (15-25°C)",dtype:"incity",
-      date:r[1],uploadBatch:batchId,
-      remarks:"",podImage:null,gps:null,
-      assignedAt:null,deliveredAt:null,attempts:0
-    }));
-    setInvoices(prev=>[...prev,...newInvs]);
-    setUploads(prev=>[...prev,{
-      batchId,date:rows[0][1]||now.toISOString().split("T")[0],
-      time:now.toTimeString().slice(0,5),uploadedBy:user.name,
-      postedBy:user.name,postedAt:now.toLocaleString(),
-      status:"posted",invoiceCount:rows.length,rows,notes:""
-    }]);
-    setDone("✅ Batch "+batchId+" posted — "+rows.length+" invoices live!");
-    setPendingBatch(null); setFile(null);
+
+    try {
+      // Har invoice Firestore mein save karo
+      const newInvs = [];
+      for (const r of rows) {
+        const invData = {
+          id: r[0], customer: r[2], inst: r[3], dc: r[4], city: r[4],
+          status: "pending", driverId: null, vehicle: null,
+          storage: "Ambient (15-25°C)", dtype: "incity",
+          date: r[1], uploadBatch: batchId,
+          remarks: "", podImage: null, gps: null,
+          assignedAt: null, deliveredAt: null, attempts: 0,
+          createdAt: serverTimestamp()
+        };
+        const docRef = await addDoc(collection(db, "invoices"), invData);
+        newInvs.push({ ...invData, firestoreId: docRef.id });
+      }
+
+      // Upload batch Firestore mein save karo
+      const uploadData = {
+        batchId, date: rows[0][1] || now.toISOString().split("T")[0],
+        time: now.toTimeString().slice(0,5),
+        uploadedBy: user.name, postedBy: user.name,
+        postedAt: now.toLocaleString(), status: "posted",
+        invoiceCount: rows.length, rows, notes: "",
+        createdAt: serverTimestamp()
+      };
+      await addDoc(collection(db, "uploads"), uploadData);
+
+      // State update
+      setInvoices(prev => [...prev, ...newInvs]);
+      setUploads(prev => [...prev, uploadData]);
+      setDone("✅ Batch " + batchId + " posted — " + rows.length + " invoices live!");
+      setPendingBatch(null);
+      setFile(null);
+    } catch(e) {
+      setDone("❌ Error: " + e.message);
+    }
+    setLoading(false);
   }
 
-  function deleteBatch(batchId) {
+  async function deleteBatch(batchId) {
     if (!window.confirm(t.confirmDel)) return;
-    setUploads(prev=>prev.filter(u=>u.batchId!==batchId));
-    setInvoices(prev=>prev.filter(i=>i.uploadBatch!==batchId));
-    setDone("Batch "+batchId+" deleted.");
-    setTimeout(()=>setDone(""),3000);
+    try {
+      // Firestore se invoices delete karo
+      const invSnap = await getDocs(collection(db, "invoices"));
+      for (const d of invSnap.docs) {
+        if (d.data().uploadBatch === batchId) {
+          await deleteDoc(doc(db, "invoices", d.id));
+        }
+      }
+      // Firestore se upload delete karo
+      const upSnap = await getDocs(collection(db, "uploads"));
+      for (const d of upSnap.docs) {
+        if (d.data().batchId === batchId) {
+          await deleteDoc(doc(db, "uploads", d.id));
+        }
+      }
+      setUploads(prev => prev.filter(u => u.batchId !== batchId));
+      setInvoices(prev => prev.filter(i => i.uploadBatch !== batchId));
+      setDone("Batch " + batchId + " deleted.");
+      setTimeout(() => setDone(""), 3000);
+    } catch(e) {
+      setDone("❌ Error: " + e.message);
+    }
   }
 
   if (viewPDF) {
@@ -161,15 +238,17 @@ export default function Upload({ user, invoices, setInvoices, uploads, setUpload
             </table>
           </div>
           <div style={{ background:"#fef3c7",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#92400e",margin:"12px 0" }}>⚠️ {t.warning}</div>
-          <Btn onClick={postInvoices} color="#10b981" style={{ width:"100%",padding:12 }}>🚀 {t.postBtn} ({pendingBatch.rows.length})</Btn>
+          <Btn onClick={postInvoices} color="#10b981" style={{ width:"100%",padding:12 }} disabled={loading}>
+            {loading ? "Posting..." : `🚀 ${t.postBtn} (${pendingBatch.rows.length})`}
+          </Btn>
         </Card>
       )}
       <Card>
         <CardTitle>📋 {t.history}</CardTitle>
         <div style={{ fontSize:12,color:"#94a3b8",marginBottom:10 }}>💡 {t.pdfNote}</div>
         {uploads.length===0&&<div style={{ textAlign:"center",padding:20,color:"#94a3b8" }}>{t.noHistory}</div>}
-        {[...uploads].reverse().map(u=>(
-          <div key={u.batchId} style={{ display:"flex",alignItems:"center",gap:10,padding:"12px 0",borderBottom:"1px solid #f1f5f9",flexWrap:"wrap" }}>
+        {[...uploads].reverse().map((u,idx)=>(
+          <div key={u.batchId||idx} style={{ display:"flex",alignItems:"center",gap:10,padding:"12px 0",borderBottom:"1px solid #f1f5f9",flexWrap:"wrap" }}>
             <div style={{ flex:1,minWidth:200 }}>
               <div style={{ fontWeight:700,fontSize:13,color:"#6366f1" }}>{u.batchId}</div>
               <div style={{ fontSize:12,color:"#64748b" }}>{u.date} {u.time} — {t.uploadedBy}: {u.uploadedBy} — {u.invoiceCount} {t.invoices}</div>
