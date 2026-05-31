@@ -23,7 +23,9 @@ const T = {
     invoices:"فواتير", warning:"بعد الترحيل ستظهر الفواتير في جميع طوابير المراكز. تحقق قبل الترحيل.",
     posted:"مُرحَّل", draft:"مسودة", deleteBtn:"حذف", confirmDel:"هل أنت متأكد من حذف هذه الدفعة؟",
     viewPDF:"عرض PDF", pdfNote:"يتم حفظ CSV تلقائياً كسجل PDF",
-    adminOnly:"للمسؤول فقط — تعديل/حذف"
+    adminOnly:"للمسؤول فقط — تعديل/حذف",
+    fillCols:"حمّل النموذج، املأ 5 أعمدة، ثم ارفعه أدناه.",
+    colNames:"أعمدة النموذج"
   }
 };
 
@@ -129,7 +131,7 @@ export default function Upload({ user, invoices, setInvoices, uploads, setUpload
       {done&&<SuccessMsg msg={done} />}
       <Card>
         <CardTitle>{t.step1}</CardTitle>
-        <p style={{ fontSize:13,color:"#64748b",marginBottom:14 }}>Download CSV, fill 5 columns, then upload below.</p>
+        <p style={{ fontSize:13,color:"#64748b",marginBottom:14 }}>{t.fillCols||"Download CSV, fill 5 columns, then upload below."}</p>
         <Btn onClick={dlTemplate} style={{ marginBottom:12 }}>⬇ {t.downloadTpl}</Btn>
         <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
           {["Invoice Number","Invoice Date","Customer Name","Institution","DC"].map(c=>(

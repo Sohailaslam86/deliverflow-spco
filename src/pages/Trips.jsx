@@ -125,7 +125,7 @@ function printTripReport(trip, t) {
   setTimeout(()=>w.print(),500);
 }
 
-export default function Trips({ user, trips, setTrips, invoices, setInvoices, lang }) {
+export default function Trips({ user, trips, setTrips, invoices, setInvoices, vehicles, users, lang }) {
   const [showForm, setShowForm] = useState(false);
   const [done, setDone] = useState("");
   const [selInv, setSelInv] = useState([]);
@@ -149,6 +149,19 @@ export default function Trips({ user, trips, setTrips, invoices, setInvoices, la
 
   const pendingShipInv = form.toCity?getPendingShipInvoices(form.toCity):[];
   const pendingForTrip = invoices.filter(i=>i.dc===dc&&i.status==="pending");
+
+  function FuelBar({ level, capacity }) {
+    const pct = Math.round((level||0)/(capacity||80)*100);
+    const color = pct < 25 ? "#ef4444" : pct < 50 ? "#f59e0b" : "#10b981";
+    return (
+      <div style={{ background:"#e0f2fe", borderRadius:99, height:8, overflow:"hidden", flex:1 }}>
+        <div style={{ width:`${pct}%`, height:"100%", background:color, borderRadius:99 }} />
+      </div>
+    );
+  }
+
+  const selVehicleObj = vehicles ? vehicles.find(v=>v.plate===form.vehicle) : null;
+  const selDriverObj = (users||[]).find(u=>u.name===form.driver&&u.role==="driver");
 
   function createTrip() {
     if (!form.toCity||!form.driver||!form.vehicle) return;
@@ -231,6 +244,56 @@ export default function Trips({ user, trips, setTrips, invoices, setInvoices, la
               <Input label={t.notes} value={form.notes} onChange={v=>setForm({...form,notes:v})} />
             </div>
           </div>
+
+          {/* Vehicle Detail Panel */}
+          {selVehicleObj&&(
+            <div style={{ background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:10,padding:"14px 16px",marginBottom:12 }}>
+              <div style={{ fontWeight:700,fontSize:13,color:"#0369a1",marginBottom:10 }}>🚗 {selVehicleObj.plate} — {selVehicleObj.type}</div>
+              <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:10 }}>
+                <div style={{ background:"white",borderRadius:8,padding:"10px 12px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
+                  <div style={{ fontSize:11,color:"#64748b",fontWeight:600,marginBottom:4 }}>⛽ Fuel Available</div>
+                  <div style={{ fontWeight:800,fontSize:18,color:(selVehicleObj.fuelLevel||0)/(selVehicleObj.fuelCapacity||80)<0.25?"#ef4444":"#10b981" }}>{selVehicleObj.fuelLevel||0}L</div>
+                  <div style={{ fontSize:12,color:"#64748b",marginBottom:6 }}>{selVehicleObj.fuelLevel||0}/{selVehicleObj.fuelCapacity||80}L ({Math.round((selVehicleObj.fuelLevel||0)/(selVehicleObj.fuelCapacity||80)*100)}%)</div>
+                  <FuelBar level={selVehicleObj.fuelLevel||0} capacity={selVehicleObj.fuelCapacity||80} />
+                </div>
+                <div style={{ background:"white",borderRadius:8,padding:"10px 12px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
+                  <div style={{ fontSize:11,color:"#64748b",fontWeight:600,marginBottom:4 }}>🛣️ Odometer</div>
+                  <div style={{ fontWeight:800,fontSize:18,color:"#6366f1" }}>{(selVehicleObj.totalKM||0).toLocaleString()}</div>
+                  <div style={{ fontSize:12,color:"#64748b" }}>km total</div>
+                </div>
+                <div style={{ background:"white",borderRadius:8,padding:"10px 12px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
+                  <div style={{ fontSize:11,color:"#64748b",fontWeight:600,marginBottom:4 }}>📍 Est. Coverage</div>
+                  <div style={{ fontWeight:800,fontSize:18,color:"#0891b2" }}>~{Math.round((selVehicleObj.fuelLevel||0)*(selVehicleObj.mileage||12))}</div>
+                  <div style={{ fontSize:12,color:"#64748b" }}>km on current fuel</div>
+                </div>
+                <div style={{ background:"white",borderRadius:8,padding:"10px 12px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
+                  <div style={{ fontSize:11,color:"#64748b",fontWeight:600,marginBottom:4 }}>📊 Efficiency</div>
+                  <div style={{ fontWeight:800,fontSize:18,color:"#7c3aed" }}>{selVehicleObj.mileage||12}</div>
+                  <div style={{ fontSize:12,color:"#64748b" }}>km / L</div>
+                </div>
+              </div>
+              {selVehicleObj.status==="Maintenance"&&<div style={{ background:"#fee2e2",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#991b1b",fontWeight:600 }}>🔴 Vehicle is under Maintenance</div>}
+              {(selVehicleObj.fuelLevel||0)<20&&<div style={{ background:"#fee2e2",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#991b1b",fontWeight:600,marginTop:4 }}>⚠️ Low Fuel Warning</div>}
+            </div>
+          )}
+
+          {/* Driver Detail Panel */}
+          {selDriverObj&&(
+            <div style={{ background:"#f0fdf4",border:"1px solid #86efac",borderRadius:10,padding:"12px 16px",marginBottom:12 }}>
+              <div style={{ fontWeight:700,fontSize:13,color:"#065f46",marginBottom:8 }}>👤 {selDriverObj.name} — {selDriverObj.dc} DC</div>
+              <div style={{ display:"flex",gap:16,fontSize:13,flexWrap:"wrap" }}>
+                <span style={{ color:"#065f46" }}>📱 {selDriverObj.phone||selDriverObj.mobile||"-"}</span>
+                <span style={{ color:selDriverObj.status==="Active"?"#065f46":selDriverObj.status==="On Leave"?"#92400e":"#991b1b",fontWeight:600 }}>
+                  {selDriverObj.status==="Active"?"✅ Active":selDriverObj.status==="On Leave"?"🏖️ On Leave":"❌ Inactive"}
+                </span>
+                {selDriverObj.licExp&&<span style={{ color:"#64748b" }}>📄 Lic Exp: {selDriverObj.licExp}</span>}
+              </div>
+              {selDriverObj.status==="On Leave"&&<div style={{ background:"#fef3c7",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#92400e",fontWeight:600,marginTop:8 }}>⚠️ Driver is On Leave — consider another driver</div>}
+              {selDriverObj.licExp&&Math.ceil((new Date(selDriverObj.licExp)-new Date())/(1000*60*60*24))<=30&&(
+                <div style={{ background:"#fef3c7",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#92400e",fontWeight:600,marginTop:4 }}>⚠️ License expiring: {selDriverObj.licExp}</div>
+              )}
+            </div>
+          )}
 
           {pendingShipInv.length>0&&(
             <div style={{ marginBottom:12, background:"#f0f9ff", borderRadius:8, padding:12 }}>

@@ -95,7 +95,7 @@ function DCReportBox({ dc, invoices, t }) {
   );
 }
 
-export default function Reports({ user, invoices, fuelLogs, vehicles, lang }) {
+export default function Reports({ user, invoices, fuelLogs, vehicles, users, lang }) {
   const [tab, setTab] = useState("daily");
   const [period, setPeriod] = useState("month");
   const rtl = lang==="ar";
@@ -108,7 +108,7 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, lang }) {
 
   const tabs = [
     ["daily","📊",t.daily],["driver","👤",t.driver],
-    ["vehicle","🚗",t.vehicle],["fuel","⛽",t.fuel],["aging","⏱️",t.aging]
+    ["vehicle","🚗",t.vehicle],["fuel","⛽",t.fuel],["aging","⏱️",t.aging],["unassigned","⚪",t.unassignedReport||"Unassigned Report"]
   ];
   const periods = [["today",t.today],["week",t.week],["month",t.month],["all",t.all]];
 
@@ -317,6 +317,57 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, lang }) {
             </div>
           ))}
         </div>
+      )}
+
+      {/* UNASSIGNED DRIVER REPORT */}
+      {tab==="unassigned"&&(
+        <Card>
+          <CardTitle>⚪ Unassigned Driver Report — {period==="today"?"Today":period==="week"?"This Week":period==="month"?"This Month":"All Time"}</CardTitle>
+          <div style={{ marginBottom:16,fontSize:13,color:"#64748b" }}>
+            Shows drivers who had no deliveries assigned for the selected period. Use for monthly incentive calculation.
+          </div>
+          {driverStats.length===0&&<div style={{ textAlign:"center",padding:20,color:"#94a3b8" }}>{t.noData}</div>}
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
+              <thead>
+                <tr style={{ background:"#1A3A5C" }}>
+                  {["#","Driver","Total Invoices","Delivered","Success Rate","Unassigned Days","Status"].map(h=>(
+                    <th key={h} style={{ padding:"10px 12px",textAlign:"left",fontWeight:700,color:"white",whiteSpace:"nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[...users.filter(u=>u.role==="driver"&&(!dc||u.dc===dc))].map((driver,i)=>{
+                  const dStats = driverStats.find(d=>d.name===driver.name)||{delivered:0,failed:0,total:0,rate:0};
+                  const isUnassigned = dStats.total===0;
+                  return (
+                    <tr key={driver.uid} style={{ background:isUnassigned?"#fff7ed":i%2===0?"white":"#f8fafc" }}>
+                      <td style={{ padding:"10px 12px",color:"#94a3b8" }}>{i+1}</td>
+                      <td style={{ padding:"10px 12px",fontWeight:600 }}>{driver.name}</td>
+                      <td style={{ padding:"10px 12px",textAlign:"center" }}>{dStats.total}</td>
+                      <td style={{ padding:"10px 12px",textAlign:"center",color:"#10b981",fontWeight:700 }}>{dStats.delivered}</td>
+                      <td style={{ padding:"10px 12px",textAlign:"center" }}>
+                        <span style={{ fontWeight:700,color:dStats.rate>=80?"#10b981":dStats.rate>=50?"#f59e0b":"#ef4444" }}>{dStats.rate}%</span>
+                      </td>
+                      <td style={{ padding:"10px 12px",textAlign:"center" }}>
+                        <span style={{ fontWeight:700,color:isUnassigned?"#f97316":"#10b981" }}>{isUnassigned?"Unassigned":"Active"}</span>
+                      </td>
+                      <td style={{ padding:"10px 12px" }}>
+                        <span style={{ fontSize:12,fontWeight:600,padding:"2px 8px",borderRadius:99,background:driver.status==="Active"?"#d1fae5":driver.status==="On Leave"?"#fef3c7":"#fee2e2",color:driver.status==="Active"?"#065f46":driver.status==="On Leave"?"#92400e":"#991b1b" }}>
+                          {driver.status||"Active"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ marginTop:12,display:"flex",gap:8 }}>
+            <div style={{ fontSize:12,color:"#f97316",fontWeight:600 }}>⚪ Unassigned: {users.filter(u=>u.role==="driver"&&(!dc||u.dc===dc)&&!driverStats.find(d=>d.name===u.name)).length} driver(s)</div>
+            <div style={{ fontSize:12,color:"#10b981",fontWeight:600 }}>✅ Active: {driverStats.length} driver(s)</div>
+          </div>
+        </Card>
       )}
 
       {/* AGING REPORT */}

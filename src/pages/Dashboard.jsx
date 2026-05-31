@@ -17,8 +17,8 @@ const T = {
     invoices:"invoices", batches:"batches today",
     riyadhDC:"Riyadh Distribution Center", jeddahDC:"Jeddah Distribution Center",
     dammamDC:"Dammam Distribution Center", assignedDrv:"Assigned Drivers",
-    idleVehicles:"IDLE Vehicles Today", idleDrivers:"IDLE Drivers Today",
-    noIdle:"None — All active"
+    idleVehicles:"Unassigned Vehicles Today", idleDrivers:"Unassigned Drivers Today",
+    noIdle:"None — All assigned"
   },
   ar: {
     welcome:"مرحباً بعودتك", adminTitle:"نظرة عامة على العمليات",
@@ -35,8 +35,8 @@ const T = {
     invoices:"فواتير", batches:"دفعات اليوم",
     riyadhDC:"مركز توزيع الرياض", jeddahDC:"مركز توزيع جدة",
     dammamDC:"مركز توزيع الدمام", assignedDrv:"سائقون مخصصون",
-    idleVehicles:"مركبات خاملة اليوم", idleDrivers:"سائقون خاملون اليوم",
-    noIdle:"لا يوجد — جميعهم نشطون"
+    idleVehicles:"مركبات غير مخصصة اليوم", idleDrivers:"سائقون غير مخصصين اليوم",
+    noIdle:"لا يوجد — جميعهم مخصصون"
   }
 };
 
@@ -132,7 +132,7 @@ function DCBox({ dc, invoices, vehicles, users, alerts, t }) {
         <div style={{ fontWeight:600, fontSize:12, color:"#64748b", marginBottom:4 }}>🚗 {t.idleVehicles}:</div>
         {idleVeh.length===0
           ? <div style={{ fontSize:11, color:"#10b981" }}>✅ {t.noIdle}</div>
-          : idleVeh.map(v=><div key={v.plate} style={{ fontSize:11, color:"#f97316", fontWeight:600 }}>⚪ IDLE: {v.plate}</div>)
+          : idleVeh.map(v=><div key={v.plate} style={{ fontSize:11, color:"#f97316", fontWeight:600 }}>⚪ Unassigned: {v.plate}</div>)
         }
       </div>
 
@@ -141,7 +141,7 @@ function DCBox({ dc, invoices, vehicles, users, alerts, t }) {
         <div style={{ fontWeight:600, fontSize:12, color:"#64748b", marginBottom:4 }}>👤 {t.idleDrivers}:</div>
         {idleDrv.length===0
           ? <div style={{ fontSize:11, color:"#10b981" }}>✅ {t.noIdle}</div>
-          : idleDrv.map(d=><div key={d.uid} style={{ fontSize:11, color:"#f97316", fontWeight:600 }}>⚪ IDLE: {d.name}</div>)
+          : idleDrv.map(d=><div key={d.uid} style={{ fontSize:11, color:"#f97316", fontWeight:600 }}>⚪ Unassigned: {d.name}</div>)
         }
       </div>
 
@@ -160,7 +160,7 @@ function DCBox({ dc, invoices, vehicles, users, alerts, t }) {
   );
 }
 
-export default function Dashboard({ user, lang, invoices, vehicles, alerts, uploads, users, setPage }) {
+export default function Dashboard({ user, lang, invoices, setInvoices, vehicles, alerts, setAlerts, uploads, setUploads, trips, setTrips, fuelLogs, setFuelLogs, users, setPage }) {
   const rtl = lang==="ar";
   const t = T[lang]||T.en;
   const role = user.role;
@@ -267,9 +267,24 @@ export default function Dashboard({ user, lang, invoices, vehicles, alerts, uplo
 
   return (
     <div style={{ direction:rtl?"rtl":"ltr" }}>
-      <div style={{ marginBottom:20 }}>
-        <h2 style={{ fontSize:22, fontWeight:900, color:"#0f172a", margin:"0 0 4px" }}>{t.welcome}, {user.displayName||user.name}!</h2>
-        <p style={{ fontSize:14, color:"#64748b", margin:0 }}>{dc?dcLabel(dc,t):t.adminTitle}</p>
+      <div style={{ marginBottom:20, display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:12 }}>
+        <div>
+          <h2 style={{ fontSize:22, fontWeight:900, color:"#0f172a", margin:"0 0 4px" }}>{t.welcome}, {user.displayName||user.name}!</h2>
+          <p style={{ fontSize:14, color:"#64748b", margin:0 }}>{dc?dcLabel(dc,t):t.adminTitle}</p>
+        </div>
+        {!dc&&(
+          <button onClick={()=>{
+            if (!window.confirm("Reset all test data? This will clear all invoices, trips, uploads, fuel logs and alerts. Vehicles and users will be kept.")) return;
+            setInvoices([]);
+            setTrips([]);
+            setUploads([]);
+            setFuelLogs([]);
+            setAlerts([]);
+            alert("Test data cleared! Ready for fresh UAT.");
+          }} style={{ background:"#fee2e2", border:"2px solid #ef4444", color:"#991b1b", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700 }}>
+            🗑️ Clear Test Data
+          </button>
+        )}
       </div>
 
       {/* Overall KPIs */}

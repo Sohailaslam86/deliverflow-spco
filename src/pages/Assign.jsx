@@ -2,12 +2,6 @@ import { useState } from "react";
 import { Card, CardTitle, Btn, Select, SuccessMsg } from "../components/Shared.jsx";
 import { DRIVERS_BY_DC, STORAGE_CONDITIONS, CITIES } from "../data/masterData.js";
 
-const VEHICLES_BY_DC = {
-  Riyadh:["Dyna 5784","BUS 2632","BUS 2630","BUS 2629","BUS 4295","Bus 4294","BUS 2631","Bus 2633","Dyna 5789","Dyna 5788"],
-  Jeddah:["BUS 2631","Dyna 1217","Dyna 5787","Dyna 5786","BUS 2629","Dyna 5784","BUS 4472","BUS 2633","Dyna 5789"],
-  Dammam:["BUS 4472","Dyna 5789","Dyna 5787"],
-};
-
 const T = {
   en: {
     selectInv:"Select Invoices", selected:"selected",
@@ -15,11 +9,13 @@ const T = {
     city:"Delivery City", storage:"Storage Condition", deliveryType:"Delivery Type",
     inCity:"In-City", outCity:"Out-City", assignBtn:"Assign to",
     noInvoices:"No pending invoices",
-    fuelInfo:"Fuel Level", distanceCover:"Estimated Coverage",
+    fuelAvailable:"Fuel Available", odometer:"Current Odometer",
+    estDistance:"Estimated Coverage", efficiency:"Efficiency",
     vehAlert:"Vehicle Alert", drvAlert:"Driver Alert",
     onLeave:"Driver is on leave — cannot assign",
     inMaint:"Vehicle is under maintenance — cannot assign",
-    done:"invoice(s) assigned to"
+    done:"invoice(s) assigned to", lowFuel:"Low Fuel Warning",
+    driverLoad:"assigned", driverFree:"free"
   },
   ar: {
     selectInv:"اختر الفواتير", selected:"محددة",
@@ -27,13 +23,25 @@ const T = {
     city:"مدينة التسليم", storage:"ظروف التخزين", deliveryType:"نوع التسليم",
     inCity:"داخل المدينة", outCity:"خارج المدينة", assignBtn:"تخصيص إلى",
     noInvoices:"لا توجد فواتير معلقة",
-    fuelInfo:"مستوى الوقود", distanceCover:"التغطية المقدرة",
+    fuelAvailable:"الوقود المتاح", odometer:"عداد المسافة الحالي",
+    estDistance:"التغطية المقدرة", efficiency:"الكفاءة",
     vehAlert:"تنبيه المركبة", drvAlert:"تنبيه السائق",
     onLeave:"السائق في إجازة — لا يمكن التخصيص",
     inMaint:"المركبة تحت الصيانة — لا يمكن التخصيص",
-    done:"تم تخصيص الفواتير"
+    done:"تم تخصيص الفواتير", lowFuel:"تحذير: وقود منخفض",
+    driverLoad:"مخصص", driverFree:"متاح"
   }
 };
+
+function FuelBar({ level, capacity }) {
+  const pct = Math.round((level||0)/(capacity||80)*100);
+  const color = pct < 25 ? "#ef4444" : pct < 50 ? "#f59e0b" : "#10b981";
+  return (
+    <div style={{ background:"#e0f2fe", borderRadius:99, height:8, overflow:"hidden", flex:1 }}>
+      <div style={{ width:`${pct}%`, height:"100%", background:color, borderRadius:99, transition:"width 0.3s" }} />
+    </div>
+  );
+}
 
 export default function Assign({ user, invoices, setInvoices, vehicles, users, lang }) {
   const [selected, setSelected] = useState([]);
@@ -50,9 +58,6 @@ export default function Assign({ user, invoices, setInvoices, vehicles, users, l
 
   const myInvoices = invoices.filter(i=>i.dc===dc&&["pending","outstanding"].includes(i.status));
   const allVehicles = vehicles.filter(v=>v.dc===dc);
-  const activeVehicles = allVehicles.filter(v=>v.status==="Active");
-
-  // All drivers for this DC including status
   const dcDrivers = (users||[]).filter(u=>u.role==="driver"&&u.dc===dc);
 
   const driverLoad = {};
@@ -64,25 +69,29 @@ export default function Assign({ user, invoices, setInvoices, vehicles, users, l
   const selDriverUser = dcDrivers.find(d=>d.name===driver);
   const storageOptions = STORAGE_CONDITIONS.map(s=>s.name+" ("+s.range+")");
 
+  // Vehicle computed values
+  const fuelLevel = selVehicle ? (selVehicle.fuelLevel||0) : 0;
+  const fuelCap = selVehicle ? (selVehicle.fuelCapacity||80) : 80;
+  const fuelPct = Math.round(fuelLevel/fuelCap*100);
+  const efficiency = selVehicle ? (selVehicle.mileage||12) : 12;
+  const estDist = Math.round(fuelLevel * efficiency);
+  const odometer = selVehicle ? (selVehicle.totalKM||0) : 0;
+
   // Vehicle alerts
   const vehAlerts = selVehicle ? [
     selVehicle.status==="Maintenance" && t.inMaint,
-    (selVehicle.fuelLevel||0)<20 && "⛽ Low Fuel: "+(selVehicle.fuelLevel||0)+"L",
-    selVehicle.fahas && Math.ceil((new Date(selVehicle.fahas)-new Date())/(1000*60*60*24))<=30 && "Fahas expiring in "+Math.ceil((new Date(selVehicle.fahas)-new Date())/(1000*60*60*24))+" days",
-    selVehicle.insurance && Math.ceil((new Date(selVehicle.insurance)-new Date())/(1000*60*60*24))<=30 && "Insurance expiring soon",
+    fuelLevel<20 && t.lowFuel+": "+fuelLevel+"L ("+fuelPct+"%)",
+    selVehicle.fahas && Math.ceil((new Date(selVehicle.fahas)-new Date())/(1000*60*60*24))<=30 && "Fahas expiring: "+selVehicle.fahas,
+    selVehicle.insurance && Math.ceil((new Date(selVehicle.insurance)-new Date())/(1000*60*60*24))<=30 && "Insurance expiring: "+selVehicle.insurance,
+    selVehicle.nextOilKM && (odometer >= selVehicle.nextOilKM) && "Oil change overdue!",
   ].filter(Boolean) : [];
 
   // Driver alerts
   const drvAlerts = selDriverUser ? [
     selDriverUser.status==="On Leave" && t.onLeave,
-    selDriverUser.licExp && Math.ceil((new Date(selDriverUser.licExp)-new Date())/(1000*60*60*24))<=30 && "License expiring in "+Math.ceil((new Date(selDriverUser.licExp)-new Date())/(1000*60*60*24))+" days",
-    selDriverUser.driverCardExp && Math.ceil((new Date(selDriverUser.driverCardExp)-new Date())/(1000*60*60*24))<=30 && "Driver card expiring soon",
+    selDriverUser.licExp && Math.ceil((new Date(selDriverUser.licExp)-new Date())/(1000*60*60*24))<=30 && "License expiring: "+selDriverUser.licExp,
+    selDriverUser.driverCardExp && Math.ceil((new Date(selDriverUser.driverCardExp)-new Date())/(1000*60*60*24))<=30 && "Driver card expiring: "+selDriverUser.driverCardExp,
   ].filter(Boolean) : [];
-
-  // Estimated distance coverage
-  const estDistance = selVehicle && selVehicle.fuelLevel && selVehicle.mileage
-    ? Math.round(selVehicle.fuelLevel * selVehicle.mileage)
-    : null;
 
   function assign() {
     setError("");
@@ -103,6 +112,7 @@ export default function Assign({ user, invoices, setInvoices, vehicles, users, l
       {done&&<SuccessMsg msg={done} />}
       {error&&<div style={{ background:"#fee2e2",color:"#991b1b",borderRadius:8,padding:"10px 14px",fontSize:13,marginBottom:12,fontWeight:600 }}>⛔ {error}</div>}
 
+      {/* Invoice Selection */}
       <Card>
         <CardTitle>
           📋 {t.selectInv}
@@ -129,9 +139,10 @@ export default function Assign({ user, invoices, setInvoices, vehicles, users, l
         })}
       </Card>
 
+      {/* Assignment Details */}
       <Card>
         <CardTitle>⚙️ {t.assignDetails}</CardTitle>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:"0 12px" }}>
+        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:"0 12px" }}>
 
           {/* Driver Select */}
           <div style={{ marginBottom:12 }}>
@@ -141,7 +152,7 @@ export default function Assign({ user, invoices, setInvoices, vehicles, users, l
               <option value="">Select driver...</option>
               {dcDrivers.map(d=>(
                 <option key={d.uid} value={d.name} disabled={d.status==="On Leave"}>
-                  {d.name} {d.status==="On Leave"?"(On Leave)":driverLoad[d.uid]?"("+driverLoad[d.uid]+" assigned)":"(free)"}
+                  {d.name} — {d.status==="On Leave"?"(On Leave)":driverLoad[d.uid]?driverLoad[d.uid]+" "+t.driverLoad:t.driverFree}
                 </option>
               ))}
             </select>
@@ -153,11 +164,14 @@ export default function Assign({ user, invoices, setInvoices, vehicles, users, l
             <select value={vehicle} onChange={e=>setVehicle(e.target.value)}
               style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box" }}>
               <option value="">Select vehicle...</option>
-              {allVehicles.map(v=>(
-                <option key={v.plate} value={v.plate} disabled={v.status==="Maintenance"}>
-                  {v.plate} — {v.fuelLevel||0}L/{v.fuelCapacity||80}L ({Math.round((v.fuelLevel||0)/(v.fuelCapacity||80)*100)}%) {v.status==="Maintenance"?"[MAINTENANCE]":""}
-                </option>
-              ))}
+              {allVehicles.map(v=>{
+                const pct=Math.round((v.fuelLevel||0)/(v.fuelCapacity||80)*100);
+                return (
+                  <option key={v.plate} value={v.plate} disabled={v.status==="Maintenance"}>
+                    {v.plate} — {v.fuelLevel||0}L ({pct}%) {v.status==="Maintenance"?"[MAINTENANCE]":""}
+                  </option>
+                );
+              })}
             </select>
           </div>
 
@@ -165,24 +179,49 @@ export default function Assign({ user, invoices, setInvoices, vehicles, users, l
           <Select label={"🌡️ "+t.storage} value={storage} onChange={setStorage} options={storageOptions} />
         </div>
 
-        {/* Vehicle Info Panel */}
+        {/* Vehicle Detail Panel */}
         {selVehicle&&(
-          <div style={{ background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:8,padding:"12px 14px",marginBottom:12 }}>
-            <div style={{ fontWeight:600,fontSize:13,color:"#0369a1",marginBottom:8 }}>🚗 {selVehicle.plate} — {t.fuelInfo}</div>
-            <div style={{ display:"flex",gap:16,fontSize:13,flexWrap:"wrap",marginBottom:8 }}>
-              <span>⛽ {selVehicle.fuelLevel||0}L / {selVehicle.fuelCapacity||80}L ({Math.round((selVehicle.fuelLevel||0)/(selVehicle.fuelCapacity||80)*100)}%)</span>
-              {estDistance&&<span>🛣️ {t.distanceCover}: ~{estDistance} km</span>}
-              {selVehicle.nextOilKM&&<span>🔩 Next Oil: {selVehicle.nextOilKM} KM</span>}
+          <div style={{ background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:10,padding:"14px 16px",marginBottom:12 }}>
+            <div style={{ fontWeight:700,fontSize:13,color:"#0369a1",marginBottom:12 }}>🚗 {selVehicle.plate} — {selVehicle.type} {selVehicle.brand}</div>
+
+            {/* 4 detail boxes */}
+            <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:12 }}>
+              {/* Fuel Available */}
+              <div style={{ background:"white",borderRadius:8,padding:"10px 12px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
+                <div style={{ fontSize:11,color:"#64748b",fontWeight:600,marginBottom:4 }}>⛽ {t.fuelAvailable}</div>
+                <div style={{ fontWeight:800,fontSize:18,color:fuelPct<25?"#ef4444":fuelPct<50?"#f59e0b":"#10b981" }}>{fuelLevel}L</div>
+                <div style={{ fontSize:12,color:"#64748b",marginBottom:6 }}>{fuelLevel}/{fuelCap}L ({fuelPct}%)</div>
+                <FuelBar level={fuelLevel} capacity={fuelCap} />
+              </div>
+
+              {/* Odometer */}
+              <div style={{ background:"white",borderRadius:8,padding:"10px 12px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
+                <div style={{ fontSize:11,color:"#64748b",fontWeight:600,marginBottom:4 }}>🛣️ {t.odometer}</div>
+                <div style={{ fontWeight:800,fontSize:18,color:"#6366f1" }}>{odometer.toLocaleString()}</div>
+                <div style={{ fontSize:12,color:"#64748b" }}>km total</div>
+              </div>
+
+              {/* Estimated Distance */}
+              <div style={{ background:"white",borderRadius:8,padding:"10px 12px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
+                <div style={{ fontSize:11,color:"#64748b",fontWeight:600,marginBottom:4 }}>📍 {t.estDistance}</div>
+                <div style={{ fontWeight:800,fontSize:18,color:"#0891b2" }}>~{estDist}</div>
+                <div style={{ fontSize:12,color:"#64748b" }}>km on current fuel</div>
+              </div>
+
+              {/* Efficiency */}
+              <div style={{ background:"white",borderRadius:8,padding:"10px 12px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
+                <div style={{ fontSize:11,color:"#64748b",fontWeight:600,marginBottom:4 }}>📊 {t.efficiency}</div>
+                <div style={{ fontWeight:800,fontSize:18,color:"#7c3aed" }}>{efficiency}</div>
+                <div style={{ fontSize:12,color:"#64748b" }}>km / L</div>
+              </div>
             </div>
-            {/* Fuel bar */}
-            <div style={{ background:"#e0f2fe",borderRadius:99,height:6,overflow:"hidden",marginBottom:8 }}>
-              <div style={{ width:`${Math.round((selVehicle.fuelLevel||0)/(selVehicle.fuelCapacity||80)*100)}%`,height:"100%",background:(selVehicle.fuelLevel||0)/(selVehicle.fuelCapacity||80)<0.25?"#ef4444":"#0891b2",borderRadius:99 }} />
-            </div>
+
+            {/* Vehicle Alerts */}
             {vehAlerts.length>0&&(
               <div>
                 <div style={{ fontWeight:600,fontSize:12,color:"#991b1b",marginBottom:4 }}>⚠️ {t.vehAlert}:</div>
                 {vehAlerts.map((a,i)=>(
-                  <div key={i} style={{ fontSize:12,color:"#991b1b",background:"#fee2e2",borderRadius:6,padding:"4px 8px",marginBottom:3,fontWeight:600 }}>🔴 {a}</div>
+                  <div key={i} style={{ fontSize:12,color:"#991b1b",background:"#fee2e2",borderRadius:6,padding:"5px 10px",marginBottom:3,fontWeight:600 }}>🔴 {a}</div>
                 ))}
               </div>
             )}
