@@ -1,5 +1,8 @@
 import React from "react";
 import { useState } from "react";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc, collection, addDoc, getDocs, updateDoc } from "firebase/firestore";
+import { auth, db } from "../firebase";
 import { Card, CardTitle, Btn, Input, Select, Textarea, SuccessMsg, TabBar } from "../components/Shared.jsx";
 import { DEPARTMENTS, RC, RI, genId } from "../data/masterData.js";
 
@@ -93,7 +96,7 @@ const T = {
     approve:"✅ Approve", reject:"❌ Reject", noPending:"No pending requests",
     requestedBy:"Requested by", requestSent:"Request submitted!",
     defPass:"Default password: spco2026", updated:"User updated!", created:"User created!",
-    approvedMsg:"User approved!", rejectedMsg:"Request rejected.",
+    approvedMsg:"User approved! Login ID & Password issued.", rejectedMsg:"Request rejected.",
     permission:"Permission", addRole:"+ Add Authorization Level",
     roleAdded:"New level added!", roleName:"Level Name",
     saveMatrix:"Save Matrix", matrixSaved:"Authorization matrix saved!",
@@ -102,7 +105,8 @@ const T = {
     newPass:"New Password", confirmPass:"Confirm Password",
     passMismatch:"Passwords do not match", passChanged:"Password changed!",
     passReset:"Password reset to: spco2026",
-    suggestRole:"Suggested Role", pending:"Pending", myDCOnly:"My DC drivers only"
+    suggestRole:"Suggested Role", pending:"Pending", myDCOnly:"My DC drivers only",
+    loginIssued:"Login ID & Password Issued", approving:"Approving..."
   },
   ar:{
     userDir:"دليل المستخدمين", accessReq:"طلبات الوصول", newUser:"مستخدم جديد",
@@ -117,7 +121,7 @@ const T = {
     approve:"موافقة", reject:"رفض", noPending:"لا توجد طلبات معلقة",
     requestedBy:"طلب بواسطة", requestSent:"تم إرسال الطلب!",
     defPass:"كلمة المرور: spco2026", updated:"تم التحديث", created:"تم الإنشاء",
-    approvedMsg:"تمت الموافقة", rejectedMsg:"تم الرفض",
+    approvedMsg:"تمت الموافقة! تم إصدار بيانات الدخول.", rejectedMsg:"تم الرفض",
     permission:"الصلاحية", addRole:"+ إضافة مستوى تفويض",
     roleAdded:"تمت الإضافة!", roleName:"اسم المستوى",
     saveMatrix:"حفظ المصفوفة", matrixSaved:"تم حفظ مصفوفة التفويض!",
@@ -126,7 +130,8 @@ const T = {
     newPass:"كلمة المرور الجديدة", confirmPass:"تأكيد كلمة المرور",
     passMismatch:"كلمتا المرور غير متطابقتان", passChanged:"تم تغيير كلمة المرور!",
     passReset:"تم إعادة التعيين إلى: spco2026",
-    suggestRole:"الدور المقترح", pending:"معلق", myDCOnly:"سائقو مركزي فقط"
+    suggestRole:"الدور المقترح", pending:"معلق", myDCOnly:"سائقو مركزي فقط",
+    loginIssued:"تم إصدار بيانات الدخول", approving:"جاري الموافقة..."
   }
 };
 
@@ -151,11 +156,12 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
   const [done, setDone] = useState("");
   const [form, setForm] = useState(EMPTY_FORM);
   const [reqEditForm, setReqEditForm] = useState(null);
-  const [passModal, setPassModal] = useState(null); // {uid, name, mode:'change'|'reset'}
+  const [passModal, setPassModal] = useState(null);
   const [newPass, setNewPass] = useState("");
   const [confirmPass, setConfirmPass] = useState("");
+  const [approving, setApproving] = useState(false);
+  const [issuedCredentials, setIssuedCredentials] = useState(null);
 
-  // Authorization Matrix state with localStorage
   const [permissions, setPermissions] = useState(() => {
     try { const s=localStorage.getItem("df_perms"); return s?JSON.parse(s):DEFAULT_PERMISSIONS; } catch { return DEFAULT_PERMISSIONS; }
   });
@@ -170,31 +176,26 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
   const [newRoleName, setNewRoleName] = useState("");
   const [showAddRole, setShowAddRole] = useState(false);
 
-  function flash(msg) { setDone(msg); setTimeout(()=>setDone(""),3000); }
+  function flash(msg) { setDone(msg); setTimeout(()=>setDone(""),5000); }
   function resetForm() { setForm(EMPTY_FORM); setEditUser(null); }
-
   function getRoleLabel(r) { return roleLabels[r]||rl[r]||r.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase()); }
 
   function F(key,val) {
     const updated={...form,[key]:val};
-    // Location lock based on user role
     if (key==="location") {
       const dc=LOCATION_TO_DC[val]||"";
       updated.dc=dc; updated.viewDC=dc||"all";
     }
     if (key==="empType"&&val==="driver") {
-      // Driver dept always Logistics
       updated.dept="Logistics";
       if (isManager) { updated.dc=user.dc||""; updated.location=user.location||"Head Office"; }
     }
     setForm(updated);
   }
 
-  // Determine locked fields based on submitter role
   function getLockedFields() {
     if (isAdmin) return {};
     if (isManager) return { location:user.location||"Head Office", dc:user.dc||"" };
-    // Planning, ViewOnly, Driver — location locked to their own
     return { location:user.location||"Head Office", dc:user.dc||"" };
   }
   const locked = getLockedFields();
@@ -211,7 +212,6 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
       }
       setTab("users");
     } else {
-      // All non-admin submit request
       const req = {
         reqId:genId("REQ"), empType:form.empType, name:form.name,
         displayName:form.displayName, empId:form.empId, mobile:form.mobile,
@@ -224,6 +224,8 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
         reqDate:new Date().toLocaleDateString(), status:"pending",
         submitterRole:user.role, submitterDC:user.dc||null
       };
+      // Save to Firestore
+      addDoc(collection(db, "requests"), req).catch(e=>console.error(e));
       setRequests(prev=>[...prev,req]);
       flash(t.requestSent);
     }
@@ -238,14 +240,83 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
 
   function toggleStatus(uid) { setUsers(prev=>prev.map(u=>u.uid===uid?{...u,status:u.status==="Active"?"Inactive":"Active"}:u)); }
 
-  function approveReq(reqId,approved) {
-    const req=requests.find(r=>r.reqId===reqId);
-    if (approved&&req) {
-      setUsers(prev=>[...prev,{uid:"u"+Date.now(),name:req.name,displayName:req.displayName||req.name,empId:req.empId,phone:req.mobile,email:req.email,role:req.role,dept:req.dept,location:req.location||"Head Office",dc:req.dc||null,viewDC:req.viewDC||"all",status:"Active",licNo:req.licNo||null,licExp:req.licExp||null,driverCard:req.driverCard||null,driverCardExp:req.driverCardExp||null,uniqueRef:genId("USR"),password:"spco2026"}]);
+  // ===== MAIN APPROVE FUNCTION — Firebase Auth + Firestore =====
+  async function approveReq(reqId, approved) {
+    const req = requests.find(r=>r.reqId===reqId);
+    if (!approved || !req) {
+      setRequests(prev=>prev.map(r=>r.reqId===reqId?{...r,status:"rejected",adminName:user.name,adminDate:new Date().toLocaleDateString()}:r));
+      flash(t.rejectedMsg);
+      return;
     }
-    setRequests(prev=>prev.map(r=>r.reqId===reqId?{...r,status:approved?"approved":"rejected",adminName:user.name,adminDate:new Date().toLocaleDateString(),uniqueRef:approved?genId("USR"):null}:r));
-    flash(approved?t.approvedMsg:t.rejectedMsg);
-    setEditReq(null); setReqEditForm(null);
+
+    // Email check
+    if (!req.email) {
+      flash("❌ Email required to approve! Please edit request and add email first.");
+      return;
+    }
+
+    setApproving(true);
+
+    try {
+      const defaultPassword = "spco2026";
+      const uniqueRef = genId("USR");
+
+      // Step 1 — Firebase Auth mein user banao
+      const userCredential = await createUserWithEmailAndPassword(auth, req.email.trim().toLowerCase(), defaultPassword);
+      const newUID = userCredential.user.uid;
+
+      // Step 2 — Firestore users collection mein profile banao
+      const profileData = {
+        name: req.name,
+        displayName: req.displayName || req.name,
+        email: req.email.trim().toLowerCase(),
+        mobile: req.mobile,
+        empId: req.empId || "",
+        role: req.role || "viewonly",
+        dept: req.dept || "Logistics",
+        dc: req.dc || "",
+        location: req.location || "Head Office",
+        status: "active",
+        empType: req.empType || "systemuser",
+        uniqueRef,
+        approvedBy: user.name,
+        approvedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        // Driver specific fields
+        licNo: req.licNo || null,
+        licExp: req.licExp || null,
+        driverCard: req.driverCard || null,
+        driverCardExp: req.driverCardExp || null,
+      };
+      await setDoc(doc(db, "users", newUID), profileData);
+
+      // Step 3 — Request status update karo
+      setRequests(prev=>prev.map(r=>r.reqId===reqId?{...r,status:"approved",adminName:user.name,adminDate:new Date().toLocaleDateString(),uniqueRef,firebaseUID:newUID}:r));
+
+      // Step 4 — Local users state update karo
+      setUsers(prev=>[...prev,{uid:newUID,...profileData,password:defaultPassword}]);
+
+      // Step 5 — Credentials dikhao
+      setIssuedCredentials({
+        name: req.name,
+        email: req.email,
+        password: defaultPassword,
+        role: getRoleLabel(req.role),
+        dc: req.dc || "Head Office",
+        ref: uniqueRef
+      });
+
+      flash(t.approvedMsg);
+    } catch(e) {
+      if (e.code === "auth/email-already-in-use") {
+        flash("❌ Email already exists in Firebase! This user may already have an account.");
+      } else {
+        flash("❌ Error: " + e.message);
+      }
+    }
+    setApproving(false);
+    setEditReq(null);
+    setReqEditForm(null);
   }
 
   function saveReqEdit() {
@@ -308,8 +379,6 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
   }
 
   const isDriverForm = form.empType==="driver";
-
-  // Filter requests — manager sees only driver requests for their DC
   const visibleRequests = isAdmin
     ? requests
     : requests.filter(r=>r.empType==="driver"&&r.submitterDC===user.dc||r.requestedBy===user.name);
@@ -317,6 +386,47 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
   return (
     <div style={{ direction:rtl?"rtl":"ltr" }}>
       {done&&<SuccessMsg msg={done} />}
+
+      {/* ===== ISSUED CREDENTIALS MODAL ===== */}
+      {issuedCredentials&&(
+        <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }}>
+          <div style={{ background:"white",borderRadius:16,padding:32,width:"100%",maxWidth:420,boxShadow:"0 20px 60px rgba(0,0,0,0.3)" }}>
+            <div style={{ textAlign:"center",marginBottom:20 }}>
+              <div style={{ fontSize:48,marginBottom:8 }}>🎉</div>
+              <h3 style={{ margin:"0 0 4px",fontWeight:900,color:"#065f46",fontSize:20 }}>User Approved!</h3>
+              <p style={{ color:"#64748b",fontSize:13,margin:0 }}>Login credentials issued — share with user</p>
+            </div>
+            <div style={{ background:"#f0fdf4",border:"2px solid #10b981",borderRadius:12,padding:20,marginBottom:20 }}>
+              <div style={{ marginBottom:10 }}>
+                <div style={{ fontSize:11,color:"#64748b",fontWeight:600,marginBottom:2 }}>👤 NAME</div>
+                <div style={{ fontWeight:700,fontSize:15,color:"#0f172a" }}>{issuedCredentials.name}</div>
+              </div>
+              <div style={{ marginBottom:10 }}>
+                <div style={{ fontSize:11,color:"#64748b",fontWeight:600,marginBottom:2 }}>📧 LOGIN ID (EMAIL)</div>
+                <div style={{ fontWeight:700,fontSize:15,color:"#1A3A5C",fontFamily:"monospace",background:"#e0f2fe",padding:"6px 10px",borderRadius:6 }}>{issuedCredentials.email}</div>
+              </div>
+              <div style={{ marginBottom:10 }}>
+                <div style={{ fontSize:11,color:"#64748b",fontWeight:600,marginBottom:2 }}>🔑 DEFAULT PASSWORD</div>
+                <div style={{ fontWeight:700,fontSize:20,color:"#7c3aed",fontFamily:"monospace",background:"#f3e8ff",padding:"6px 10px",borderRadius:6,letterSpacing:2 }}>{issuedCredentials.password}</div>
+              </div>
+              <div style={{ marginBottom:10 }}>
+                <div style={{ fontSize:11,color:"#64748b",fontWeight:600,marginBottom:2 }}>🏢 ROLE & DC</div>
+                <div style={{ fontWeight:600,fontSize:13,color:"#374151" }}>{issuedCredentials.role} — {issuedCredentials.dc}</div>
+              </div>
+              <div>
+                <div style={{ fontSize:11,color:"#64748b",fontWeight:600,marginBottom:2 }}>🔖 REFERENCE</div>
+                <div style={{ fontWeight:600,fontSize:13,color:"#6366f1" }}>{issuedCredentials.ref}</div>
+              </div>
+            </div>
+            <div style={{ background:"#fef3c7",borderRadius:8,padding:"10px 14px",fontSize:12,color:"#92400e",marginBottom:16 }}>
+              ⚠️ Please share these credentials with the user. They can change their password after first login.
+            </div>
+            <Btn onClick={()=>setIssuedCredentials(null)} style={{ width:"100%",padding:12 }} color="#1A3A5C">
+              ✅ Done — Close
+            </Btn>
+          </div>
+        </div>
+      )}
 
       {/* Password Modal */}
       {passModal&&(
@@ -363,11 +473,11 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                       <div style={{ fontSize:11,color:"#94a3b8" }}>{u.location} {u.dept&&"| "+u.dept} {u.uniqueRef&&"| "+u.uniqueRef}</div>
                       {u.licNo&&<div style={{ fontSize:11,color:"#6366f1" }}>📄 Lic: {u.licNo} | Exp: {u.licExp}</div>}
                     </div>
-                    <span style={{ fontSize:12,fontWeight:600,padding:"3px 10px",borderRadius:99,background:u.status==="Active"?"#d1fae5":"#fee2e2",color:u.status==="Active"?"#065f46":"#991b1b" }}>{u.status||"Active"}</span>
+                    <span style={{ fontSize:12,fontWeight:600,padding:"3px 10px",borderRadius:99,background:u.status==="Active"||u.status==="active"?"#d1fae5":"#fee2e2",color:u.status==="Active"||u.status==="active"?"#065f46":"#991b1b" }}>{u.status||"Active"}</span>
                     <div style={{ display:"flex",gap:4,flexWrap:"wrap" }}>
                       <Btn small onClick={()=>startEdit(u)} color="#6366f1">✎ {t.edit}</Btn>
                       <Btn small onClick={()=>setPassModal({uid:u.uid,name:u.name,mode:"reset"})} color="#f59e0b">🔑</Btn>
-                      <Btn small onClick={()=>toggleStatus(u.uid)} color={u.status==="Active"?"#ef4444":"#10b981"}>{u.status==="Active"?t.deactivate:t.activate}</Btn>
+                      <Btn small onClick={()=>toggleStatus(u.uid)} color={u.status==="Active"||u.status==="active"?"#ef4444":"#10b981"}>{u.status==="Active"||u.status==="active"?t.deactivate:t.activate}</Btn>
                     </div>
                   </div>
                 ))}
@@ -380,6 +490,11 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
       {/* ACCESS REQUESTS */}
       {tab==="requests"&&(isAdmin||isManager)&&(
         <div>
+          {approving&&(
+            <div style={{ background:"#dbeafe",borderRadius:8,padding:"12px 16px",marginBottom:12,fontSize:14,color:"#1e40af",fontWeight:600 }}>
+              ⏳ {t.approving} Creating Firebase account...
+            </div>
+          )}
           {visibleRequests.length===0&&<Card><div style={{ textAlign:"center",padding:20,color:"#94a3b8" }}>{t.noPending}</div></Card>}
           {visibleRequests.map(req=>(
             <Card key={req.reqId} style={{ borderLeft:`4px solid ${req.status==="pending"?"#f59e0b":req.status==="approved"?"#10b981":"#ef4444"}` }}>
@@ -389,7 +504,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                   <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px" }}>
                     <Input label={t.fullName} value={reqEditForm.name} onChange={v=>setReqEditForm({...reqEditForm,name:v})} />
                     <Input label={t.mobile} value={reqEditForm.mobile} onChange={v=>setReqEditForm({...reqEditForm,mobile:v})} />
-                    <Input label={t.email} value={reqEditForm.email} onChange={v=>setReqEditForm({...reqEditForm,email:v})} />
+                    <Input label={t.email+" *"} value={reqEditForm.email} onChange={v=>setReqEditForm({...reqEditForm,email:v})} />
                     <Input label={t.empId} value={reqEditForm.empId||""} onChange={v=>setReqEditForm({...reqEditForm,empId:v})} />
                     <Select label={t.location} value={reqEditForm.location||"Head Office"} onChange={v=>setReqEditForm({...reqEditForm,location:v})} options={LOCATIONS} />
                     <Select label={t.dept} value={reqEditForm.dept||""} onChange={v=>setReqEditForm({...reqEditForm,dept:v})} options={DEPARTMENTS} />
@@ -406,19 +521,25 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                   <div style={{ flex:1 }}>
                     <div style={{ fontWeight:700,fontSize:15 }}>{req.name} <span style={{ fontSize:12,color:"#64748b" }}>({req.empType==="driver"?"Delivery Driver":"System User"})</span></div>
                     <div style={{ fontSize:13,color:"#64748b",marginTop:2 }}>{req.dept} | {getRoleLabel(req.role)} | {req.mobile}</div>
+                    {req.email&&<div style={{ fontSize:12,color:"#1A3A5C",fontWeight:600 }}>📧 {req.email}</div>}
                     {req.location&&<div style={{ fontSize:12,color:"#64748b" }}>📍 {req.location}</div>}
+                    {req.licNo&&<div style={{ fontSize:12,color:"#6366f1" }}>📄 Lic: {req.licNo} | Exp: {req.licExp}</div>}
                     <div style={{ fontSize:13,color:"#374151",marginTop:4 }}>📝 {req.reason}</div>
                     <div style={{ fontSize:11,color:"#94a3b8",marginTop:4 }}>{t.requestedBy}: {req.requestedBy} | {req.reqDate} | {req.reqId}</div>
-                    {req.uniqueRef&&<div style={{ fontSize:11,color:"#6366f1",fontWeight:600 }}>Ref: {req.uniqueRef}</div>}
+                    {req.uniqueRef&&<div style={{ fontSize:11,color:"#10b981",fontWeight:700 }}>✅ Ref: {req.uniqueRef} | Approved by: {req.adminName}</div>}
                   </div>
                   <div>
                     <span style={{ fontSize:12,fontWeight:600,padding:"4px 12px",borderRadius:99,background:req.status==="pending"?"#fef3c7":req.status==="approved"?"#d1fae5":"#fee2e2",color:req.status==="pending"?"#92400e":req.status==="approved"?"#065f46":"#991b1b" }}>{req.status.toUpperCase()}</span>
                     {isAdmin&&(
                       <div style={{ display:"flex",gap:4,marginTop:8,flexWrap:"wrap" }}>
-                        <Btn small onClick={()=>{setEditReq(req.reqId);setReqEditForm({name:req.name,mobile:req.mobile,email:req.email||"",empId:req.empId||"",dept:req.dept||"",role:req.role||"viewonly",location:req.location||"Head Office",reason:req.reason||""});}} color="#6366f1">✎ {t.edit}</Btn>
+                        {req.status==="pending"&&(
+                          <Btn small onClick={()=>{setEditReq(req.reqId);setReqEditForm({name:req.name,mobile:req.mobile,email:req.email||"",empId:req.empId||"",dept:req.dept||"",role:req.role||"viewonly",location:req.location||"Head Office",reason:req.reason||""});}} color="#6366f1">✎ {t.edit}</Btn>
+                        )}
                         {req.status==="pending"&&<>
-                          <Btn small onClick={()=>approveReq(req.reqId,true)} color="#10b981">{t.approve}</Btn>
-                          <Btn small onClick={()=>approveReq(req.reqId,false)} color="#ef4444">{t.reject}</Btn>
+                          <Btn small onClick={()=>approveReq(req.reqId,true)} color="#10b981" disabled={approving}>
+                            {approving?"⏳...":t.approve}
+                          </Btn>
+                          <Btn small onClick={()=>approveReq(req.reqId,false)} color="#ef4444" disabled={approving}>{t.reject}</Btn>
                         </>}
                       </div>
                     )}
@@ -435,7 +556,6 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
         <Card>
           <CardTitle>{editUser?t.edit+" "+editUser.name:isAdmin?t.newUser:t.myRequest}</CardTitle>
 
-          {/* Employee Type — show for all except driver */}
           {!isDriver&&(
             <div style={{ marginBottom:16 }}>
               <label style={{ fontSize:13,fontWeight:600,color:"#374151",marginBottom:6,display:"block" }}>{t.empType} *</label>
@@ -455,9 +575,8 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
             {!isDriverForm&&<div style={{ gridColumn:"1/-1" }}><Input label={t.displayName} value={form.displayName} onChange={v=>F("displayName",v)} /></div>}
             <Input label={t.empId} value={form.empId} onChange={v=>F("empId",v)} placeholder="EMP-XXX" />
             <Input label={t.mobile+" *"} value={form.mobile} onChange={v=>F("mobile",v)} required />
-            <div style={{ gridColumn:"1/-1" }}><Input label={t.email} value={form.email} onChange={v=>F("email",v)} type="email" /></div>
+            <div style={{ gridColumn:"1/-1" }}><Input label={t.email+" *"} value={form.email} onChange={v=>F("email",v)} type="email" /></div>
 
-            {/* Location — locked if not admin */}
             <div style={{ marginBottom:12 }}>
               <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#374151",marginBottom:5 }}>{t.location}</label>
               {locked.location&&!isAdmin?(
@@ -472,7 +591,6 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
               )}
             </div>
 
-            {/* Department — locked to Logistics for drivers */}
             <div style={{ marginBottom:12 }}>
               <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#374151",marginBottom:5 }}>{t.dept}</label>
               {isDriverForm?(
@@ -480,17 +598,10 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                   🔒 Logistics
                 </div>
               ):(
-                isManager?(
-                  <select value={form.dept} onChange={e=>F("dept",e.target.value)}
-                    style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box" }}>
-                    {DEPARTMENTS.map(d=><option key={d} value={d}>{d}</option>)}
-                  </select>
-                ):(
-                  <select value={form.dept} onChange={e=>F("dept",e.target.value)}
-                    style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box" }}>
-                    {DEPARTMENTS.map(d=><option key={d} value={d}>{d}</option>)}
-                  </select>
-                )
+                <select value={form.dept} onChange={e=>F("dept",e.target.value)}
+                  style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box" }}>
+                  {DEPARTMENTS.map(d=><option key={d} value={d}>{d}</option>)}
+                </select>
               )}
             </div>
 
@@ -501,12 +612,11 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                 <Input label={t.driverCard} value={form.driverCard} onChange={v=>F("driverCard",v)} />
                 <Input label={t.driverCardExp} value={form.driverCardExp} onChange={v=>F("driverCardExp",v)} type="date" />
                 <div style={{ gridColumn:"1/-1",background:"#f0f9ff",borderRadius:8,padding:"10px 14px",fontSize:12,color:"#0369a1" }}>
-                  🏢 DC: <b>{locked.dc||(isManager?user.dc:form.dc)||"Not set"}</b> | 🔒 Dept: Logistics
+                  🔒 DC: <b>{locked.dc||(isManager?user.dc:form.dc)||"Not set"}</b> | 🔒 Dept: Logistics
                 </div>
               </>
             ):(
               <>
-                {/* Role suggestion — for non-admin */}
                 {!isAdmin&&(
                   <div style={{ gridColumn:"1/-1",marginBottom:12 }}>
                     <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#374151",marginBottom:5 }}>💡 {t.suggestRole}</label>
@@ -529,7 +639,6 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
 
           {isAdmin&&<div style={{ background:"#f0f9ff",borderRadius:8,padding:"10px 14px",fontSize:12,color:"#0369a1",marginBottom:16 }}>🔑 {t.defPass}</div>}
 
-          {/* Password change for own account */}
           {!isAdmin&&editUser?.uid===user.uid&&(
             <Btn onClick={()=>setPassModal({uid:user.uid,name:user.name,mode:"change"})} color="#f59e0b" style={{ width:"100%",marginBottom:12 }}>
               🔑 {t.changePass}
