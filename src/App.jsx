@@ -47,4 +47,62 @@ export default function App() {
           if (docSnap.exists()) {
             setUser({ uid: firebaseUser.uid, email: firebaseUser.email, ...docSnap.data() });
           } else {
-            // Firestore profil
+            const demoUser = DEMO_USERS.find(u => u.email === firebaseUser.email);
+            if (demoUser) {
+              setUser({ uid: firebaseUser.uid, ...demoUser });
+            } else {
+              setUser({ uid: firebaseUser.uid, email: firebaseUser.email, role: 'viewonly', dc: 'All', name: firebaseUser.email });
+            }
+          }
+        } catch (e) {
+          const demoUser = DEMO_USERS.find(u => u.email === firebaseUser.email);
+          if (demoUser) setUser({ uid: firebaseUser.uid, ...demoUser });
+        }
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  if (loading) return (
+    <div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'100vh',fontSize:'18px',color:'#666'}}>
+      Loading DeliverFlow...
+    </div>
+  );
+
+  if (!user) return (
+    <Login onLogin={u=>{setUser(u);setPage("dashboard");}} lang={lang} setLang={setLang} />
+  );
+
+  const props = {
+    user, lang, invoices, setInvoices, vehicles, setVehicles,
+    trips, setTrips, fuelLogs, setFuelLogs, uploads, setUploads,
+    users, setUsers, requests, setRequests, alerts, setAlerts, setPage
+  };
+
+  const pages = {
+    dashboard:    <Dashboard  {...props} users={users} />,
+    invoices:     <Invoices   {...props} />,
+    upload:       <Upload     {...props} />,
+    assign:       <Assign     {...props} users={users} />,
+    trips:        <Trips      {...props} vehicles={vehicles} users={users} />,
+    users:        <Users      {...props} />,
+    masterdata:   <MasterData {...props} />,
+    fleet:        <Fleet      {...props} setUsers={setUsers} />,
+    fuel:         <Fuel       {...props} />,
+    reports:      <Reports    {...props} users={users} />,
+    mydeliveries: <Driver     {...props} />,
+    odometer:     <Odometer   {...props} />,
+    search:       <Search     {...props} />,
+    download:     <Download   {...props} />,
+  };
+
+  return (
+    <Shell user={user} lang={lang} setLang={setLang} page={page} setPage={setPage}
+      onLogout={()=>{setUser(null);setPage("dashboard");}} alerts={alerts}>
+      {pages[page]||pages.dashboard}
+    </Shell>
+  );
+}
