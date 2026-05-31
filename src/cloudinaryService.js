@@ -1,5 +1,4 @@
-// Cloudinary free plan — POD photos, vehicle photos, odometer images
-const CLOUD_NAME = 'YAHAN_AAPKA_CLOUDINARY_NAME';
+const CLOUD_NAME = 'dh7uziz5u';
 const UPLOAD_PRESET = 'deliverflow_uploads';
 
 export const uploadImage = async (file, folder = 'pod') => {
@@ -14,5 +13,11 @@ export const uploadImage = async (file, folder = 'pod') => {
   );
 
   const data = await response.json();
+  if (data.error) throw new Error(data.error.message);
   return data.secure_url;
+};
+
+export const deleteImage = async (publicId) => {
+  // Delete handled from backend if needed
+  console.log('Image public ID:', publicId);
 };
