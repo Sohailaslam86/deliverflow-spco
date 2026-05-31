@@ -5,7 +5,7 @@ import { auth, db } from "./firebase";
 
 export default function App() {
   const [status, setStatus] = useState("Loading...");
-  const [data, setData] = useState(null);
+  const [data, setData] = useState(null); 
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
