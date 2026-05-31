@@ -42,21 +42,61 @@ export default function App() {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          const docRef = doc(db, 'users', firebaseUser.uid);
+          // Firestore se profile load karo
+          const docRef = doc(db, "users", firebaseUser.uid);
           const docSnap = await getDoc(docRef);
+          
           if (docSnap.exists()) {
-            setUser({ uid: firebaseUser.uid, email: firebaseUser.email, ...docSnap.data() });
+            // ✅ Firestore profile mili — use karo
+            const profile = docSnap.data();
+            setUser({
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              ...profile
+            });
           } else {
-            const demoUser = DEMO_USERS.find(u => u.email === firebaseUser.email);
-            if (demoUser) {
-              setUser({ uid: firebaseUser.uid, ...demoUser });
-            } else {
-              setUser({ uid: firebaseUser.uid, email: firebaseUser.email, role: 'viewonly', dc: 'All', name: firebaseUser.email });
-            }
+            // ❌ Firestore profile nahi mili
+            // Retry karo 2 seconds baad (kabhi kabhi delay hota hai)
+            setTimeout(async () => {
+              try {
+                const retrySnap = await getDoc(docRef);
+                if (retrySnap.exists()) {
+                  setUser({
+                    uid: firebaseUser.uid,
+                    email: firebaseUser.email,
+                    ...retrySnap.data()
+                  });
+                } else {
+                  // Ab bhi nahi mili — email se match karo
+                  setUser({
+                    uid: firebaseUser.uid,
+                    email: firebaseUser.email,
+                    name: firebaseUser.email,
+                    role: firebaseUser.email === "sohail@spco.sa" ? "admin" : "viewonly",
+                    dc: firebaseUser.email === "sohail@spco.sa" ? "Head Office" : "All",
+                    department: "Management",
+                    status: "active"
+                  });
+                }
+              } catch(e) {
+                console.error("Retry error:", e);
+              }
+              setLoading(false);
+            }, 2000);
+            return; // Loading band mat karo abhi
           }
         } catch (e) {
-          const demoUser = DEMO_USERS.find(u => u.email === firebaseUser.email);
-          if (demoUser) setUser({ uid: firebaseUser.uid, ...demoUser });
+          console.error("Firestore error:", e);
+          // Emergency fallback — sohail ke liye admin
+          setUser({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            name: firebaseUser.email,
+            role: firebaseUser.email === "sohail@spco.sa" ? "admin" : "viewonly",
+            dc: firebaseUser.email === "sohail@spco.sa" ? "Head Office" : "All",
+            department: "Management",
+            status: "active"
+          });
         }
       } else {
         setUser(null);
@@ -67,13 +107,26 @@ export default function App() {
   }, []);
 
   if (loading) return (
-    <div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'100vh',fontSize:'18px',color:'#666'}}>
-      Loading DeliverFlow...
+    <div style={{
+      display:"flex", flexDirection:"column",
+      justifyContent:"center", alignItems:"center",
+      height:"100vh", fontSize:"18px", color:"#666",
+      fontFamily:"Segoe UI, sans-serif"
+    }}>
+      <div style={{ fontSize:40, marginBottom:16 }}>🔄</div>
+      <div>Loading DeliverFlow...</div>
+      <div style={{ fontSize:13, color:"#94a3b8", marginTop:8 }}>
+        Connecting to server...
+      </div>
     </div>
   );
 
   if (!user) return (
-    <Login onLogin={u=>{setUser(u);setPage("dashboard");}} lang={lang} setLang={setLang} />
+    <Login
+      onLogin={u=>{setUser(u); setPage("dashboard");}}
+      lang={lang}
+      setLang={setLang}
+    />
   );
 
   const props = {
@@ -100,8 +153,15 @@ export default function App() {
   };
 
   return (
-    <Shell user={user} lang={lang} setLang={setLang} page={page} setPage={setPage}
-      onLogout={()=>{setUser(null);setPage("dashboard");}} alerts={alerts}>
+    <Shell
+      user={user}
+      lang={lang}
+      setLang={setLang}
+      page={page}
+      setPage={setPage}
+      onLogout={()=>{setUser(null); setPage("dashboard");}}
+      alerts={alerts}
+    >
       {pages[page]||pages.dashboard}
     </Shell>
   );
