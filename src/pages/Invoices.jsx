@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { collection, getDocs, updateDoc, doc } from "firebase/firestore";
+import { db } from "../firebase";
 import { Card, CardTitle, Btn, Badge, EmptyState, StatCard } from "../components/Shared.jsx";
 import { STATUS_STYLES } from "../data/masterData.js";
 
@@ -100,11 +102,24 @@ export default function Invoices({ user, invoices, setInvoices, lang }) {
   const t = T[lang]||T.en;
   const isAdmin = user.role==="admin";
   const isManager = user.role==="manager";
-  const dc = user.dc;
+  const dc = user.dc==="Head Office" ? null : user.dc;
 
-  const base = dc?invoices.filter(i=>i.dc===dc):invoices;
+  // Firestore se invoices load karo
+  useEffect(() => {
+    loadInvoices();
+  }, []);
+
+  async function loadInvoices() {
+    try {
+      const snap = await getDocs(collection(db, "invoices"));
+      const data = snap.docs.map(d => ({ firestoreId: d.id, ...d.data() }));
+      setInvoices(data);
+    } catch(e) { console.error("Invoices load error:", e); }
+  }
+
+  const base = dc ? invoices.filter(i=>i.dc===dc) : invoices;
   const filtered = base.filter(inv=>{
-    const mQ = !search||inv.id.toLowerCase().includes(search.toLowerCase())||inv.customer.toLowerCase().includes(search.toLowerCase());
+    const mQ = !search||inv.id?.toLowerCase().includes(search.toLowerCase())||inv.customer?.toLowerCase().includes(search.toLowerCase());
     const mS = statusF==="all"||inv.status===statusF;
     const mDC = !isAdmin||dcF==="all"||inv.dc===dcF;
     const mFrom = !dateFrom||inv.date>=dateFrom;
@@ -114,17 +129,31 @@ export default function Invoices({ user, invoices, setInvoices, lang }) {
 
   const del = base.filter(i=>i.status==="delivered").length;
 
-  function saveHold() {
+  async function saveHold() {
     if (!holdInv) return;
     let newStatus = "scheduled";
     if (holdForm.type==="hold_await") newStatus="hold_await";
     if (holdForm.type==="hold_ship") newStatus="hold_ship";
-    setInvoices(prev=>prev.map(i=>i.id===holdInv.id?{...i,status:newStatus,holdType:holdForm.type,holdDate:holdForm.date,holdEstDate:holdForm.estDate,holdOrigin:holdForm.origin,holdReason:holdForm.reason,holdRaisedDate:new Date().toISOString().split("T")[0]}:i));
+    const updateData = {
+      status: newStatus, holdType: holdForm.type,
+      holdDate: holdForm.date, holdEstDate: holdForm.estDate,
+      holdOrigin: holdForm.origin, holdReason: holdForm.reason,
+      holdRaisedDate: new Date().toISOString().split("T")[0]
+    };
+    // Firestore update
+    if (holdInv.firestoreId) {
+      try { await updateDoc(doc(db, "invoices", holdInv.firestoreId), updateData); } catch(e) { console.error(e); }
+    }
+    setInvoices(prev=>prev.map(i=>i.id===holdInv.id?{...i,...updateData}:i));
     setHoldInv(null);
   }
 
-  function unlockInv(id) {
-    setInvoices(prev=>prev.map(i=>i.id===id?{...i,status:"pending",holdType:null}:i));
+  async function unlockInv(inv) {
+    const updateData = { status:"pending", holdType:null };
+    if (inv.firestoreId) {
+      try { await updateDoc(doc(db, "invoices", inv.firestoreId), updateData); } catch(e) { console.error(e); }
+    }
+    setInvoices(prev=>prev.map(i=>i.id===inv.id?{...i,...updateData}:i));
   }
 
   const days = inv => Math.floor((new Date()-new Date(inv.date))/(1000*60*60*24));
@@ -134,37 +163,28 @@ export default function Invoices({ user, invoices, setInvoices, lang }) {
       {/* Overall Performance */}
       <Card style={{ borderTop:"4px solid #1A3A5C", marginBottom:16 }}>
         <CardTitle>📊 {t.overall}</CardTitle>
-        <div style={{ display:"flex", gap:16, flexWrap:"wrap", fontSize:13 }}>
-          {[
-            [t.total,base.length,"#6366f1"],
-            [t.delivered,del,"#10b981"],
-            [t.pending,base.filter(i=>i.status==="pending").length,"#f59e0b"],
-            [t.assigned,base.filter(i=>i.status==="assigned").length,"#3b82f6"],
-            [t.failed,base.filter(i=>i.status==="failed").length,"#ef4444"],
-            [t.outstanding,base.filter(i=>i.status==="outstanding").length,"#f97316"],
-            [t.inTransit,base.filter(i=>i.status==="intransit").length,"#8b5cf6"],
-            [t.scheduled,base.filter(i=>["scheduled","hold_await","hold_ship"].includes(i.status)).length,"#a855f7"],
-          ].map(([label,val,color])=>(
-            <div key={label} style={{ textAlign:"center", minWidth:55 }}>
-              <div style={{ fontWeight:900, fontSize:22, color }}>{val}</div>
-              <div style={{ fontSize:11, color:"#94a3b8" }}>{label}</div>
-            </div>
-          ))}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(100px,1fr))", gap:8 }}>
+          <StatCard icon="📋" label={t.total} value={base.length} color="#6366f1" />
+          <StatCard icon="✅" label={t.delivered} value={del} color="#10b981" />
+          <StatCard icon="⏳" label={t.pending} value={base.filter(i=>i.status==="pending").length} color="#f59e0b" />
+          <StatCard icon="👤" label={t.assigned} value={base.filter(i=>i.status==="assigned").length} color="#3b82f6" />
+          <StatCard icon="❌" label={t.failed} value={base.filter(i=>i.status==="failed").length} color="#ef4444" />
+          <StatCard icon="⚠️" label={t.outstanding} value={base.filter(i=>i.status==="outstanding").length} color="#f97316" />
+          <StatCard icon="🚚" label={t.inTransit} value={base.filter(i=>i.status==="intransit").length} color="#8b5cf6" />
+          <StatCard icon="📅" label={t.scheduled} value={base.filter(i=>["scheduled","hold_await","hold_ship"].includes(i.status)).length} color="#a855f7" />
         </div>
       </Card>
 
-      {/* 3 DC Boxes — Admin only */}
+      {/* DC Boxes — Admin only */}
       {isAdmin&&(
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:16, marginBottom:16 }}>
-          <DCInvoiceBox dc="Riyadh" invoices={invoices} t={t} />
-          <DCInvoiceBox dc="Jeddah" invoices={invoices} t={t} />
-          <DCInvoiceBox dc="Dammam" invoices={invoices} t={t} />
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:12, marginBottom:16 }}>
+          {DCS.map(d=><DCInvoiceBox key={d} dc={d} invoices={invoices} t={t} />)}
         </div>
       )}
 
       {/* Filters */}
       <Card>
-        <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:12 }}>
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:10 }}>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={t.search}
             style={{ flex:1, minWidth:180, border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none" }} />
           <select value={statusF} onChange={e=>setStatusF(e.target.value)}
@@ -206,7 +226,7 @@ export default function Invoices({ user, invoices, setInvoices, lang }) {
           const isHeld = ["scheduled","hold_await","hold_ship"].includes(inv.status);
           const tat = calcTurnaround(inv);
           return (
-            <div key={inv.id} style={{ border:`1px solid ${isHeld?"#a855f7":"#e2e8f0"}`, borderRadius:8, padding:12, marginBottom:8, background:isHeld?"#faf5ff":"white" }}>
+            <div key={inv.id||inv.firestoreId} style={{ border:`1px solid ${isHeld?"#a855f7":"#e2e8f0"}`, borderRadius:8, padding:12, marginBottom:8, background:isHeld?"#faf5ff":"white" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:6, marginBottom:6 }}>
                 <span style={{ fontWeight:700, fontSize:13, color:"#6366f1" }}>{inv.id}</span>
                 <div style={{ display:"flex", gap:6, alignItems:"center" }}>
@@ -225,7 +245,6 @@ export default function Invoices({ user, invoices, setInvoices, lang }) {
                 {inv.uploadBatch&&<span style={{ color:"#94a3b8" }}>{inv.uploadBatch}</span>}
                 {tat!==null&&<span style={{ fontWeight:600, color:"#6366f1" }}>⏱️ {t.turnaround}: {tat} day{tat!==1?"s":""}</span>}
               </div>
-
               {isHeld&&inv.holdReason&&(
                 <div style={{ background:"#f3e8ff", borderRadius:6, padding:"6px 10px", fontSize:12, color:"#6b21a8", marginBottom:8 }}>
                   📌 {inv.holdReason}
@@ -237,12 +256,12 @@ export default function Invoices({ user, invoices, setInvoices, lang }) {
               {(isAdmin||isManager)&&!["delivered","intransit"].includes(inv.status)&&(
                 <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
                   {!isHeld&&(
-                    <Btn small onClick={()=>{setHoldInv(inv);setHoldForm({type:"confirmed",date:"",estDate:"",origin:"Riyadh",reason:""}); }} color="#a855f7">
+                    <Btn small onClick={()=>{setHoldInv(inv);setHoldForm({type:"confirmed",date:"",estDate:"",origin:"Riyadh",reason:""});}} color="#a855f7">
                       📅 {t.schedHold}
                     </Btn>
                   )}
                   {isHeld&&(isAdmin||(isManager&&inv.dc===dc))&&(
-                    <Btn small onClick={()=>unlockInv(inv.id)} color="#10b981">🔓 {t.unlock}</Btn>
+                    <Btn small onClick={()=>unlockInv(inv)} color="#10b981">🔓 {t.unlock}</Btn>
                   )}
                 </div>
               )}

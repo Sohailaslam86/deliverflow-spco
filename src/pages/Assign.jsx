@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { collection, getDocs, updateDoc, doc } from "firebase/firestore";
+import { db } from "../firebase";
 import { Card, CardTitle, Btn, Select, SuccessMsg } from "../components/Shared.jsx";
-import { DRIVERS_BY_DC, STORAGE_CONDITIONS, CITIES } from "../data/masterData.js";
+import { STORAGE_CONDITIONS, CITIES } from "../data/masterData.js";
 
 const T = {
   en: {
@@ -43,7 +45,7 @@ function FuelBar({ level, capacity }) {
   );
 }
 
-export default function Assign({ user, invoices, setInvoices, vehicles, users, lang }) {
+export default function Assign({ user, invoices, setInvoices, vehicles, lang }) {
   const [selected, setSelected] = useState([]);
   const [driver, setDriver] = useState("");
   const [vehicle, setVehicle] = useState("");
@@ -52,13 +54,35 @@ export default function Assign({ user, invoices, setInvoices, vehicles, users, l
   const [storage, setStorage] = useState("");
   const [done, setDone] = useState("");
   const [error, setError] = useState("");
+  const [dcDrivers, setDcDrivers] = useState([]);
   const rtl = lang==="ar";
   const t = T[lang]||T.en;
-  const dc = user.dc||"Riyadh";
+  const dc = user.dc==="Head Office" ? "Riyadh" : (user.dc||"Riyadh");
+
+  // Firestore se drivers load karo
+  useEffect(() => {
+    loadDrivers();
+    loadInvoices();
+  }, []);
+
+  async function loadDrivers() {
+    try {
+      const snap = await getDocs(collection(db, "users"));
+      const all = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+      setDcDrivers(all.filter(u => u.role === "driver" && u.dc === dc));
+    } catch(e) { console.error("Drivers load error:", e); }
+  }
+
+  async function loadInvoices() {
+    try {
+      const snap = await getDocs(collection(db, "invoices"));
+      const data = snap.docs.map(d => ({ firestoreId: d.id, ...d.data() }));
+      setInvoices(data);
+    } catch(e) { console.error("Invoices load error:", e); }
+  }
 
   const myInvoices = invoices.filter(i=>i.dc===dc&&["pending","outstanding"].includes(i.status));
   const allVehicles = vehicles.filter(v=>v.dc===dc);
-  const dcDrivers = (users||[]).filter(u=>u.role==="driver"&&u.dc===dc);
 
   const driverLoad = {};
   invoices.filter(i=>i.dc===dc&&i.status==="assigned").forEach(i=>{
@@ -69,7 +93,6 @@ export default function Assign({ user, invoices, setInvoices, vehicles, users, l
   const selDriverUser = dcDrivers.find(d=>d.name===driver);
   const storageOptions = STORAGE_CONDITIONS.map(s=>s.name+" ("+s.range+")");
 
-  // Vehicle computed values
   const fuelLevel = selVehicle ? (selVehicle.fuelLevel||0) : 0;
   const fuelCap = selVehicle ? (selVehicle.fuelCapacity||80) : 80;
   const fuelPct = Math.round(fuelLevel/fuelCap*100);
@@ -77,28 +100,39 @@ export default function Assign({ user, invoices, setInvoices, vehicles, users, l
   const estDist = Math.round(fuelLevel * efficiency);
   const odometer = selVehicle ? (selVehicle.totalKM||0) : 0;
 
-  // Vehicle alerts
   const vehAlerts = selVehicle ? [
     selVehicle.status==="Maintenance" && t.inMaint,
     fuelLevel<20 && t.lowFuel+": "+fuelLevel+"L ("+fuelPct+"%)",
     selVehicle.fahas && Math.ceil((new Date(selVehicle.fahas)-new Date())/(1000*60*60*24))<=30 && "Fahas expiring: "+selVehicle.fahas,
     selVehicle.insurance && Math.ceil((new Date(selVehicle.insurance)-new Date())/(1000*60*60*24))<=30 && "Insurance expiring: "+selVehicle.insurance,
-    selVehicle.nextOilKM && (odometer >= selVehicle.nextOilKM) && "Oil change overdue!",
   ].filter(Boolean) : [];
 
-  // Driver alerts
   const drvAlerts = selDriverUser ? [
     selDriverUser.status==="On Leave" && t.onLeave,
     selDriverUser.licExp && Math.ceil((new Date(selDriverUser.licExp)-new Date())/(1000*60*60*24))<=30 && "License expiring: "+selDriverUser.licExp,
-    selDriverUser.driverCardExp && Math.ceil((new Date(selDriverUser.driverCardExp)-new Date())/(1000*60*60*24))<=30 && "Driver card expiring: "+selDriverUser.driverCardExp,
   ].filter(Boolean) : [];
 
-  function assign() {
+  async function assign() {
     setError("");
     if (selVehicle?.status==="Maintenance") { setError(t.inMaint); return; }
     if (selDriverUser?.status==="On Leave") { setError(t.onLeave); return; }
     if (!driver||!vehicle||!city||!dtype||!storage||!selected.length) return;
-    setInvoices(prev=>prev.map(i=>selected.includes(i.id)?{...i,status:"assigned",driverId:user.uid,driverName:driver,vehicle,city,dtype,storage,assignedAt:new Date().toLocaleString(),attempts:i.attempts||0}:i));
+
+    const updateData = {
+      status:"assigned", driverId: selDriverUser?.uid||user.uid,
+      driverName: driver, vehicle, city, dtype, storage,
+      assignedAt: new Date().toLocaleString(), attempts: 0
+    };
+
+    // Firestore update — har selected invoice
+    for (const invId of selected) {
+      const inv = invoices.find(i=>i.id===invId);
+      if (inv?.firestoreId) {
+        try { await updateDoc(doc(db, "invoices", inv.firestoreId), updateData); } catch(e) { console.error(e); }
+      }
+    }
+
+    setInvoices(prev=>prev.map(i=>selected.includes(i.id)?{...i,...updateData}:i));
     setDone(selected.length+" "+t.done+" "+driver+"!");
     setSelected([]); setDriver(""); setVehicle(""); setCity(""); setDtype(""); setStorage("");
     setTimeout(()=>setDone(""),3000);
@@ -112,7 +146,6 @@ export default function Assign({ user, invoices, setInvoices, vehicles, users, l
       {done&&<SuccessMsg msg={done} />}
       {error&&<div style={{ background:"#fee2e2",color:"#991b1b",borderRadius:8,padding:"10px 14px",fontSize:13,marginBottom:12,fontWeight:600 }}>⛔ {error}</div>}
 
-      {/* Invoice Selection */}
       <Card>
         <CardTitle>
           📋 {t.selectInv}
@@ -122,7 +155,7 @@ export default function Assign({ user, invoices, setInvoices, vehicles, users, l
         {myInvoices.map(inv=>{
           const d=days(inv);
           return (
-            <div key={inv.id} onClick={()=>setSelected(p=>p.includes(inv.id)?p.filter(x=>x!==inv.id):[...p,inv.id])}
+            <div key={inv.id||inv.firestoreId} onClick={()=>setSelected(p=>p.includes(inv.id)?p.filter(x=>x!==inv.id):[...p,inv.id])}
               style={{ display:"flex",alignItems:"center",gap:10,padding:12,border:`1px solid ${selected.includes(inv.id)?"#a5b4fc":"#f1f5f9"}`,background:selected.includes(inv.id)?"#eef2ff":"white",borderRadius:8,marginBottom:6,cursor:"pointer" }}>
               <span style={{ fontSize:20,color:"#6366f1" }}>{selected.includes(inv.id)?"☑":"☐"}</span>
               <div style={{ flex:1 }}>
@@ -132,19 +165,15 @@ export default function Assign({ user, invoices, setInvoices, vehicles, users, l
               </div>
               <div style={{ textAlign:"right" }}>
                 <span style={{ fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:99,background:d<=1?"#d1fae5":d<=3?"#fef3c7":"#fee2e2",color:d<=1?"#065f46":d<=3?"#92400e":"#991b1b" }}>{d}d</span>
-                {inv.status==="outstanding"&&<div style={{ fontSize:11,color:"#f97316",fontWeight:600 }}>⚠️ {inv.attempts} attempt(s)</div>}
               </div>
             </div>
           );
         })}
       </Card>
 
-      {/* Assignment Details */}
       <Card>
         <CardTitle>⚙️ {t.assignDetails}</CardTitle>
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:"0 12px" }}>
-
-          {/* Driver Select */}
           <div style={{ marginBottom:12 }}>
             <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#374151",marginBottom:5 }}>👤 {t.driver}</label>
             <select value={driver} onChange={e=>setDriver(e.target.value)}
@@ -157,8 +186,6 @@ export default function Assign({ user, invoices, setInvoices, vehicles, users, l
               ))}
             </select>
           </div>
-
-          {/* Vehicle Select */}
           <div style={{ marginBottom:12 }}>
             <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#374151",marginBottom:5 }}>🚗 {t.vehicle}</label>
             <select value={vehicle} onChange={e=>setVehicle(e.target.value)}
@@ -174,49 +201,36 @@ export default function Assign({ user, invoices, setInvoices, vehicles, users, l
               })}
             </select>
           </div>
-
           <Select label={"📍 "+t.city} value={city} onChange={setCity} options={CITIES} />
           <Select label={"🌡️ "+t.storage} value={storage} onChange={setStorage} options={storageOptions} />
         </div>
 
-        {/* Vehicle Detail Panel */}
         {selVehicle&&(
           <div style={{ background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:10,padding:"14px 16px",marginBottom:12 }}>
             <div style={{ fontWeight:700,fontSize:13,color:"#0369a1",marginBottom:12 }}>🚗 {selVehicle.plate} — {selVehicle.type} {selVehicle.brand}</div>
-
-            {/* 4 detail boxes */}
             <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:12 }}>
-              {/* Fuel Available */}
               <div style={{ background:"white",borderRadius:8,padding:"10px 12px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
                 <div style={{ fontSize:11,color:"#64748b",fontWeight:600,marginBottom:4 }}>⛽ {t.fuelAvailable}</div>
                 <div style={{ fontWeight:800,fontSize:18,color:fuelPct<25?"#ef4444":fuelPct<50?"#f59e0b":"#10b981" }}>{fuelLevel}L</div>
                 <div style={{ fontSize:12,color:"#64748b",marginBottom:6 }}>{fuelLevel}/{fuelCap}L ({fuelPct}%)</div>
                 <FuelBar level={fuelLevel} capacity={fuelCap} />
               </div>
-
-              {/* Odometer */}
               <div style={{ background:"white",borderRadius:8,padding:"10px 12px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
                 <div style={{ fontSize:11,color:"#64748b",fontWeight:600,marginBottom:4 }}>🛣️ {t.odometer}</div>
                 <div style={{ fontWeight:800,fontSize:18,color:"#6366f1" }}>{odometer.toLocaleString()}</div>
                 <div style={{ fontSize:12,color:"#64748b" }}>km total</div>
               </div>
-
-              {/* Estimated Distance */}
               <div style={{ background:"white",borderRadius:8,padding:"10px 12px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
                 <div style={{ fontSize:11,color:"#64748b",fontWeight:600,marginBottom:4 }}>📍 {t.estDistance}</div>
                 <div style={{ fontWeight:800,fontSize:18,color:"#0891b2" }}>~{estDist}</div>
                 <div style={{ fontSize:12,color:"#64748b" }}>km on current fuel</div>
               </div>
-
-              {/* Efficiency */}
               <div style={{ background:"white",borderRadius:8,padding:"10px 12px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
                 <div style={{ fontSize:11,color:"#64748b",fontWeight:600,marginBottom:4 }}>📊 {t.efficiency}</div>
                 <div style={{ fontWeight:800,fontSize:18,color:"#7c3aed" }}>{efficiency}</div>
                 <div style={{ fontSize:12,color:"#64748b" }}>km / L</div>
               </div>
             </div>
-
-            {/* Vehicle Alerts */}
             {vehAlerts.length>0&&(
               <div>
                 <div style={{ fontWeight:600,fontSize:12,color:"#991b1b",marginBottom:4 }}>⚠️ {t.vehAlert}:</div>
@@ -228,7 +242,6 @@ export default function Assign({ user, invoices, setInvoices, vehicles, users, l
           </div>
         )}
 
-        {/* Driver Alert Panel */}
         {selDriverUser&&drvAlerts.length>0&&(
           <div style={{ background:"#fef3c7",border:"1px solid #fbbf24",borderRadius:8,padding:"12px 14px",marginBottom:12 }}>
             <div style={{ fontWeight:600,fontSize:13,color:"#92400e",marginBottom:6 }}>⚠️ {t.drvAlert}: {selDriverUser.name}</div>
@@ -238,7 +251,6 @@ export default function Assign({ user, invoices, setInvoices, vehicles, users, l
           </div>
         )}
 
-        {/* Delivery Type */}
         <div style={{ marginBottom:14 }}>
           <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#374151",marginBottom:6 }}>{t.deliveryType}</label>
           <div style={{ display:"flex",gap:8 }}>

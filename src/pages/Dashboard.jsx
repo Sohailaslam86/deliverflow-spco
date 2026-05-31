@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { collection, getDocs, deleteDoc, doc } from "firebase/firestore";
+import { db } from "../firebase";
 import { Card, CardTitle, StatCard } from "../components/Shared.jsx";
 
 const T = {
@@ -18,7 +20,7 @@ const T = {
     riyadhDC:"Riyadh Distribution Center", jeddahDC:"Jeddah Distribution Center",
     dammamDC:"Dammam Distribution Center", assignedDrv:"Assigned Drivers",
     idleVehicles:"Unassigned Vehicles Today", idleDrivers:"Unassigned Drivers Today",
-    noIdle:"None — All assigned"
+    noIdle:"None — All assigned", loading:"Loading data..."
   },
   ar: {
     welcome:"مرحباً بعودتك", adminTitle:"نظرة عامة على العمليات",
@@ -36,7 +38,7 @@ const T = {
     riyadhDC:"مركز توزيع الرياض", jeddahDC:"مركز توزيع جدة",
     dammamDC:"مركز توزيع الدمام", assignedDrv:"سائقون مخصصون",
     idleVehicles:"مركبات غير مخصصة اليوم", idleDrivers:"سائقون غير مخصصين اليوم",
-    noIdle:"لا يوجد — جميعهم مخصصون"
+    noIdle:"لا يوجد — جميعهم مخصصون", loading:"جاري التحميل..."
   }
 };
 
@@ -59,42 +61,32 @@ function DCBox({ dc, invoices, vehicles, users, alerts, t }) {
   const activeV = veh.filter(v=>v.status==="Active").length;
   const dcAlerts = (alerts||[]).filter(a=>a.status==="active"&&a.dc===dc);
   const assignedInv = inv.filter(i=>i.status==="assigned").length;
-
-  // IDLE vehicles — active but no assigned invoices today
   const assignedVehicles = new Set(inv.filter(i=>i.status==="assigned"&&i.vehicle).map(i=>i.vehicle));
   const idleVeh = veh.filter(v=>v.status==="Active"&&!assignedVehicles.has(v.plate));
-
-  // IDLE drivers — drivers for this DC with no assigned invoices
-  const dcDrivers = (users||[]).filter(u=>u.role==="driver"&&u.dc===dc&&u.status==="Active");
+  const dcDrivers = (users||[]).filter(u=>u.role==="driver"&&u.dc===dc&&u.status==="active");
   const assignedDriverNames = new Set(inv.filter(i=>i.status==="assigned"&&i.driverName).map(i=>i.driverName));
   const idleDrv = dcDrivers.filter(d=>!assignedDriverNames.has(d.name));
 
   return (
     <Card style={{ borderTop:`4px solid ${color}` }}>
       <CardTitle style={{ color }}>📍 {dcLabel(dc,t)}</CardTitle>
-
-      {/* Row 1 */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:8 }}>
         <StatCard icon="📋" label={t.total} value={inv.length} color={color} />
         <StatCard icon="✅" label={t.delivered} value={del} color="#10b981" />
         <StatCard icon="⏳" label={t.pending} value={inv.filter(i=>i.status==="pending").length} color="#f59e0b" />
         <StatCard icon="👤" label={t.assigned} value={assignedInv} color="#3b82f6" />
       </div>
-      {/* Row 2 */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom:12 }}>
         <StatCard icon="❌" label={t.failed} value={inv.filter(i=>i.status==="failed").length} color="#ef4444" />
         <StatCard icon="⚠️" label={t.outstanding} value={inv.filter(i=>i.status==="outstanding").length} color="#f97316" />
         <StatCard icon="🚚" label={t.inTransit} value={inv.filter(i=>i.status==="intransit").length} color="#8b5cf6" />
         <StatCard icon="📅" label={t.scheduled} value={inv.filter(i=>["scheduled","hold_await","hold_ship"].includes(i.status)).length} color="#a855f7" />
       </div>
-      {/* Row 3 - Utilization */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:12 }}>
         <StatCard icon="🚗" label={t.activeVeh} value={activeV+"/"+veh.length} color="#0891b2" />
         <StatCard icon="🔔" label={t.alerts} value={dcAlerts.length} color="#ef4444" />
         <StatCard icon="👥" label={t.assignedDrv} value={assignedInv} color="#6366f1" />
       </div>
-
-      {/* Delivery Rate */}
       <div style={{ marginBottom:8 }}>
         <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:3 }}>
           <span style={{ fontWeight:600 }}>{t.deliveryRate}</span>
@@ -104,30 +96,6 @@ function DCBox({ dc, invoices, vehicles, users, alerts, t }) {
           <div style={{ width:`${rate}%`, height:"100%", background:rate>=80?"#10b981":rate>=50?"#f59e0b":"#ef4444", borderRadius:99 }} />
         </div>
       </div>
-
-      {/* Vehicle Utilization */}
-      <div style={{ marginBottom:8 }}>
-        <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:3 }}>
-          <span style={{ fontWeight:600 }}>🚗 {t.vehicleUtil}</span>
-          <span style={{ fontWeight:700, color:"#0891b2" }}>{veh.length>0?Math.round(activeV/veh.length*100):0}%</span>
-        </div>
-        <div style={{ background:"#f1f5f9", borderRadius:99, height:6, overflow:"hidden" }}>
-          <div style={{ width:`${veh.length>0?Math.round(activeV/veh.length*100):0}%`, height:"100%", background:"#0891b2", borderRadius:99 }} />
-        </div>
-      </div>
-
-      {/* Driver Utilization */}
-      <div style={{ marginBottom:10 }}>
-        <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:3 }}>
-          <span style={{ fontWeight:600 }}>👤 {t.driverUtil}</span>
-          <span style={{ fontWeight:700, color:"#6366f1" }}>{dcDrivers.length>0?Math.round((dcDrivers.length-idleDrv.length)/dcDrivers.length*100):0}%</span>
-        </div>
-        <div style={{ background:"#f1f5f9", borderRadius:99, height:6, overflow:"hidden" }}>
-          <div style={{ width:`${dcDrivers.length>0?Math.round((dcDrivers.length-idleDrv.length)/dcDrivers.length*100):0}%`, height:"100%", background:"#6366f1", borderRadius:99 }} />
-        </div>
-      </div>
-
-      {/* IDLE Vehicles */}
       <div style={{ background:"#f8fafc", borderRadius:8, padding:"8px 10px", marginBottom:6 }}>
         <div style={{ fontWeight:600, fontSize:12, color:"#64748b", marginBottom:4 }}>🚗 {t.idleVehicles}:</div>
         {idleVeh.length===0
@@ -135,121 +103,65 @@ function DCBox({ dc, invoices, vehicles, users, alerts, t }) {
           : idleVeh.map(v=><div key={v.plate} style={{ fontSize:11, color:"#f97316", fontWeight:600 }}>⚪ Unassigned: {v.plate}</div>)
         }
       </div>
-
-      {/* IDLE Drivers */}
-      <div style={{ background:"#f8fafc", borderRadius:8, padding:"8px 10px", marginBottom:6 }}>
+      <div style={{ background:"#f8fafc", borderRadius:8, padding:"8px 10px" }}>
         <div style={{ fontWeight:600, fontSize:12, color:"#64748b", marginBottom:4 }}>👤 {t.idleDrivers}:</div>
         {idleDrv.length===0
           ? <div style={{ fontSize:11, color:"#10b981" }}>✅ {t.noIdle}</div>
-          : idleDrv.map(d=><div key={d.uid} style={{ fontSize:11, color:"#f97316", fontWeight:600 }}>⚪ Unassigned: {d.name}</div>)
+          : idleDrv.map(d=><div key={d.uid} style={{ fontSize:11, color:"#6366f1", fontWeight:600 }}>⚪ Unassigned: {d.name}</div>)
         }
       </div>
-
-      {/* DC Alerts */}
-      {dcAlerts.length>0&&(
-        <div style={{ marginTop:8 }}>
-          {dcAlerts.slice(0,3).map(a=>(
-            <div key={a.id} style={{ fontSize:11, padding:"4px 8px", borderRadius:6, background:(ALERT_COLORS[a.type]||"#64748b")+"15", color:ALERT_COLORS[a.type]||"#64748b", marginBottom:3, fontWeight:600 }}>
-              🔔 {a.title} — {a.desc}
-            </div>
-          ))}
-          {dcAlerts.length>3&&<div style={{ fontSize:11, color:"#94a3b8" }}>+{dcAlerts.length-3} more alerts</div>}
-        </div>
-      )}
     </Card>
   );
 }
 
-export default function Dashboard({ user, lang, invoices, setInvoices, vehicles, alerts, setAlerts, uploads, setUploads, trips, setTrips, fuelLogs, setFuelLogs, users, setPage }) {
+export default function Dashboard({ user, lang, invoices, setInvoices, vehicles, trips, setTrips, uploads, setUploads, fuelLogs, setFuelLogs, alerts, setAlerts, users, setUsers, setPage }) {
+  const [fsUsers, setFsUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const rtl = lang==="ar";
   const t = T[lang]||T.en;
+  const dc = user.dc==="Head Office" ? null : user.dc;
   const role = user.role;
 
-  // PLANNING DASHBOARD
-  if (role==="planning") {
-    const today = new Date().toISOString().split("T")[0];
-    const todayUploads = (uploads||[]).filter(u=>u.date===today);
-    const todayInvoices = invoices.filter(i=>i.date===today);
-    const govTotal = invoices.filter(i=>i.inst==="Government").length;
-    const govDel = invoices.filter(i=>i.inst==="Government"&&i.status==="delivered").length;
-    const privTotal = invoices.filter(i=>i.inst==="Private").length;
-    const privDel = invoices.filter(i=>i.inst==="Private"&&i.status==="delivered").length;
-    return (
-      <div style={{ direction:rtl?"rtl":"ltr" }}>
-        <div style={{ marginBottom:20 }}>
-          <h2 style={{ fontSize:22, fontWeight:900, color:"#0f172a", margin:"0 0 4px" }}>{t.welcome}, {user.displayName||user.name}!</h2>
-          <p style={{ fontSize:14, color:"#64748b", margin:0 }}>{t.planningTitle}</p>
-        </div>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:12, marginBottom:16 }}>
-          <StatCard icon="📋" label={t.totalUploaded} value={invoices.length} color="#6366f1" />
-          <StatCard icon="📤" label={t.totalBatches} value={(uploads||[]).length} color="#7c3aed" />
-          <StatCard icon="📅" label="Today Invoices" value={todayInvoices.length} color="#0891b2" />
-          <StatCard icon="📦" label={t.batches} value={todayUploads.length} color="#10b981" />
-        </div>
-        <Card>
-          <CardTitle>📅 {t.todaySummary}</CardTitle>
-          {todayUploads.length===0&&<div style={{ textAlign:"center", padding:20, color:"#94a3b8" }}>No uploads today</div>}
-          {todayUploads.map(u=>(
-            <div key={u.batchId} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
-              <div style={{ flex:1 }}>
-                <div style={{ fontWeight:700, fontSize:13, color:"#6366f1" }}>{u.batchId}</div>
-                <div style={{ fontSize:12, color:"#64748b" }}>{t.uploadedBy}: {u.uploadedBy} | {t.postedAt}: {u.postedAt}</div>
-              </div>
-              <span style={{ fontWeight:700, color:"#10b981" }}>{u.invoiceCount} {t.invoices}</span>
-            </div>
-          ))}
-        </Card>
-        <Card>
-          <CardTitle>🏢 {t.byDC}</CardTitle>
-          {["Riyadh","Jeddah","Dammam"].map(dc=>{
-            const dcInv=invoices.filter(i=>i.dc===dc);
-            const dcDel=dcInv.filter(i=>i.status==="delivered").length;
-            return (
-              <div key={dc} style={{ marginBottom:14 }}>
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4, fontSize:13 }}>
-                  <span style={{ fontWeight:600 }}>📍 {dcLabel(dc,t)}</span>
-                  <span style={{ color:"#64748b" }}>{dcDel}/{dcInv.length}</span>
-                </div>
-                <div style={{ background:"#f1f5f9", borderRadius:99, height:8, overflow:"hidden" }}>
-                  <div style={{ width:`${dcInv.length>0?Math.round(dcDel/dcInv.length*100):0}%`, height:"100%", background:"#6366f1", borderRadius:99 }} />
-                </div>
-              </div>
-            );
-          })}
-        </Card>
-        <Card>
-          <CardTitle>🏥 {t.byInstitution}</CardTitle>
-          {[["Government","🏛️ "+t.govt,"#1e40af",govTotal,govDel],["Private","🏥 "+t.priv,"#6d28d9",privTotal,privDel]].map(([key,label,color,total,del])=>(
-            <div key={key} style={{ marginBottom:14 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4, fontSize:13 }}>
-                <span style={{ fontWeight:600 }}>{label}</span>
-                <span style={{ color:"#64748b" }}>{del}/{total}</span>
-              </div>
-              <div style={{ background:"#f1f5f9", borderRadius:99, height:8, overflow:"hidden" }}>
-                <div style={{ width:`${total>0?Math.round(del/total*100):0}%`, height:"100%", background:color, borderRadius:99 }} />
-              </div>
-            </div>
-          ))}
-        </Card>
-      </div>
-    );
+  useEffect(() => {
+    loadAllData();
+  }, []);
+
+  async function loadAllData() {
+    try {
+      // Load invoices
+      const invSnap = await getDocs(collection(db, "invoices"));
+      setInvoices(invSnap.docs.map(d => ({ firestoreId: d.id, ...d.data() })));
+
+      // Load users/drivers from Firestore
+      const usersSnap = await getDocs(collection(db, "users"));
+      setFsUsers(usersSnap.docs.map(d => ({ uid: d.id, ...d.data() })));
+
+      // Load alerts
+      const alertsSnap = await getDocs(collection(db, "alerts"));
+      setAlerts(alertsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+    } catch(e) { console.error("Dashboard load error:", e); }
+    setLoading(false);
   }
 
-  if (role==="driver") {
-    return (
-      <div style={{ textAlign:"center", padding:60, color:"#94a3b8" }}>
-        <div style={{ fontSize:48, marginBottom:16 }}>🚚</div>
-        <div style={{ fontSize:18, fontWeight:700, color:"#0f172a", marginBottom:8 }}>{t.welcome}, {user.displayName||user.name}!</div>
-        <div style={{ fontSize:14 }}>Go to My Deliveries to start your route.</div>
-      </div>
-    );
+  async function clearTestData() {
+    if (!window.confirm("Reset all test data? This will clear all invoices, trips, uploads, fuel logs and alerts. Users and vehicles will be kept.")) return;
+    try {
+      const collections = ["invoices","trips","uploads","fuelLogs","alerts"];
+      for (const col of collections) {
+        const snap = await getDocs(collection(db, col));
+        for (const d of snap.docs) { await deleteDoc(doc(db, col, d.id)); }
+      }
+      setInvoices([]); setTrips([]); setUploads([]); setFuelLogs([]); setAlerts([]);
+      alert("✅ Test data cleared! Ready for fresh UAT.");
+    } catch(e) { alert("Error: "+e.message); }
   }
 
-  // ADMIN / DC MANAGER
-  const dc = user.dc;
-  const myInv = dc?invoices.filter(i=>i.dc===dc):invoices;
-  const myVeh = dc?vehicles.filter(v=>v.dc===dc):vehicles;
-  const myAlerts = (alerts||[]).filter(a=>a.status==="active"&&(!dc||a.dc===dc));
+  const myInv = dc ? invoices.filter(i=>i.dc===dc) : invoices;
+  const myVeh = dc ? vehicles.filter(v=>v.dc===dc) : vehicles;
+  const myAlerts = dc ? (alerts||[]).filter(a=>a.dc===dc&&a.status==="active") : (alerts||[]).filter(a=>a.status==="active");
+  const allUsers = fsUsers.length > 0 ? fsUsers : (users||[]);
+
   const countable = myInv.filter(i=>!["scheduled","hold_await","hold_ship","intransit"].includes(i.status));
   const del = myInv.filter(i=>i.status==="delivered").length;
   const deliveryRate = countable.length>0?Math.round(del/countable.length*100):0;
@@ -258,30 +170,61 @@ export default function Dashboard({ user, lang, invoices, setInvoices, vehicles,
   const alertByType = {};
   myAlerts.forEach(a=>{ alertByType[a.type]=(alertByType[a.type]||0)+1; });
 
-  // IDLE for DC Manager view
-  const dcDrivers = dc?(users||[]).filter(u=>u.role==="driver"&&u.dc===dc&&u.status==="Active"):[];
+  const dcDrivers = dc?(allUsers).filter(u=>u.role==="driver"&&u.dc===dc&&u.status==="active"):[];
   const assignedDriverNames = new Set(myInv.filter(i=>i.status==="assigned"&&i.driverName).map(i=>i.driverName));
   const assignedVehicles = new Set(myInv.filter(i=>i.status==="assigned"&&i.vehicle).map(i=>i.vehicle));
   const idleVeh = myVeh.filter(v=>v.status==="Active"&&!assignedVehicles.has(v.plate));
   const idleDrv = dcDrivers.filter(d=>!assignedDriverNames.has(d.name));
 
+  // Planning view
+  if (role==="planning") {
+    const today = new Date().toISOString().split("T")[0];
+    const todayUploads = uploads.filter(u=>u.date===today);
+    const govCount = myInv.filter(i=>i.inst==="Government").length;
+    const privCount = myInv.filter(i=>i.inst==="Private").length;
+    return (
+      <div style={{ direction:rtl?"rtl":"ltr" }}>
+        <h2 style={{ fontSize:22, fontWeight:900, color:"#0f172a", marginBottom:4 }}>{t.welcome}, {user.name}!</h2>
+        <p style={{ fontSize:14, color:"#64748b", marginBottom:20 }}>{t.planningTitle}</p>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:16 }}>
+          <StatCard icon="📋" label={t.totalUploaded} value={myInv.length} color="#6366f1" />
+          <StatCard icon="📦" label={t.totalBatches} value={uploads.length} color="#0891b2" />
+          <StatCard icon="🏛️" label={t.govt} value={govCount} color="#1A3A5C" />
+          <StatCard icon="🏢" label={t.priv} value={privCount} color="#7c3aed" />
+        </div>
+        {todayUploads.length>0&&(
+          <Card>
+            <CardTitle>📅 {t.todaySummary}</CardTitle>
+            {todayUploads.map(u=>(
+              <div key={u.batchId} style={{ padding:"8px 0", borderBottom:"1px solid #f1f5f9", fontSize:13 }}>
+                <span style={{ fontWeight:700, color:"#6366f1" }}>{u.batchId}</span>
+                <span style={{ color:"#64748b", marginLeft:8 }}>{u.invoiceCount} {t.invoices}</span>
+                <span style={{ color:"#94a3b8", marginLeft:8 }}>{t.uploadedBy}: {u.uploadedBy}</span>
+              </div>
+            ))}
+          </Card>
+        )}
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div style={{ display:"flex", justifyContent:"center", alignItems:"center", height:200, fontSize:16, color:"#64748b" }}>
+        ⏳ {t.loading}
+      </div>
+    );
+  }
+
   return (
     <div style={{ direction:rtl?"rtl":"ltr" }}>
       <div style={{ marginBottom:20, display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:12 }}>
         <div>
-          <h2 style={{ fontSize:22, fontWeight:900, color:"#0f172a", margin:"0 0 4px" }}>{t.welcome}, {user.displayName||user.name}!</h2>
+          <h2 style={{ fontSize:22, fontWeight:900, color:"#0f172a", margin:"0 0 4px" }}>{t.welcome}, {user.name}!</h2>
           <p style={{ fontSize:14, color:"#64748b", margin:0 }}>{dc?dcLabel(dc,t):t.adminTitle}</p>
         </div>
         {!dc&&(
-          <button onClick={()=>{
-            if (!window.confirm("Reset all test data? This will clear all invoices, trips, uploads, fuel logs and alerts. Vehicles and users will be kept.")) return;
-            setInvoices([]);
-            setTrips([]);
-            setUploads([]);
-            setFuelLogs([]);
-            setAlerts([]);
-            alert("Test data cleared! Ready for fresh UAT.");
-          }} style={{ background:"#fee2e2", border:"2px solid #ef4444", color:"#991b1b", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700 }}>
+          <button onClick={clearTestData} style={{ background:"#fee2e2", border:"2px solid #ef4444", color:"#991b1b", padding:"8px 16px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700 }}>
             🗑️ Clear Test Data
           </button>
         )}
@@ -316,7 +259,6 @@ export default function Dashboard({ user, lang, invoices, setInvoices, vehicles,
             <div style={{ fontSize:13, color:"#64748b", marginBottom:4 }}>🚗 {t.vehicleUtil}</div>
             <div style={{ fontSize:36, fontWeight:900, color:"#0891b2" }}>{myVeh.length>0?Math.round(activeV/myVeh.length*100):0}%</div>
             <div style={{ fontSize:12, color:"#64748b" }}>{activeV}/{myVeh.length} {t.activeVeh}</div>
-            <div style={{ fontSize:11, color:"#94a3b8" }}>{t.howCalc}: Active ÷ Total × 100</div>
           </div>
           <div>
             <div style={{ fontSize:13, color:"#64748b", marginBottom:4 }}>👤 {t.driverUtil}</div>
@@ -326,9 +268,9 @@ export default function Dashboard({ user, lang, invoices, setInvoices, vehicles,
         </div>
       </Card>
 
-      {/* DC Manager — IDLE section */}
+      {/* DC Manager Idle section */}
       {dc&&(
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16, marginTop:16 }}>
           <Card style={{ borderLeft:"4px solid #f97316" }}>
             <CardTitle>⚪ {t.idleVehicles}</CardTitle>
             {idleVeh.length===0
@@ -356,16 +298,16 @@ export default function Dashboard({ user, lang, invoices, setInvoices, vehicles,
 
       {/* DC Boxes — Admin only */}
       {!dc&&(
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", gap:16 }}>
-          <DCBox dc="Riyadh" invoices={invoices} vehicles={vehicles} users={users} alerts={alerts} t={t} />
-          <DCBox dc="Jeddah" invoices={invoices} vehicles={vehicles} users={users} alerts={alerts} t={t} />
-          <DCBox dc="Dammam" invoices={invoices} vehicles={vehicles} users={users} alerts={alerts} t={t} />
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", gap:16, marginTop:16 }}>
+          <DCBox dc="Riyadh" invoices={invoices} vehicles={vehicles} users={allUsers} alerts={alerts} t={t} />
+          <DCBox dc="Jeddah" invoices={invoices} vehicles={vehicles} users={allUsers} alerts={alerts} t={t} />
+          <DCBox dc="Dammam" invoices={invoices} vehicles={vehicles} users={allUsers} alerts={alerts} t={t} />
         </div>
       )}
 
       {/* Alerts */}
       {myAlerts.length>0&&(
-        <Card style={{ borderLeft:"4px solid #ef4444" }}>
+        <Card style={{ borderLeft:"4px solid #ef4444", marginTop:16 }}>
           <CardTitle>🔔 {t.alerts} ({myAlerts.length})</CardTitle>
           <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:12 }}>
             {Object.entries(alertByType).map(([type,count])=>(
