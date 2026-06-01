@@ -167,6 +167,9 @@ export default function Shell({ user, lang, setLang, page, setPage, onLogout, ch
             display:"flex", alignItems:"center", gap:6
           }}>
             {RI[user.role]} {t[user.role]||user.role}
+            {user.dc&&user.dc!=="Head Office"&&(
+              <span style={{ fontSize:12, opacity:0.85 }}>— {user.dc}</span>
+            )}
           </div>
         </header>
 
