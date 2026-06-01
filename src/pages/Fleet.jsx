@@ -378,5 +378,3 @@ function MaintTab({ vehicles, t }) {
     </Card>
   );
 }
-
-const DC_COLORS = { Riyadh:"#1A3A5C", Jeddah:"#0f766e", Dammam:"#7c3aed" };
