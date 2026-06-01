@@ -204,7 +204,7 @@ function VehiclesTab({ vehicles, setVehicles, setDone, t, isAdmin, isManager, us
             <Input label={t.nextOilDate} value={f.nextOilDate} onChange={v=>setF({...f,nextOilDate:v})} type="date" />
           </div>
           <div style={{ marginBottom:12 }}>
-            <label style={{ fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:8 }}>📸 {t.photos}</label>
+            <label style={{ fontSize:14,fontWeight:600,color:"#374151",display:"block",marginBottom:8 }}>📸 {t.photos}</label>
             <input ref={photoRef} type="file" accept="image/*" multiple onChange={handlePhotos} style={{ display:"none" }} />
             <Btn small onClick={()=>photoRef.current.click()} color="#6366f1">📸 {t.uploadPhoto}</Btn>
             {photos.length>0&&(
@@ -214,14 +214,14 @@ function VehiclesTab({ vehicles, setVehicles, setDone, t, isAdmin, isManager, us
             )}
           </div>
           <div style={{ background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:8,padding:"10px 14px",marginBottom:12 }}>
-            <div style={{ fontWeight:600,fontSize:13,color:"#0369a1",marginBottom:6 }}>🤖 {t.aiCheck}</div>
+            <div style={{ fontWeight:600,fontSize:14,color:"#0369a1",marginBottom:6 }}>🤖 {t.aiCheck}</div>
             <div style={{ display:"flex",gap:8,alignItems:"center" }}>
               <Btn small onClick={()=>{if(!photos.length){setAiStatus("noplate");return;}setAiStatus("checking");setTimeout(()=>setAiStatus(f.plate&&f.plate.length>2?"match":"mismatch"),1500);}} color="#0369a1" disabled={aiStatus==="checking"}>
                 {aiStatus==="checking"?t.aiChecking:"✔️ "+t.aiCheck}
               </Btn>
-              {aiStatus==="match"&&<span style={{ color:"#065f46",fontWeight:600,fontSize:13 }}>✅ {t.aiMatch}</span>}
-              {aiStatus==="mismatch"&&<span style={{ color:"#991b1b",fontWeight:600,fontSize:13 }}>⚠️ {t.aiMismatch}</span>}
-              {aiStatus==="noplate"&&<span style={{ color:"#92400e",fontSize:13 }}>{t.aiNoPlate}</span>}
+              {aiStatus==="match"&&<span style={{ color:"#065f46",fontWeight:600,fontSize:14 }}>✅ {t.aiMatch}</span>}
+              {aiStatus==="mismatch"&&<span style={{ color:"#991b1b",fontWeight:600,fontSize:14 }}>⚠️ {t.aiMismatch}</span>}
+              {aiStatus==="noplate"&&<span style={{ color:"#92400e",fontSize:14 }}>{t.aiNoPlate}</span>}
             </div>
           </div>
           <div style={{ display:"flex",gap:8 }}>
@@ -240,13 +240,13 @@ function VehiclesTab({ vehicles, setVehicles, setDone, t, isAdmin, isManager, us
             {dv.map(v=>(
               <div key={v.plate} style={{ display:"flex",alignItems:"flex-start",gap:10,padding:"12px 0",borderBottom:"1px solid #f1f5f9",flexWrap:"wrap" }}>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:700,fontSize:14 }}>{v.plate} <span style={{ fontSize:12,color:"#64748b" }}>({v.type}) {v.brand} {v.model}</span></div>
-                  <div style={{ fontSize:11,color:"#94a3b8" }}>{t.fahas}: {v.fahas||"-"} | {t.insurance}: {v.insurance||"-"}</div>
+                  <div style={{ fontWeight:700,fontSize:14 }}>{v.plate} <span style={{ fontSize:13,color:"#64748b" }}>({v.type}) {v.brand} {v.model}</span></div>
+                  <div style={{ fontSize:12,color:"#94a3b8" }}>{t.fahas}: {v.fahas||"-"} | {t.insurance}: {v.insurance||"-"}</div>
                 </div>
-                <span style={{ fontSize:12,fontWeight:600,padding:"3px 10px",borderRadius:99,background:v.status==="Maintenance"?"#fef3c7":"#d1fae5",color:v.status==="Maintenance"?"#92400e":"#065f46" }}>{v.status}</span>
+                <span style={{ fontSize:13,fontWeight:600,padding:"3px 10px",borderRadius:99,background:v.status==="Maintenance"?"#fef3c7":"#d1fae5",color:v.status==="Maintenance"?"#92400e":"#065f46" }}>{v.status}</span>
                 {isAdmin&&(
                   <select value={v.dc} onChange={e=>toggleDC(v.plate,e.target.value)}
-                    style={{ border:"1px solid #e2e8f0",borderRadius:6,padding:"5px 8px",fontSize:12,cursor:"pointer" }}>
+                    style={{ border:"1px solid #e2e8f0",borderRadius:6,padding:"5px 8px",fontSize:13,cursor:"pointer" }}>
                     {DCS.map(d=><option key={d} value={d}>{d}</option>)}
                   </select>
                 )}
@@ -293,12 +293,12 @@ function DriverRequestsTab({ driverReqs, setDriverReqs, users, setUsers, setDone
           <div style={{ display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:6,marginBottom:6 }}>
             <div>
               <div style={{ fontWeight:700,fontSize:14 }}>{req.name}</div>
-              <div style={{ fontSize:12,color:"#64748b" }}>{req.mobile} | {req.dc} DC | Lic: {req.licNo} Exp: {req.licExp}</div>
-              <div style={{ fontSize:12,color:"#374151",marginTop:4 }}>📝 {req.reason}</div>
-              <div style={{ fontSize:11,color:"#94a3b8" }}>By: {req.requestedBy} | {req.requestedAt}</div>
+              <div style={{ fontSize:13,color:"#64748b" }}>{req.mobile} | {req.dc} DC | Lic: {req.licNo} Exp: {req.licExp}</div>
+              <div style={{ fontSize:13,color:"#374151",marginTop:4 }}>📝 {req.reason}</div>
+              <div style={{ fontSize:12,color:"#94a3b8" }}>By: {req.requestedBy} | {req.requestedAt}</div>
             </div>
             <div>
-              <span style={{ fontSize:12,fontWeight:600,padding:"3px 10px",borderRadius:99,background:req.status==="pending"?"#fef3c7":req.status==="approved"?"#d1fae5":"#fee2e2",color:req.status==="pending"?"#92400e":req.status==="approved"?"#065f46":"#991b1b" }}>{req.status.toUpperCase()}</span>
+              <span style={{ fontSize:13,fontWeight:600,padding:"3px 10px",borderRadius:99,background:req.status==="pending"?"#fef3c7":req.status==="approved"?"#d1fae5":"#fee2e2",color:req.status==="pending"?"#92400e":req.status==="approved"?"#065f46":"#991b1b" }}>{req.status.toUpperCase()}</span>
               {isAdmin&&req.status==="pending"&&(
                 <div style={{ display:"flex",gap:6,marginTop:8 }}>
                   <Btn small onClick={()=>approve(req.id)} color="#10b981">✅ {t.reqApprove}</Btn>
@@ -345,12 +345,12 @@ function VehicleRequestsTab({ vehicleReqs, setVehicleReqs, vehicles, setVehicles
           <div style={{ display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:6,marginBottom:6 }}>
             <div>
               <div style={{ fontWeight:700,fontSize:14 }}>{req.plate} — {req.type} {req.brand} {req.model}</div>
-              <div style={{ fontSize:12,color:"#64748b" }}>{req.dc} DC | Year: {req.year} | Fuel: {req.fuelCapacity}L | {req.mileage} km/L</div>
-              <div style={{ fontSize:12,color:"#374151",marginTop:4 }}>📝 {req.reason}</div>
-              <div style={{ fontSize:11,color:"#94a3b8" }}>By: {req.requestedBy} | {req.requestedAt}</div>
+              <div style={{ fontSize:13,color:"#64748b" }}>{req.dc} DC | Year: {req.year} | Fuel: {req.fuelCapacity}L | {req.mileage} km/L</div>
+              <div style={{ fontSize:13,color:"#374151",marginTop:4 }}>📝 {req.reason}</div>
+              <div style={{ fontSize:12,color:"#94a3b8" }}>By: {req.requestedBy} | {req.requestedAt}</div>
             </div>
             <div>
-              <span style={{ fontSize:12,fontWeight:600,padding:"3px 10px",borderRadius:99,background:req.status==="pending"?"#fef3c7":req.status==="approved"?"#d1fae5":"#fee2e2",color:req.status==="pending"?"#92400e":req.status==="approved"?"#065f46":"#991b1b" }}>{req.status.toUpperCase()}</span>
+              <span style={{ fontSize:13,fontWeight:600,padding:"3px 10px",borderRadius:99,background:req.status==="pending"?"#fef3c7":req.status==="approved"?"#d1fae5":"#fee2e2",color:req.status==="pending"?"#92400e":req.status==="approved"?"#065f46":"#991b1b" }}>{req.status.toUpperCase()}</span>
               {isAdmin&&req.status==="pending"&&(
                 <div style={{ display:"flex",gap:6,marginTop:8 }}>
                   <Btn small onClick={()=>approve(req.id)} color="#10b981">✅ {t.reqApprove}</Btn>
@@ -456,10 +456,10 @@ function DriversTab({ users, setUsers, setDone, t, isAdmin, isManager, userDC, u
                 <div style={{ width:36,height:36,borderRadius:"50%",background:"#b45309",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontWeight:700,fontSize:14,flexShrink:0 }}>{d.name.charAt(0)}</div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontWeight:600,fontSize:14 }}>{d.name}</div>
-                  <div style={{ fontSize:12,color:"#64748b" }}>{d.phone||d.mobile}</div>
-                  {d.licNo&&<div style={{ fontSize:11,color:"#6366f1" }}>📄 Lic: {d.licNo} | Exp: {d.licExp}</div>}
+                  <div style={{ fontSize:13,color:"#64748b" }}>{d.phone||d.mobile}</div>
+                  {d.licNo&&<div style={{ fontSize:12,color:"#6366f1" }}>📄 Lic: {d.licNo} | Exp: {d.licExp}</div>}
                 </div>
-                <span style={{ fontSize:12,fontWeight:600,padding:"3px 10px",borderRadius:99,background:d.status==="Active"?"#d1fae5":d.status==="On Leave"?"#fef3c7":"#fee2e2",color:d.status==="Active"?"#065f46":d.status==="On Leave"?"#92400e":"#991b1b" }}>{d.status||"Active"}</span>
+                <span style={{ fontSize:13,fontWeight:600,padding:"3px 10px",borderRadius:99,background:d.status==="Active"?"#d1fae5":d.status==="On Leave"?"#fef3c7":"#fee2e2",color:d.status==="Active"?"#065f46":d.status==="On Leave"?"#92400e":"#991b1b" }}>{d.status||"Active"}</span>
                 {isAdmin&&(
                   <div style={{ display:"flex",gap:4 }}>
                     <Btn small onClick={()=>startEdit(d)} color="#6366f1">✎</Btn>
@@ -525,14 +525,14 @@ function DCsTab({ dcList, setDcList, setDone, t, isAdmin }) {
               </div>
             )}
           </div>
-          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:6,fontSize:13,color:"#374151",marginBottom:8 }}>
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:6,fontSize:14,color:"#374151",marginBottom:8 }}>
             <div><b>{t.dcCity}:</b> {d.city}</div>
             <div><b>{t.dcManager}:</b> {d.manager}</div>
             {d.lat&&<div><b>GPS:</b> {d.lat}, {d.lng}</div>}
           </div>
-          {d.addrEn&&<div style={{ background:"#f8fafc",borderRadius:6,padding:"6px 10px",marginBottom:4,fontSize:13 }}>🇬🇧 {d.addrEn}</div>}
-          {d.addrAr&&<div style={{ background:"#f0f9ff",borderRadius:6,padding:"6px 10px",marginBottom:8,direction:"rtl",fontSize:13,color:"#0369a1" }}>🇸🇦 {d.addrAr}</div>}
-          {d.lat&&d.lng&&<a href={"https://maps.google.com/?q="+d.lat+","+d.lng} target="_blank" rel="noreferrer" style={{ fontSize:12,color:"#6366f1",fontWeight:600 }}>📍 {t.viewMap} →</a>}
+          {d.addrEn&&<div style={{ background:"#f8fafc",borderRadius:6,padding:"6px 10px",marginBottom:4,fontSize:14 }}>🇬🇧 {d.addrEn}</div>}
+          {d.addrAr&&<div style={{ background:"#f0f9ff",borderRadius:6,padding:"6px 10px",marginBottom:8,direction:"rtl",fontSize:14,color:"#0369a1" }}>🇸🇦 {d.addrAr}</div>}
+          {d.lat&&d.lng&&<a href={"https://maps.google.com/?q="+d.lat+","+d.lng} target="_blank" rel="noreferrer" style={{ fontSize:13,color:"#6366f1",fontWeight:600 }}>📍 {t.viewMap} →</a>}
         </div>
       ))}
     </Card>
@@ -563,7 +563,7 @@ function StorageTab({ storageList, setStorageList, setDone, t, isAdmin }) {
             <Input label={t.storageName+" *"} value={f.name} onChange={v=>setF({...f,name:v})} placeholder="e.g. Ambient" />
             <Input label={t.storageRange+" *"} value={f.range} onChange={v=>setF({...f,range:v})} placeholder="e.g. 15-25C" />
             <div style={{ marginBottom:12 }}>
-              <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#374151",marginBottom:5 }}>{t.storageColor}</label>
+              <label style={{ display:"block",fontSize:14,fontWeight:600,color:"#374151",marginBottom:5 }}>{t.storageColor}</label>
               <input type="color" value={f.color} onChange={e=>setF({...f,color:e.target.value})} style={{ width:"100%",height:40,border:"1.5px solid #e2e8f0",borderRadius:8,cursor:"pointer",padding:4 }} />
             </div>
           </div>
@@ -576,7 +576,7 @@ function StorageTab({ storageList, setStorageList, setDone, t, isAdmin }) {
       {storageList.map((s,idx)=>(
         <div key={idx} style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 0",borderBottom:"1px solid #f1f5f9" }}>
           <div style={{ width:14,height:14,borderRadius:"50%",background:s.color,flexShrink:0 }} />
-          <div style={{ flex:1 }}><div style={{ fontWeight:600,fontSize:14 }}>{s.name} <span style={{ fontSize:13,color:"#64748b",fontWeight:400 }}>({s.range})</span></div></div>
+          <div style={{ flex:1 }}><div style={{ fontWeight:600,fontSize:14 }}>{s.name} <span style={{ fontSize:14,color:"#64748b",fontWeight:400 }}>({s.range})</span></div></div>
           {isAdmin&&(
             <div style={{ display:"flex",gap:4 }}>
               <Btn small onClick={()=>{setEditIdx(idx);setF({...s});setShowAdd(true);}} color="#6366f1">✎</Btn>
@@ -604,7 +604,7 @@ function CitiesTab({ cityList, setCityList, setDone, t, isAdmin }) {
       {showAdd&&isAdmin&&(
         <div style={{ display:"flex",gap:8,marginBottom:12 }}>
           <input value={newCity} onChange={e=>setNewCity(e.target.value)} placeholder={t.cityName}
-            style={{ flex:1,border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none" }} />
+            style={{ flex:1,border:"1.5px solid #e2e8f0",borderRadius:8,padding:"11px 14px",fontSize:14,outline:"none" }} />
           <Btn onClick={()=>{if(!newCity.trim())return;setCityList(prev=>[...prev,newCity.trim()]);setDone(newCity+" added!");setNewCity("");setShowAdd(false);}} color="#10b981">✅</Btn>
           <Btn onClick={()=>setShowAdd(false)} color="#64748b">{t.cancel}</Btn>
         </div>
@@ -614,16 +614,16 @@ function CitiesTab({ cityList, setCityList, setDone, t, isAdmin }) {
           <div key={idx} style={{ display:"flex",alignItems:"center",gap:4,background:"#f1f5f9",borderRadius:8,padding:"6px 12px" }}>
             {editIdx===idx?(
               <>
-                <input value={editVal} onChange={e=>setEditVal(e.target.value)} style={{ border:"1px solid #6366f1",borderRadius:6,padding:"3px 8px",fontSize:13,outline:"none",width:100 }} />
-                <button onClick={()=>{setCityList(prev=>prev.map((x,i)=>i===idx?editVal:x));setDone(editVal+" updated!");setEditIdx(null);}} style={{ background:"#10b981",border:"none",color:"white",borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:11 }}>✓</button>
-                <button onClick={()=>setEditIdx(null)} style={{ background:"#64748b",border:"none",color:"white",borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:11 }}>✕</button>
+                <input value={editVal} onChange={e=>setEditVal(e.target.value)} style={{ border:"1px solid #6366f1",borderRadius:6,padding:"3px 8px",fontSize:14,outline:"none",width:100 }} />
+                <button onClick={()=>{setCityList(prev=>prev.map((x,i)=>i===idx?editVal:x));setDone(editVal+" updated!");setEditIdx(null);}} style={{ background:"#10b981",border:"none",color:"white",borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:12 }}>✓</button>
+                <button onClick={()=>setEditIdx(null)} style={{ background:"#64748b",border:"none",color:"white",borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:12 }}>✕</button>
               </>
             ):(
               <>
-                <span style={{ fontSize:13,fontWeight:600,color:"#374151" }}>📍 {c}</span>
+                <span style={{ fontSize:14,fontWeight:600,color:"#374151" }}>📍 {c}</span>
                 {isAdmin&&<>
-                  <button onClick={()=>{setEditIdx(idx);setEditVal(c);}} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#6366f1",padding:"0 2px" }}>✎</button>
-                  <button onClick={()=>{if(window.confirm("Delete "+c+"?"))setCityList(prev=>prev.filter((_,i)=>i!==idx));}} style={{ background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#ef4444",padding:"0 2px" }}>✕</button>
+                  <button onClick={()=>{setEditIdx(idx);setEditVal(c);}} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#6366f1",padding:"0 2px" }}>✎</button>
+                  <button onClick={()=>{if(window.confirm("Delete "+c+"?"))setCityList(prev=>prev.filter((_,i)=>i!==idx));}} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#ef4444",padding:"0 2px" }}>✕</button>
                 </>}
               </>
             )}
@@ -645,7 +645,7 @@ function AllUsersTab({ users, setUsers, setDone, t }) {
     <Card>
       <CardTitle>👥 {t.allUsers}</CardTitle>
       <div style={{ overflowX:"auto" }}>
-        <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
+        <table style={{ width:"100%",borderCollapse:"collapse",fontSize:14 }}>
           <thead>
             <tr style={{ background:"#f8fafc" }}>
               {["Name","Display","Dept","Role","Location","Status",""].map(h=>(
@@ -658,17 +658,17 @@ function AllUsersTab({ users, setUsers, setDone, t }) {
               <tr key={u.uid} style={{ background:i%2===0?"white":"#f8fafc" }}>
                 {editId===u.uid?(
                   <>
-                    <td style={{ padding:"8px 12px" }}><input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} style={{ border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 8px",fontSize:13,width:100 }} /></td>
-                    <td style={{ padding:"8px 12px" }}><input value={form.displayName} onChange={e=>setForm({...form,displayName:e.target.value})} style={{ border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 8px",fontSize:13,width:90 }} /></td>
-                    <td style={{ padding:"8px 12px" }}><input value={form.dept} onChange={e=>setForm({...form,dept:e.target.value})} style={{ border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 8px",fontSize:13,width:80 }} /></td>
+                    <td style={{ padding:"8px 12px" }}><input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} style={{ border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 8px",fontSize:14,width:100 }} /></td>
+                    <td style={{ padding:"8px 12px" }}><input value={form.displayName} onChange={e=>setForm({...form,displayName:e.target.value})} style={{ border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 8px",fontSize:14,width:90 }} /></td>
+                    <td style={{ padding:"8px 12px" }}><input value={form.dept} onChange={e=>setForm({...form,dept:e.target.value})} style={{ border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 8px",fontSize:14,width:80 }} /></td>
                     <td style={{ padding:"8px 12px" }}>
-                      <select value={form.role} onChange={e=>setForm({...form,role:e.target.value})} style={{ border:"1px solid #e2e8f0",borderRadius:6,padding:"4px",fontSize:12 }}>
+                      <select value={form.role} onChange={e=>setForm({...form,role:e.target.value})} style={{ border:"1px solid #e2e8f0",borderRadius:6,padding:"4px",fontSize:13 }}>
                         {Object.entries(ROLE_LABELS).map(([v,l])=><option key={v} value={v}>{l}</option>)}
                       </select>
                     </td>
-                    <td style={{ padding:"8px 12px" }}><input value={form.location} onChange={e=>setForm({...form,location:e.target.value})} style={{ border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 8px",fontSize:13,width:110 }} /></td>
+                    <td style={{ padding:"8px 12px" }}><input value={form.location} onChange={e=>setForm({...form,location:e.target.value})} style={{ border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 8px",fontSize:14,width:110 }} /></td>
                     <td style={{ padding:"8px 12px" }}>
-                      <select value={form.status} onChange={e=>setForm({...form,status:e.target.value})} style={{ border:"1px solid #e2e8f0",borderRadius:6,padding:"4px",fontSize:12 }}>
+                      <select value={form.status} onChange={e=>setForm({...form,status:e.target.value})} style={{ border:"1px solid #e2e8f0",borderRadius:6,padding:"4px",fontSize:13 }}>
                         {["Active","Inactive"].map(s=><option key={s} value={s}>{s}</option>)}
                       </select>
                     </td>
@@ -684,9 +684,9 @@ function AllUsersTab({ users, setUsers, setDone, t }) {
                     <td style={{ padding:"10px 12px",fontWeight:600 }}>{u.name}</td>
                     <td style={{ padding:"10px 12px",color:"#64748b" }}>{u.displayName||"-"}</td>
                     <td style={{ padding:"10px 12px",color:"#64748b" }}>{u.dept||"-"}</td>
-                    <td style={{ padding:"10px 12px" }}><span style={{ fontSize:12,fontWeight:600,padding:"2px 8px",borderRadius:99,background:"#f1f5f9",color:"#374151" }}>{ROLE_LABELS[u.role]||u.role}</span></td>
-                    <td style={{ padding:"10px 12px",color:"#64748b",fontSize:12 }}>{u.location||"-"}</td>
-                    <td style={{ padding:"10px 12px" }}><span style={{ fontSize:12,fontWeight:600,padding:"2px 8px",borderRadius:99,background:u.status==="Active"?"#d1fae5":"#fee2e2",color:u.status==="Active"?"#065f46":"#991b1b" }}>{u.status||"Active"}</span></td>
+                    <td style={{ padding:"10px 12px" }}><span style={{ fontSize:13,fontWeight:600,padding:"2px 8px",borderRadius:99,background:"#f1f5f9",color:"#374151" }}>{ROLE_LABELS[u.role]||u.role}</span></td>
+                    <td style={{ padding:"10px 12px",color:"#64748b",fontSize:13 }}>{u.location||"-"}</td>
+                    <td style={{ padding:"10px 12px" }}><span style={{ fontSize:13,fontWeight:600,padding:"2px 8px",borderRadius:99,background:u.status==="Active"?"#d1fae5":"#fee2e2",color:u.status==="Active"?"#065f46":"#991b1b" }}>{u.status||"Active"}</span></td>
                     <td style={{ padding:"10px 12px" }}>
                       <div style={{ display:"flex",gap:4 }}>
                         <Btn small onClick={()=>startEdit(u)} color="#6366f1">✎</Btn>

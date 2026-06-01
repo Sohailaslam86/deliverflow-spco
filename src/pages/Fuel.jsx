@@ -58,7 +58,7 @@ function DCFuelBox({ dc, fuelLogs, vehicles, t }) {
         <StatCard icon="🛣️" label={t.totalKM} value={tKM+"km"} color="#6366f1" />
         <StatCard icon="📊" label={t.avgEff} value={tL>0?(tKM/tL).toFixed(1)+" km/L":"-"} color="#10b981" />
       </div>
-      <div style={{ fontSize:12, color:"#64748b" }}>⛽ Avg Fuel Level: {avgFuel}L</div>
+      <div style={{ fontSize:13, color:"#64748b" }}>⛽ Avg Fuel Level: {avgFuel}L</div>
     </Card>
   );
 }
@@ -139,7 +139,7 @@ export default function Fuel({ user, fuelLogs, setFuelLogs, vehicles, setVehicle
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 12px" }}>
             <Input label={"📅 "+t.date} value={form.date} onChange={v=>setForm({...form,date:v})} type="date" />
             <div style={{ marginBottom:12 }}>
-              <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#374151", marginBottom:5 }}>🚗 {t.vehicle} *</label>
+              <label style={{ display:"block", fontSize:14, fontWeight:600, color:"#374151", marginBottom:5 }}>🚗 {t.vehicle} *</label>
               <select value={form.vehicle} onChange={e=>setForm({...form,vehicle:e.target.value})}
                 style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", background:"white", boxSizing:"border-box" }}>
                 <option value="">Select vehicle...</option>
@@ -151,7 +151,7 @@ export default function Fuel({ user, fuelLogs, setFuelLogs, vehicles, setVehicle
             <Input label={"💰 "+t.cost} value={form.sar} onChange={v=>setForm({...form,sar:v})} type="number" placeholder="90" />
             <Input label={"🛣️ "+t.tripKM} value={form.tripKM} onChange={v=>setForm({...form,tripKM:v})} type="number" placeholder="350" />
           </div>
-          {form.liters&&form.tripKM&&<div style={{ background:"#f0fdf4", padding:"8px 14px", borderRadius:8, fontSize:13, marginBottom:12 }}>📊 {t.calcEff}: <b>{(Number(form.tripKM)/Number(form.liters)).toFixed(1)} km/L</b></div>}
+          {form.liters&&form.tripKM&&<div style={{ background:"#f0fdf4", padding:"8px 14px", borderRadius:8, fontSize:14, marginBottom:12 }}>📊 {t.calcEff}: <b>{(Number(form.tripKM)/Number(form.liters)).toFixed(1)} km/L</b></div>}
           <div style={{ display:"flex", gap:8 }}>
             <Btn onClick={addLog} color="#10b981" disabled={!form.vehicle||!form.liters}>✅ {t.save}</Btn>
             <Btn onClick={()=>setShowForm(false)} color="#64748b">{t.cancel}</Btn>
@@ -164,7 +164,7 @@ export default function Fuel({ user, fuelLogs, setFuelLogs, vehicles, setVehicle
           <Card style={{ marginBottom:16 }}>
             <CardTitle>🚗 {t.allVehicles}</CardTitle>
             <div style={{ overflowX:"auto" }}>
-              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
                 <thead>
                   <tr style={{ background:"#f8fafc" }}>
                     {[t.vehicle,"DC",t.currentFuel,"Last Refill",t.effTrend].map(h=>(
@@ -182,7 +182,7 @@ export default function Fuel({ user, fuelLogs, setFuelLogs, vehicles, setVehicle
                           <div style={{ flex:1, background:"#f1f5f9", borderRadius:99, height:6, overflow:"hidden", minWidth:60 }}>
                             <div style={{ width:`${Math.round((v.fuelLevel||0)/(v.fuelCapacity||80)*100)}%`, height:"100%", background:(v.fuelLevel||0)/(v.fuelCapacity||80)<0.25?"#ef4444":"#10b981" }} />
                           </div>
-                          <span style={{ fontSize:12, fontWeight:600 }}>{v.fuelLevel||0}L</span>
+                          <span style={{ fontSize:13, fontWeight:600 }}>{v.fuelLevel||0}L</span>
                         </div>
                       </td>
                       <td style={{ padding:"10px 12px", color:"#64748b" }}>{lastLog?lastLog.date+" ("+lastLog.liters+"L)":"-"}</td>
@@ -195,7 +195,7 @@ export default function Fuel({ user, fuelLogs, setFuelLogs, vehicles, setVehicle
           </Card>
           {vStats.filter(s=>s.logs.length>0).map(({v,logs,tL,tKM,tSAR,eff,expectedFuel,deviation})=>(
             <Card key={v.plate}>
-              <CardTitle>🚗 {v.plate} <span style={{ fontSize:12, color:"#64748b", fontWeight:400 }}>({v.type}) {v.dc} DC</span></CardTitle>
+              <CardTitle>🚗 {v.plate} <span style={{ fontSize:13, color:"#64748b", fontWeight:400 }}>({v.type}) {v.dc} DC</span></CardTitle>
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:8, marginBottom:12 }}>
                 <StatCard icon="⛽" label={t.currentFuel} value={(v.fuelLevel||0)+"L"} color="#0891b2" />
                 <StatCard icon="🛣️" label={t.totalKM} value={tKM+"km"} color="#6366f1" />
@@ -203,13 +203,13 @@ export default function Fuel({ user, fuelLogs, setFuelLogs, vehicles, setVehicle
                 <StatCard icon="💰" label={t.totalCost} value={"SAR "+tSAR} color="#f59e0b" />
               </div>
               {deviation!==null&&(
-                <div style={{ background:Math.abs(Number(deviation))>5?"#fee2e2":"#d1fae5", borderRadius:8, padding:"8px 14px", fontSize:13, fontWeight:600, color:Math.abs(Number(deviation))>5?"#991b1b":"#065f46", marginBottom:12 }}>
+                <div style={{ background:Math.abs(Number(deviation))>5?"#fee2e2":"#d1fae5", borderRadius:8, padding:"8px 14px", fontSize:14, fontWeight:600, color:Math.abs(Number(deviation))>5?"#991b1b":"#065f46", marginBottom:12 }}>
                   {Math.abs(Number(deviation))>5?"⚠️ "+t.deviationAlert+": "+t.expected+" "+expectedFuel+"L vs "+t.actual+" "+tL+"L":"✅ "+t.normal+" ("+t.deviation+": "+Number(deviation).toFixed(1)+"L)"}
                 </div>
               )}
-              <div style={{ fontWeight:600, fontSize:13, marginBottom:6 }}>📜 {t.refillHistory}</div>
+              <div style={{ fontWeight:600, fontSize:14, marginBottom:6 }}>📜 {t.refillHistory}</div>
               {logs.slice(0,5).map(log=>(
-                <div key={log.id} style={{ display:"flex", gap:12, padding:"6px 0", borderBottom:"1px solid #f1f5f9", fontSize:12, flexWrap:"wrap" }}>
+                <div key={log.id} style={{ display:"flex", gap:12, padding:"6px 0", borderBottom:"1px solid #f1f5f9", fontSize:13, flexWrap:"wrap" }}>
                   <span style={{ color:"#64748b" }}>📅 {log.date}</span>
                   <span>👤 {log.driver||"-"}</span>
                   <span style={{ color:"#f59e0b", fontWeight:600 }}>⛽ +{log.liters}L</span>
@@ -229,12 +229,12 @@ export default function Fuel({ user, fuelLogs, setFuelLogs, vehicles, setVehicle
           {myLogs.length===0&&<div style={{ textAlign:"center", padding:20, color:"#94a3b8" }}>{t.noData}</div>}
           {[...myLogs].reverse().map(log=>(
             <div key={log.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
-              <span style={{ fontWeight:700, fontSize:13, color:"#6366f1", minWidth:90 }}>{log.vehicle}</span>
-              <span style={{ fontSize:13, flex:1, minWidth:100 }}>{log.driver||"-"}</span>
+              <span style={{ fontWeight:700, fontSize:14, color:"#6366f1", minWidth:90 }}>{log.vehicle}</span>
+              <span style={{ fontSize:14, flex:1, minWidth:100 }}>{log.driver||"-"}</span>
               <span>⛽ {log.liters}L</span><span>💰 SAR {log.sar}</span>
               <span>🛣️ {log.tripKM}km</span>
               <span style={{ fontWeight:700, color:"#10b981" }}>{log.liters>0?(log.tripKM/log.liters).toFixed(1):"-"} km/L</span>
-              <span style={{ color:"#94a3b8", fontSize:12 }}>📅 {log.date}</span>
+              <span style={{ color:"#94a3b8", fontSize:13 }}>📅 {log.date}</span>
             </div>
           ))}
         </Card>
@@ -247,15 +247,15 @@ export default function Fuel({ user, fuelLogs, setFuelLogs, vehicles, setVehicle
           {vStats.filter(s=>s.tL>0).map(({v,tL,tKM,tSAR,eff,expectedFuel,deviation})=>(
             <div key={v.plate} style={{ padding:"12px 0", borderBottom:"1px solid #f1f5f9" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:6, marginBottom:6 }}>
-                <span style={{ fontWeight:700, fontSize:14 }}>{v.plate} <span style={{ fontSize:12, color:"#64748b" }}>({v.type}) {v.dc}</span></span>
+                <span style={{ fontWeight:700, fontSize:14 }}>{v.plate} <span style={{ fontSize:13, color:"#64748b" }}>({v.type}) {v.dc}</span></span>
                 <span style={{ fontWeight:800, fontSize:18, color:Number(eff)>=10?"#10b981":Number(eff)>=7?"#f59e0b":"#ef4444" }}>{eff} km/L</span>
               </div>
-              <div style={{ display:"flex", gap:16, fontSize:13, color:"#64748b", flexWrap:"wrap", marginBottom:6 }}>
+              <div style={{ display:"flex", gap:16, fontSize:14, color:"#64748b", flexWrap:"wrap", marginBottom:6 }}>
                 <span>⛽ {t.actual}: {tL}L</span><span>🛣️ {tKM}km</span>
                 <span>💰 SAR {tSAR}</span><span>📊 {t.expected}: {expectedFuel}L</span>
               </div>
               {deviation!==null&&(
-                <div style={{ fontSize:12, fontWeight:600, padding:"6px 10px", borderRadius:6, background:Math.abs(Number(deviation))>5?"#fee2e2":"#d1fae5", color:Math.abs(Number(deviation))>5?"#991b1b":"#065f46" }}>
+                <div style={{ fontSize:13, fontWeight:600, padding:"6px 10px", borderRadius:6, background:Math.abs(Number(deviation))>5?"#fee2e2":"#d1fae5", color:Math.abs(Number(deviation))>5?"#991b1b":"#065f46" }}>
                   {Math.abs(Number(deviation))>5?"⚠️ "+t.deviationAlert+": "+Number(deviation).toFixed(1)+"L difference — Review Needed":"✅ "+t.normal+" ("+t.deviation+": "+Number(deviation).toFixed(1)+"L)"}
                 </div>
               )}

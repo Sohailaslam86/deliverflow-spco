@@ -53,11 +53,11 @@ export default function Odometer({ user, lang }) {
       <Card style={{ borderLeft:"4px solid #3b82f6" }}>
         <CardTitle>📅 {t.prevReading}</CardTitle>
         <div style={{ display:"flex", alignItems:"center", gap:16 }}>
-          <div style={{ background:"#f8fafc", borderRadius:8, padding:"10px 16px", fontSize:13 }}>
+          <div style={{ background:"#f8fafc", borderRadius:8, padding:"10px 16px", fontSize:14 }}>
             <div style={{ fontWeight:700, fontSize:20, color:"#3b82f6" }}>{lastReading.km} KM</div>
             <div style={{ color:"#64748b" }}>Date: {lastReading.date}</div>
           </div>
-          <div style={{ fontSize:13, color:"#64748b" }}>
+          <div style={{ fontSize:14, color:"#64748b" }}>
             <div>⚠️ {t.todayNote}</div>
             <div>{t.deviationNote}</div>
           </div>
@@ -69,10 +69,10 @@ export default function Odometer({ user, lang }) {
       ):(
         <Card>
           <CardTitle>🔢 {t.title}</CardTitle>
-          <p style={{ fontSize:13, color:"#64748b", marginBottom:20 }}>{t.subtitle}</p>
+          <p style={{ fontSize:14, color:"#64748b", marginBottom:20 }}>{t.subtitle}</p>
           <div style={{ marginBottom:16 }}>
             <button onClick={()=>setUseManual(!useManual)}
-              style={{ background:useManual?"#fef3c7":"#f1f5f9", border:`1px solid ${useManual?"#fbbf24":"#e2e8f0"}`, borderRadius:8, padding:"7px 14px", cursor:"pointer", fontSize:13, fontWeight:600, color:useManual?"#92400e":"#64748b" }}>
+              style={{ background:useManual?"#fef3c7":"#f1f5f9", border:`1px solid ${useManual?"#fbbf24":"#e2e8f0"}`, borderRadius:8, padding:"7px 14px", cursor:"pointer", fontSize:14, fontWeight:600, color:useManual?"#92400e":"#64748b" }}>
               ✏️ {useManual?t.manualEntry:t.switchManual}
             </button>
           </div>
@@ -81,22 +81,22 @@ export default function Odometer({ user, lang }) {
             <div style={{ fontWeight:600, fontSize:14, marginBottom:10 }}>🟢 {t.startReading}</div>
             <input type="file" accept="image/*" capture="environment" id="odo_start" style={{ display:"none" }}
               onChange={e=>{const f=e.target.files[0];if(f)setStartPhoto(URL.createObjectURL(f));}} />
-            <label htmlFor="odo_start" style={{ display:"inline-block", background:"#8b5cf6", color:"white", border:"none", padding:"9px 16px", borderRadius:7, cursor:"pointer", fontWeight:600, fontSize:13 }}>
+            <label htmlFor="odo_start" style={{ display:"inline-block", background:"#8b5cf6", color:"white", border:"none", padding:"9px 16px", borderRadius:7, cursor:"pointer", fontWeight:600, fontSize:14 }}>
               📸 {startPhoto?t.changePhoto:t.takePhoto}
             </label>
             {startPhoto&&(
               <div style={{ marginTop:10, display:"flex", alignItems:"center", gap:12 }}>
                 <img src={startPhoto} alt="odo" style={{ width:80, height:60, objectFit:"cover", borderRadius:6, border:"1px solid #e2e8f0" }} />
-                <div style={{ background:"#f0fdf4", padding:"6px 12px", borderRadius:6, fontSize:13 }}>
+                <div style={{ background:"#f0fdf4", padding:"6px 12px", borderRadius:6, fontSize:14 }}>
                   🤖 {t.aiRead}: <b>{startKM} KM</b>
                 </div>
               </div>
             )}
-            {!startPhoto&&<div style={{ marginTop:8, fontSize:13, color:"#94a3b8" }}>🤖 {t.aiRead}: <b>{startKM} KM</b> {t.demo}</div>}
+            {!startPhoto&&<div style={{ marginTop:8, fontSize:14, color:"#94a3b8" }}>🤖 {t.aiRead}: <b>{startKM} KM</b> {t.demo}</div>}
             {useManual&&(
               <div style={{ marginTop:10 }}>
                 <Input label={t.manualLabel} value={manualStart} onChange={setManualStart} placeholder="102,345" />
-                {deviation&&<div style={{ fontSize:12, color:"#ef4444", fontWeight:600 }}>⚠️ {t.deviationAlert}</div>}
+                {deviation&&<div style={{ fontSize:13, color:"#ef4444", fontWeight:600 }}>⚠️ {t.deviationAlert}</div>}
               </div>
             )}
           </div>
@@ -105,13 +105,13 @@ export default function Odometer({ user, lang }) {
             <div style={{ fontWeight:600, fontSize:14, marginBottom:10 }}>🔴 {t.endReading}</div>
             <input type="file" accept="image/*" capture="environment" id="odo_end" style={{ display:"none" }}
               onChange={e=>{const f=e.target.files[0];if(f){setEndPhoto(URL.createObjectURL(f));setEndKM("102,487");}}} />
-            <label htmlFor="odo_end" style={{ display:"inline-block", background:"#8b5cf6", color:"white", border:"none", padding:"9px 16px", borderRadius:7, cursor:"pointer", fontWeight:600, fontSize:13 }}>
+            <label htmlFor="odo_end" style={{ display:"inline-block", background:"#8b5cf6", color:"white", border:"none", padding:"9px 16px", borderRadius:7, cursor:"pointer", fontWeight:600, fontSize:14 }}>
               📸 {endPhoto?t.changePhoto:t.takePhoto}
             </label>
             {endPhoto&&(
               <div style={{ marginTop:10, display:"flex", alignItems:"center", gap:12 }}>
                 <img src={endPhoto} alt="odo" style={{ width:80, height:60, objectFit:"cover", borderRadius:6, border:"1px solid #e2e8f0" }} />
-                <div style={{ background:"#f0fdf4", padding:"6px 12px", borderRadius:6, fontSize:13 }}>
+                <div style={{ background:"#f0fdf4", padding:"6px 12px", borderRadius:6, fontSize:14 }}>
                   🤖 {t.aiRead}: <b>{endKM} KM</b>
                 </div>
               </div>
@@ -125,7 +125,7 @@ export default function Odometer({ user, lang }) {
               <span style={{ fontSize:24, fontWeight:900, color:"#10b981" }}>{diff} KM</span>
             </div>
           )}
-          {useManual&&<div style={{ background:"#fef3c7", border:"1px solid #fbbf24", borderRadius:8, padding:"10px 14px", fontSize:13, color:"#92400e", marginBottom:12 }}>⚠️ {t.manualWarn}</div>}
+          {useManual&&<div style={{ background:"#fef3c7", border:"1px solid #fbbf24", borderRadius:8, padding:"10px 14px", fontSize:14, color:"#92400e", marginBottom:12 }}>⚠️ {t.manualWarn}</div>}
           <Btn onClick={()=>setSubmitted(true)} style={{ width:"100%", padding:12, fontSize:14 }}>📤 {t.submitBtn}</Btn>
         </Card>
       )}

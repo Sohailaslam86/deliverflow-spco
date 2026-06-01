@@ -1,43 +1,49 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { collection, getDocs, updateDoc, doc, addDoc } from "firebase/firestore";
+import { db } from "../firebase";
 import { Card, CardTitle, Btn, Input, Select, SuccessMsg, StatCard, TabBar } from "../components/Shared.jsx";
 import { MAINTENANCE_TYPES, DCS } from "../data/masterData.js";
 
 const T = {
   en: {
     vehicles:"Vehicles", drivers:"Drivers", maintenance:"Maintenance Log",
-    allFleet:"All Fleet — Overview", total:"Total", active:"Active",
+    overview:"Overview", total:"Total", active:"Active",
     inMaint:"In Maintenance", expiryAlerts:"Expiry Alerts",
     fuelLevel:"Fuel Level", totalKM:"Total KM",
     fahas:"Fahas", nextOil:"Next Oil", insurance:"Insurance",
     sendMaint:"Send to Maintenance", reactivate:"Reactivate",
     noMaint:"No maintenance history", onLeave:"On Leave", inactive:"Inactive",
     expired:"Expiring Soon", allDrivers:"All Drivers — Overview",
-    riyadhDC:"Riyadh Distribution Center", jeddahDC:"Jeddah Distribution Center",
-    dammamDC:"Dammam Distribution Center",
+    allVehicles:"All Vehicles — Overview",
+    riyadhDC:"Riyadh DC", jeddahDC:"Jeddah DC", dammamDC:"Dammam DC",
     maintType:"Type", cost:"Cost (SAR)", startDate:"Start Date",
     returnDate:"Expected Return", notes:"Notes",
     confirm:"Confirm", cancel:"Cancel", edit:"Edit", save:"Save",
     markLeave:"Mark On Leave", markActive:"Mark Active",
-    markMaint:"Mark Maintenance", markReactive:"Reactivate",
-    unassigned:"Unassigned Today"
+    unassigned:"Unassigned Today", loading:"Loading fleet data...",
+    vehicleUtil:"Vehicle Utilization", driverUtil:"Driver Utilization",
+    addVehicle:"+ Add Vehicle (Request)", noVehicles:"No vehicles found",
+    noDrivers:"No drivers found"
   },
   ar: {
     vehicles:"المركبات", drivers:"السائقون", maintenance:"سجل الصيانة",
-    allFleet:"جميع الأسطول — نظرة عامة", total:"الإجمالي",
+    overview:"نظرة عامة", total:"الإجمالي",
     active:"نشط", inMaint:"في الصيانة", expiryAlerts:"تنبيهات الانتهاء",
     fuelLevel:"مستوى الوقود", totalKM:"إجمالي الكيلومترات",
     fahas:"الفحص", nextOil:"تغيير الزيت", insurance:"التأمين",
     sendMaint:"إرسال للصيانة", reactivate:"إعادة التفعيل",
     noMaint:"لا يوجد سجل صيانة", onLeave:"إجازة", inactive:"غير نشط",
-    expired:"ينتهي قريباً", allDrivers:"جميع السائقون — نظرة عامة",
-    riyadhDC:"مركز توزيع الرياض", jeddahDC:"مركز توزيع جدة",
-    dammamDC:"مركز توزيع الدمام",
-    maintType:"النوع", cost:"التكلفة (SAR)",
-    startDate:"تاريخ البدء", returnDate:"تاريخ العودة",
-    notes:"ملاحظات", confirm:"تأكيد", cancel:"إلغاء", edit:"تعديل", save:"حفظ",
-    markLeave:"تسجيل إجازة", markActive:"تفعيل",
-    markMaint:"إرسال للصيانة", markReactive:"إعادة التفعيل",
-    unassigned:"غير مخصص اليوم"
+    expired:"ينتهي قريباً", allDrivers:"جميع السائقون",
+    allVehicles:"جميع المركبات",
+    riyadhDC:"الرياض", jeddahDC:"جدة", dammamDC:"الدمام",
+    maintType:"النوع", cost:"التكلفة", startDate:"تاريخ البدء",
+    returnDate:"تاريخ العودة", notes:"ملاحظات",
+    confirm:"تأكيد", cancel:"إلغاء", edit:"تعديل", save:"حفظ",
+    markLeave:"إجازة", markActive:"تفعيل",
+    unassigned:"غير مخصص اليوم", loading:"جاري التحميل...",
+    vehicleUtil:"استخدام المركبات", driverUtil:"استخدام السائقين",
+    addVehicle:"+ إضافة مركبة (طلب)", noVehicles:"لا توجد مركبات",
+    noDrivers:"لا يوجد سائقون"
   }
 };
 
@@ -49,244 +55,293 @@ function dcLabel(dc, t) {
   return t.dammamDC;
 }
 
-export default function Fleet({ user, vehicles, setVehicles, users, setUsers, lang }) {
-  const [tab, setTab] = useState("vehicles");
+export default function Fleet({ user, vehicles: masterVehicles, setVehicles: setMasterVehicles, users: masterUsers, setUsers, lang }) {
+  const [tab, setTab] = useState("overview");
   const [done, setDone] = useState("");
+  const [fsVehicles, setFsVehicles] = useState([]);
+  const [fsDrivers, setFsDrivers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const rtl = lang==="ar";
   const t = T[lang]||T.en;
-  const dc = user.dc;
+  const dc = user.dc==="Head Office"?null:user.dc;
   const isAdmin = user.role==="admin";
-  const isManager = user.role==="manager";
-  const canManage = isAdmin || isManager;
+  const canManage = user.role==="admin"||user.role==="manager";
 
-  const tabs = [
-    ["vehicles","🚗",t.vehicles],
-    ["drivers","👤",t.drivers],
-    ["maintenance","🔧",t.maintenance],
-  ];
+  const tabs = isAdmin
+    ? [["overview","📊",t.overview],["vehicles","🚗",t.vehicles],["drivers","👤",t.drivers],["maintenance","🔧",t.maintenance]]
+    : [["vehicles","🚗",t.vehicles],["drivers","👤",t.drivers],["maintenance","🔧",t.maintenance]];
 
-  function flash(msg) { setDone(msg); setTimeout(()=>setDone(""),3000); }
+  function flash(msg) { setDone(msg); setTimeout(()=>setDone(""),4000); }
 
-  return (
-    <div style={{ direction:rtl?"rtl":"ltr" }}>
-      {done&&<SuccessMsg msg={done} />}
-      <TabBar tabs={tabs} active={tab} onChange={setTab} />
-      {tab==="vehicles"&&<VehiclesTab vehicles={vehicles} setVehicles={setVehicles} setDone={flash} t={t} dc={dc} isAdmin={isAdmin} canManage={canManage} user={user} />}
-      {tab==="drivers"&&<DriversTab users={users} setUsers={setUsers} t={t} dc={dc} isAdmin={isAdmin} canManage={canManage} setDone={flash} />}
-      {tab==="maintenance"&&<MaintTab vehicles={vehicles} setVehicles={setVehicles} setDone={flash} t={t} dc={dc} user={user} />}
-    </div>
-  );
-}
+  useEffect(() => { loadData(); }, []);
 
-function VehiclesTab({ vehicles, setVehicles, setDone, t, dc, isAdmin, canManage, user }) {
-  const [showMaint, setShowMaint] = useState(null);
-  const [maintForm, setMaintForm] = useState({ type:"Scheduled Service", startDate:"", returnDate:"", cost:"", notes:"" });
+  async function loadData() {
+    setLoading(true);
+    try {
+      const vSnap = await getDocs(collection(db, "vehicles"));
+      setFsVehicles(vSnap.docs.map(d => ({ firestoreId: d.id, ...d.data() })));
 
-  const myVehicles = dc?vehicles.filter(v=>v.dc===dc):vehicles;
-
-  function sendMaint(plate) {
-    setVehicles(prev=>prev.map(v=>v.plate===plate?{...v,status:"Maintenance",maintHistory:[...(v.maintHistory||[]),{...maintForm,date:new Date().toLocaleDateString(),addedBy:user.name}]}:v));
-    setShowMaint(null);
-    setDone(plate+" sent to maintenance");
+      const uSnap = await getDocs(collection(db, "users"));
+      setFsDrivers(uSnap.docs.map(d => ({ uid: d.id, ...d.data() })).filter(u => u.role === "driver"));
+    } catch(e) { console.error(e); }
+    setLoading(false);
   }
 
-  function reactivate(plate) {
-    setVehicles(prev=>prev.map(v=>v.plate===plate?{...v,status:"Active"}:v));
-    setDone(plate+" reactivated");
+  // Use Firestore vehicles if available, else masterData
+  const allVehicles = fsVehicles.length > 0 ? fsVehicles : masterVehicles;
+  const allDrivers = fsDrivers.length > 0 ? fsDrivers : (masterUsers||[]).filter(u=>u.role==="driver");
+
+  const myVehicles = dc ? allVehicles.filter(v=>v.dc===dc) : allVehicles;
+  const myDrivers = dc ? allDrivers.filter(d=>d.dc===dc) : allDrivers;
+
+  async function sendMaint(vehicle, maintForm) {
+    const updateData = { status:"Maintenance", maintHistory:[...(vehicle.maintHistory||[]), {...maintForm, date:new Date().toLocaleDateString(), addedBy:user.name}] };
+    if (vehicle.firestoreId) {
+      try { await updateDoc(doc(db,"vehicles",vehicle.firestoreId), updateData); } catch(e) { console.error(e); }
+    }
+    setFsVehicles(prev=>prev.map(v=>v.firestoreId===vehicle.firestoreId?{...v,...updateData}:v));
+    flash(vehicle.plate+" sent to maintenance");
   }
 
-  const alerts = myVehicles.filter(v=>{
-    if (!v.fahas) return false;
-    return Math.ceil((new Date(v.fahas)-new Date())/(1000*60*60*24))<=60;
-  });
+  async function reactivate(vehicle) {
+    if (vehicle.firestoreId) {
+      try { await updateDoc(doc(db,"vehicles",vehicle.firestoreId), {status:"Active"}); } catch(e) { console.error(e); }
+    }
+    setFsVehicles(prev=>prev.map(v=>v.firestoreId===vehicle.firestoreId?{...v,status:"Active"}:v));
+    flash(vehicle.plate+" reactivated");
+  }
+
+  async function setDriverStatus(driver, status) {
+    if (driver.uid) {
+      try { await updateDoc(doc(db,"users",driver.uid), {status}); } catch(e) { console.error(e); }
+    }
+    setFsDrivers(prev=>prev.map(d=>d.uid===driver.uid?{...d,status}:d));
+    flash("Driver status updated");
+  }
 
   function DCVehBox({ dcName }) {
     const color = DC_COLORS[dcName];
-    const dv = vehicles.filter(v=>v.dc===dcName);
+    const dv = allVehicles.filter(v=>v.dc===dcName);
     const act = dv.filter(v=>v.status==="Active").length;
     const mnt = dv.filter(v=>v.status==="Maintenance").length;
-    const exp = dv.filter(v=>{if(!v.fahas)return false;return Math.ceil((new Date(v.fahas)-new Date())/(1000*60*60*24))<=30;}).length;
     return (
       <Card style={{ borderTop:`4px solid ${color}` }}>
-        <CardTitle style={{ color }}>📍 {dcLabel(dcName,t)}</CardTitle>
-        <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8 }}>
-          {[["🚗","Total",dv.length,color],["✅",t.active,act,"#10b981"],["🔧",t.inMaint,mnt,"#f59e0b"],["⚠️",t.expired,exp,"#ef4444"]].map(([icon,label,val,c])=>(
-            <div key={label} style={{ textAlign:"center",background:"white",borderRadius:8,padding:"10px 4px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
-              <div style={{ fontSize:16 }}>{icon}</div>
-              <div style={{ fontWeight:800,fontSize:18,color:c }}>{val}</div>
-              <div style={{ fontSize:10,color:"#94a3b8" }}>{label}</div>
-            </div>
-          ))}
+        <CardTitle style={{ color, fontSize:16 }}>📍 {dcLabel(dcName,t)}</CardTitle>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
+          <StatCard icon="🚗" label={t.total} value={dv.length} color={color} />
+          <StatCard icon="✅" label={t.active} value={act} color="#10b981" />
+          <StatCard icon="🔧" label={t.inMaint} value={mnt} color="#f59e0b" />
         </div>
       </Card>
     );
-  }
-
-  return (
-    <div>
-      {alerts.length>0&&(
-        <Card style={{ border:"1px solid #fbbf24",marginBottom:16 }}>
-          <CardTitle>⚠️ {t.expiryAlerts}</CardTitle>
-          {alerts.map(v=>{
-            const days=Math.ceil((new Date(v.fahas)-new Date())/(1000*60*60*24));
-            return <div key={v.plate} style={{ padding:"6px 0",borderBottom:"1px solid #f1f5f9",fontSize:13,color:days<0?"#991b1b":"#92400e" }}>🔔 {v.plate} — Fahas: {v.fahas} ({days<0?Math.abs(days)+"d EXPIRED":days+"d left"})</div>;
-          })}
-        </Card>
-      )}
-
-      {/* Overall */}
-      <Card style={{ borderTop:"4px solid #1A3A5C",marginBottom:16 }}>
-        <CardTitle>🚗 {t.allFleet}</CardTitle>
-        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:10 }}>
-          <StatCard icon="🚗" label={t.total} value={myVehicles.length} color="#6366f1" />
-          <StatCard icon="✅" label={t.active} value={myVehicles.filter(v=>v.status==="Active").length} color="#10b981" />
-          <StatCard icon="🔧" label={t.inMaint} value={myVehicles.filter(v=>v.status==="Maintenance").length} color="#f59e0b" />
-          <StatCard icon="⚠️" label={t.expired} value={myVehicles.filter(v=>{if(!v.fahas)return false;return Math.ceil((new Date(v.fahas)-new Date())/(1000*60*60*24))<=30;}).length} color="#ef4444" />
-        </div>
-      </Card>
-
-      {!dc&&(
-        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:16,marginBottom:16 }}>
-          <DCVehBox dcName="Riyadh" />
-          <DCVehBox dcName="Jeddah" />
-          <DCVehBox dcName="Dammam" />
-        </div>
-      )}
-
-      {DCS.filter(d=>!dc||d===dc).map(d=>{
-        const dv=myVehicles.filter(v=>v.dc===d);
-        if (!dv.length) return null;
-        return (
-          <Card key={d}>
-            <CardTitle>📍 {dcLabel(d,t)} — {dv.length} {t.vehicles}</CardTitle>
-            {dv.map(v=>(
-              <div key={v.plate} style={{ border:`1px solid ${v.status==="Maintenance"?"#fbbf24":"#e2e8f0"}`,borderRadius:8,padding:12,marginBottom:8 }}>
-                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:6,marginBottom:8 }}>
-                  <div>
-                    <span style={{ fontWeight:700,fontSize:15 }}>{v.plate}</span>
-                    <span style={{ fontSize:13,color:"#64748b",marginLeft:8 }}>({v.type}) {v.brand} {v.model}</span>
-                  </div>
-                  <span style={{ fontSize:12,fontWeight:600,padding:"3px 10px",borderRadius:99,background:v.status==="Maintenance"?"#fef3c7":"#d1fae5",color:v.status==="Maintenance"?"#92400e":"#065f46" }}>{v.status}</span>
-                </div>
-                {/* Fuel bar */}
-                <div style={{ marginBottom:8 }}>
-                  <div style={{ display:"flex",justifyContent:"space-between",fontSize:12,color:"#64748b",marginBottom:3 }}>
-                    <span>⛽ {t.fuelLevel}: {v.fuelLevel||0}L / {v.fuelCapacity||80}L</span>
-                    <span>{Math.round((v.fuelLevel||0)/(v.fuelCapacity||80)*100)}%</span>
-                  </div>
-                  <div style={{ background:"#f1f5f9",borderRadius:99,height:6,overflow:"hidden" }}>
-                    <div style={{ width:`${Math.round((v.fuelLevel||0)/(v.fuelCapacity||80)*100)}%`,height:"100%",background:(v.fuelLevel||0)/(v.fuelCapacity||80)<0.25?"#ef4444":"#10b981",borderRadius:99 }} />
-                  </div>
-                </div>
-                <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:4,fontSize:12,color:"#64748b",marginBottom:8 }}>
-                  <span>🛣️ {t.totalKM}: {(v.totalKM||0).toLocaleString()}</span>
-                  <span>📊 {v.mileage||12} km/L</span>
-                  {v.fahas&&<span>🔧 {t.fahas}: {v.fahas}</span>}
-                  {v.insurance&&<span>🛡️ {t.insurance}: {v.insurance}</span>}
-                </div>
-                {canManage&&(
-                  <div style={{ display:"flex",gap:8 }}>
-                    {v.status==="Active"?(
-                      <Btn small onClick={()=>{setShowMaint(v.plate);setMaintForm({type:"Scheduled Service",startDate:"",returnDate:"",cost:"",notes:""}); }} color="#f59e0b">🔧 {t.sendMaint}</Btn>
-                    ):(
-                      <Btn small onClick={()=>reactivate(v.plate)} color="#10b981">✅ {t.reactivate}</Btn>
-                    )}
-                  </div>
-                )}
-                {showMaint===v.plate&&(
-                  <div style={{ marginTop:10,padding:12,background:"#f8fafc",borderRadius:8 }}>
-                    <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px" }}>
-                      <Select label={t.maintType} value={maintForm.type} onChange={v=>setMaintForm({...maintForm,type:v})} options={MAINTENANCE_TYPES} />
-                      <Input label={t.cost} value={maintForm.cost} onChange={v=>setMaintForm({...maintForm,cost:v})} type="number" />
-                      <Input label={t.startDate} value={maintForm.startDate} onChange={v=>setMaintForm({...maintForm,startDate:v})} type="date" />
-                      <Input label={t.returnDate} value={maintForm.returnDate} onChange={v=>setMaintForm({...maintForm,returnDate:v})} type="date" />
-                      <div style={{ gridColumn:"1/-1" }}><Input label={t.notes} value={maintForm.notes} onChange={v=>setMaintForm({...maintForm,notes:v})} /></div>
-                    </div>
-                    <div style={{ display:"flex",gap:8 }}>
-                      <Btn small onClick={()=>sendMaint(v.plate)} color="#f59e0b">✅ {t.confirm}</Btn>
-                      <Btn small onClick={()=>setShowMaint(null)} color="#64748b">{t.cancel}</Btn>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </Card>
-        );
-      })}
-    </div>
-  );
-}
-
-function DriversTab({ users, setUsers, t, dc, isAdmin, canManage, setDone }) {
-  const allDrv = users.filter(u=>u.role==="driver");
-  const myDrv = dc?allDrv.filter(d=>d.dc===dc):allDrv;
-
-  function setStatus(uid, status) {
-    setUsers(prev=>prev.map(u=>u.uid===uid?{...u,status}:u));
-    setDone("Driver status updated to: "+status);
   }
 
   function DCDrvBox({ dcName }) {
     const color = DC_COLORS[dcName];
-    const dv = allDrv.filter(d=>d.dc===dcName);
-    const act = dv.filter(d=>d.status==="Active").length;
+    const dv = allDrivers.filter(d=>d.dc===dcName);
+    const act = dv.filter(d=>d.status==="active"||d.status==="Active").length;
     const leave = dv.filter(d=>d.status==="On Leave").length;
-    const inact = dv.filter(d=>d.status==="Inactive").length;
     return (
       <Card style={{ borderTop:`4px solid ${color}` }}>
-        <CardTitle style={{ color }}>📍 {dcLabel(dcName,t)}</CardTitle>
-        <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8 }}>
-          {[["👤","Total",dv.length,color],["✅",t.active,act,"#10b981"],["🏖️",t.onLeave,leave,"#f59e0b"],["⚠️",t.inactive,inact,"#ef4444"]].map(([icon,label,val,c])=>(
-            <div key={label} style={{ textAlign:"center",background:"white",borderRadius:8,padding:"10px 4px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
-              <div style={{ fontSize:16 }}>{icon}</div>
-              <div style={{ fontWeight:800,fontSize:18,color:c }}>{val}</div>
-              <div style={{ fontSize:10,color:"#94a3b8" }}>{label}</div>
-            </div>
-          ))}
+        <CardTitle style={{ color, fontSize:16 }}>📍 {dcLabel(dcName,t)}</CardTitle>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
+          <StatCard icon="👤" label={t.total} value={dv.length} color={color} />
+          <StatCard icon="✅" label={t.active} value={act} color="#10b981" />
+          <StatCard icon="🏖️" label={t.onLeave} value={leave} color="#f59e0b" />
         </div>
       </Card>
     );
   }
 
-  return (
-    <div>
-      <Card style={{ borderTop:"4px solid #1A3A5C",marginBottom:16 }}>
-        <CardTitle>👤 {t.allDrivers}</CardTitle>
-        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:10 }}>
-          <StatCard icon="👤" label={t.total} value={myDrv.length} color="#6366f1" />
-          <StatCard icon="✅" label={t.active} value={myDrv.filter(d=>d.status==="Active").length} color="#10b981" />
-          <StatCard icon="🏖️" label={t.onLeave} value={myDrv.filter(d=>d.status==="On Leave").length} color="#f59e0b" />
-          <StatCard icon="⚠️" label={t.inactive} value={myDrv.filter(d=>d.status==="Inactive").length} color="#ef4444" />
-        </div>
-      </Card>
+  if (loading) {
+    return <div style={{ textAlign:"center", padding:40, fontSize:16, color:"#64748b" }}>⏳ {t.loading}</div>;
+  }
 
-      {!dc&&(
-        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:16,marginBottom:16 }}>
-          <DCDrvBox dcName="Riyadh" />
-          <DCDrvBox dcName="Jeddah" />
-          <DCDrvBox dcName="Dammam" />
+  return (
+    <div style={{ direction:rtl?"rtl":"ltr" }}>
+      {done&&<SuccessMsg msg={done}/>}
+      <TabBar tabs={tabs} active={tab} onChange={setTab}/>
+
+      {/* OVERVIEW — Admin only */}
+      {tab==="overview"&&isAdmin&&(
+        <div>
+          {/* Vehicles Overview */}
+          <Card style={{ borderTop:"4px solid #1A3A5C" }}>
+            <CardTitle>🚗 {t.allVehicles}</CardTitle>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:12 }}>
+              <StatCard icon="🚗" label={t.total} value={allVehicles.length} color="#6366f1" />
+              <StatCard icon="✅" label={t.active} value={allVehicles.filter(v=>v.status==="Active").length} color="#10b981" />
+              <StatCard icon="🔧" label={t.inMaint} value={allVehicles.filter(v=>v.status==="Maintenance").length} color="#f59e0b" />
+              <StatCard icon="⚠️" label={t.expired} value={allVehicles.filter(v=>v.fahas&&Math.ceil((new Date(v.fahas)-new Date())/(1000*60*60*24))<=30).length} color="#ef4444" />
+            </div>
+          </Card>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:16, marginBottom:16 }}>
+            <DCVehBox dcName="Riyadh"/>
+            <DCVehBox dcName="Jeddah"/>
+            <DCVehBox dcName="Dammam"/>
+          </div>
+
+          {/* Drivers Overview */}
+          <Card style={{ borderTop:"4px solid #0f766e" }}>
+            <CardTitle>👤 {t.allDrivers}</CardTitle>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:12 }}>
+              <StatCard icon="👤" label={t.total} value={allDrivers.length} color="#6366f1" />
+              <StatCard icon="✅" label={t.active} value={allDrivers.filter(d=>d.status==="active"||d.status==="Active").length} color="#10b981" />
+              <StatCard icon="🏖️" label={t.onLeave} value={allDrivers.filter(d=>d.status==="On Leave").length} color="#f59e0b" />
+              <StatCard icon="⚠️" label={t.inactive} value={allDrivers.filter(d=>d.status==="inactive"||d.status==="Inactive").length} color="#ef4444" />
+            </div>
+          </Card>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:16 }}>
+            <DCDrvBox dcName="Riyadh"/>
+            <DCDrvBox dcName="Jeddah"/>
+            <DCDrvBox dcName="Dammam"/>
+          </div>
         </div>
       )}
 
-      {DCS.filter(d=>!dc||d===dc).map(d=>{
-        const dv=users.filter(u=>u.role==="driver"&&u.dc===d);
+      {/* VEHICLES TAB */}
+      {tab==="vehicles"&&(
+        <VehiclesTab vehicles={myVehicles} dc={dc} t={t} canManage={canManage} user={user} onSendMaint={sendMaint} onReactivate={reactivate} />
+      )}
+
+      {/* DRIVERS TAB */}
+      {tab==="drivers"&&(
+        <DriversTab drivers={myDrivers} dc={dc} t={t} canManage={canManage} onSetStatus={setDriverStatus} isAdmin={isAdmin} DCS={DCS} dcLabel={dcLabel} allDrivers={allDrivers} />
+      )}
+
+      {/* MAINTENANCE TAB */}
+      {tab==="maintenance"&&(
+        <MaintTab vehicles={myVehicles} t={t} />
+      )}
+    </div>
+  );
+}
+
+function VehiclesTab({ vehicles, dc, t, canManage, user, onSendMaint, onReactivate }) {
+  const [showMaint, setShowMaint] = useState(null);
+  const [maintForm, setMaintForm] = useState({ type:"Scheduled Service", startDate:"", returnDate:"", cost:"", notes:"" });
+
+  const alerts = vehicles.filter(v => v.fahas && Math.ceil((new Date(v.fahas)-new Date())/(1000*60*60*24))<=60);
+
+  return (
+    <div>
+      {alerts.length>0&&(
+        <Card style={{ border:"1px solid #fbbf24" }}>
+          <CardTitle>⚠️ {t.expiryAlerts}</CardTitle>
+          {alerts.map(v=>{
+            const days = Math.ceil((new Date(v.fahas)-new Date())/(1000*60*60*24));
+            return (
+              <div key={v.plate||v.firestoreId} style={{ padding:"8px 0", borderBottom:"1px solid #f1f5f9", fontSize:14, color:days<0?"#991b1b":"#92400e", fontWeight:600 }}>
+                🔔 {v.plate} — Fahas: {v.fahas} ({days<0?Math.abs(days)+"d EXPIRED":days+"d left"})
+              </div>
+            );
+          })}
+        </Card>
+      )}
+
+      {vehicles.length===0&&(
+        <Card><div style={{ textAlign:"center", padding:32, color:"#94a3b8", fontSize:15 }}>🚗 {t.noVehicles}</div></Card>
+      )}
+
+      {["Riyadh","Jeddah","Dammam"].filter(d=>!dc||d===dc).map(dcName=>{
+        const dv = vehicles.filter(v=>v.dc===dcName);
         if (!dv.length) return null;
         return (
-          <Card key={d}>
-            <CardTitle>📍 {dcLabel(d,t)} — {dv.length} Drivers</CardTitle>
-            {dv.map(dr=>(
-              <div key={dr.uid} style={{ display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:"1px solid #f1f5f9",flexWrap:"wrap" }}>
-                <div style={{ width:36,height:36,borderRadius:"50%",background:"#b45309",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontWeight:700,fontSize:14,flexShrink:0 }}>{dr.name.charAt(0)}</div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:600,fontSize:14 }}>{dr.name}</div>
-                  <div style={{ fontSize:12,color:"#64748b" }}>{dr.phone||dr.mobile}</div>
-                  {dr.licNo&&<div style={{ fontSize:11,color:"#6366f1" }}>📄 Lic: {dr.licNo} | Exp: {dr.licExp}</div>}
+          <Card key={dcName}>
+            <CardTitle style={{ color:DC_COLORS[dcName] }}>📍 {dcName} DC — {dv.length} vehicles</CardTitle>
+            {dv.map(v=>{
+              const fuelPct = Math.round((v.fuelLevel||0)/(v.fuelCapacity||80)*100);
+              return (
+                <div key={v.plate||v.firestoreId} style={{ borderBottom:"1px solid #f1f5f9", padding:"14px 0" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:8 }}>
+                    <div>
+                      <span style={{ fontWeight:700, fontSize:16 }}>{v.plate}</span>
+                      <span style={{ fontSize:14, color:"#64748b", marginLeft:8 }}>{v.type} — {v.brand} {v.model}</span>
+                    </div>
+                    <span style={{ fontSize:13, fontWeight:600, padding:"4px 12px", borderRadius:99, background:v.status==="Active"?"#d1fae5":"#fee2e2", color:v.status==="Active"?"#065f46":"#991b1b" }}>
+                      {v.status||"Active"}
+                    </span>
+                  </div>
+                  <div style={{ marginBottom:8 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:4 }}>
+                      <span>⛽ {t.fuelLevel}: {v.fuelLevel||0}L / {v.fuelCapacity||80}L</span>
+                      <span style={{ fontWeight:700, color:fuelPct<25?"#ef4444":fuelPct<50?"#f59e0b":"#10b981" }}>{fuelPct}%</span>
+                    </div>
+                    <div style={{ background:"#f1f5f9", borderRadius:99, height:8, overflow:"hidden" }}>
+                      <div style={{ width:`${fuelPct}%`, height:"100%", background:fuelPct<25?"#ef4444":"#10b981", borderRadius:99 }} />
+                    </div>
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:6, fontSize:13, color:"#64748b", marginBottom:8 }}>
+                    <span>🛣️ {t.totalKM}: {(v.totalKM||0).toLocaleString()}</span>
+                    <span>📊 {v.mileage||12} km/L</span>
+                    {v.fahas&&<span>🔧 Fahas: {v.fahas}</span>}
+                    {v.insurance&&<span>🛡️ Insurance: {v.insurance}</span>}
+                  </div>
+                  {canManage&&(
+                    <div style={{ display:"flex", gap:8 }}>
+                      {v.status==="Active"?(
+                        <Btn small onClick={()=>{setShowMaint(v.plate||v.firestoreId);setMaintForm({type:"Scheduled Service",startDate:"",returnDate:"",cost:"",notes:""});}} color="#f59e0b">🔧 {t.sendMaint}</Btn>
+                      ):(
+                        <Btn small onClick={()=>onReactivate(v)} color="#10b981">✅ {t.reactivate}</Btn>
+                      )}
+                    </div>
+                  )}
+                  {showMaint===(v.plate||v.firestoreId)&&(
+                    <div style={{ marginTop:12, padding:14, background:"#f8fafc", borderRadius:8 }}>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 12px" }}>
+                        <Select label={t.maintType} value={maintForm.type} onChange={v2=>setMaintForm({...maintForm,type:v2})} options={MAINTENANCE_TYPES} />
+                        <Input label={t.cost+" (SAR)"} value={maintForm.cost} onChange={v2=>setMaintForm({...maintForm,cost:v2})} type="number" />
+                        <Input label={t.startDate} value={maintForm.startDate} onChange={v2=>setMaintForm({...maintForm,startDate:v2})} type="date" />
+                        <Input label={t.returnDate} value={maintForm.returnDate} onChange={v2=>setMaintForm({...maintForm,returnDate:v2})} type="date" />
+                        <div style={{ gridColumn:"1/-1" }}><Input label={t.notes} value={maintForm.notes} onChange={v2=>setMaintForm({...maintForm,notes:v2})} /></div>
+                      </div>
+                      <div style={{ display:"flex", gap:8 }}>
+                        <Btn small onClick={()=>{onSendMaint(v,maintForm);setShowMaint(null);}} color="#f59e0b">✅ {t.confirm}</Btn>
+                        <Btn small onClick={()=>setShowMaint(null)} color="#64748b">{t.cancel}</Btn>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <span style={{ fontSize:12,fontWeight:600,padding:"3px 10px",borderRadius:99,background:dr.status==="Active"?"#d1fae5":dr.status==="On Leave"?"#fef3c7":"#fee2e2",color:dr.status==="Active"?"#065f46":dr.status==="On Leave"?"#92400e":"#991b1b" }}>{dr.status||"Active"}</span>
+              );
+            })}
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+function DriversTab({ drivers, dc, t, canManage, onSetStatus, isAdmin, DCS, dcLabel, allDrivers }) {
+  return (
+    <div>
+      {drivers.length===0&&(
+        <Card><div style={{ textAlign:"center", padding:32, color:"#94a3b8", fontSize:15 }}>👤 {t.noDrivers}</div></Card>
+      )}
+      {DCS.filter(d=>!dc||d===dc).map(dcName=>{
+        const dv = (dc?drivers:allDrivers).filter(d=>d.dc===dcName);
+        if (!dv.length) return null;
+        return (
+          <Card key={dcName}>
+            <CardTitle style={{ color:DC_COLORS[dcName] }}>📍 {dcName} DC — {dv.length} drivers</CardTitle>
+            {dv.map(dr=>(
+              <div key={dr.uid} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
+                <div style={{ width:40, height:40, borderRadius:"50%", background:"#b45309", display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontWeight:700, fontSize:16, flexShrink:0 }}>
+                  {(dr.name||"?").charAt(0)}
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:700, fontSize:15 }}>{dr.name}</div>
+                  <div style={{ fontSize:13, color:"#64748b" }}>{dr.mobile||dr.phone}</div>
+                  {dr.licNo&&<div style={{ fontSize:12, color:"#6366f1" }}>📄 Lic: {dr.licNo} | Exp: {dr.licExp}</div>}
+                  {dr.driverCard&&<div style={{ fontSize:12, color:"#6366f1" }}>🪪 Card: {dr.driverCard} | Exp: {dr.driverCardExp}</div>}
+                </div>
+                <span style={{ fontSize:13, fontWeight:600, padding:"4px 12px", borderRadius:99,
+                  background:dr.status==="active"||dr.status==="Active"?"#d1fae5":dr.status==="On Leave"?"#fef3c7":"#fee2e2",
+                  color:dr.status==="active"||dr.status==="Active"?"#065f46":dr.status==="On Leave"?"#92400e":"#991b1b"
+                }}>{dr.status||"Active"}</span>
                 {canManage&&(
-                  <div style={{ display:"flex",gap:4,flexWrap:"wrap" }}>
-                    {dr.status!=="Active"&&<Btn small onClick={()=>setStatus(dr.uid,"Active")} color="#10b981">✅ {t.markActive}</Btn>}
-                    {dr.status==="Active"&&<Btn small onClick={()=>setStatus(dr.uid,"On Leave")} color="#f59e0b">🏖️ {t.markLeave}</Btn>}
+                  <div style={{ display:"flex", gap:6 }}>
+                    {(dr.status==="active"||dr.status==="Active")&&<Btn small onClick={()=>onSetStatus(dr,"On Leave")} color="#f59e0b">🏖️ {t.markLeave}</Btn>}
+                    {dr.status==="On Leave"&&<Btn small onClick={()=>onSetStatus(dr,"active")} color="#10b981">✅ {t.markActive}</Btn>}
                   </div>
                 )}
               </div>
@@ -298,25 +353,24 @@ function DriversTab({ users, setUsers, t, dc, isAdmin, canManage, setDone }) {
   );
 }
 
-function MaintTab({ vehicles, setVehicles, setDone, t, dc, user }) {
-  const myV = dc?vehicles.filter(v=>v.dc===dc):vehicles;
-  const withHist = myV.filter(v=>(v.maintHistory||[]).length>0);
+function MaintTab({ vehicles, t }) {
+  const withHist = vehicles.filter(v=>(v.maintHistory||[]).length>0);
   return (
     <Card>
       <CardTitle>🔧 {t.maintenance}</CardTitle>
-      {withHist.length===0&&<div style={{ textAlign:"center",padding:20,color:"#94a3b8" }}>{t.noMaint}</div>}
+      {withHist.length===0&&<div style={{ textAlign:"center", padding:24, color:"#94a3b8", fontSize:15 }}>{t.noMaint}</div>}
       {withHist.map(v=>(
-        <div key={v.plate} style={{ marginBottom:16 }}>
-          <div style={{ fontWeight:700,fontSize:14,marginBottom:8 }}>🚗 {v.plate} ({v.type}) — {v.dc} DC</div>
+        <div key={v.plate||v.firestoreId} style={{ marginBottom:18 }}>
+          <div style={{ fontWeight:700, fontSize:15, marginBottom:8 }}>🚗 {v.plate} ({v.type}) — {v.dc} DC</div>
           {(v.maintHistory||[]).map((m,i)=>(
-            <div key={i} style={{ background:"#f8fafc",borderRadius:8,padding:"10px 14px",marginBottom:6,fontSize:13 }}>
-              <div style={{ display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:4 }}>
+            <div key={i} style={{ background:"#f8fafc", borderRadius:8, padding:"12px 16px", marginBottom:8, fontSize:14 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", flexWrap:"wrap", gap:4 }}>
                 <span style={{ fontWeight:600 }}>🔧 {m.type}</span>
                 <span style={{ color:"#64748b" }}>📅 {m.date}</span>
               </div>
-              {m.startDate&&<div style={{ color:"#64748b",marginTop:2 }}>Start: {m.startDate} {m.returnDate&&"| Return: "+m.returnDate} {m.cost&&"| SAR "+m.cost}</div>}
-              {m.notes&&<div style={{ color:"#374151",marginTop:2 }}>📝 {m.notes}</div>}
-              {m.addedBy&&<div style={{ color:"#94a3b8",fontSize:11,marginTop:2 }}>By: {m.addedBy}</div>}
+              {m.startDate&&<div style={{ color:"#64748b", marginTop:4 }}>Start: {m.startDate} {m.returnDate&&"| Return: "+m.returnDate} {m.cost&&"| SAR "+m.cost}</div>}
+              {m.notes&&<div style={{ color:"#374151", marginTop:4 }}>📝 {m.notes}</div>}
+              {m.addedBy&&<div style={{ color:"#94a3b8", fontSize:12, marginTop:4 }}>By: {m.addedBy}</div>}
             </div>
           ))}
         </div>
@@ -324,3 +378,5 @@ function MaintTab({ vehicles, setVehicles, setDone, t, dc, user }) {
     </Card>
   );
 }
+
+const DC_COLORS = { Riyadh:"#1A3A5C", Jeddah:"#0f766e", Dammam:"#7c3aed" };

@@ -171,41 +171,41 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
     return (
       <Card>
         <div style={{ display:"flex",justifyContent:"space-between",marginBottom:6,flexWrap:"wrap",gap:6 }}>
-          <span style={{ fontWeight:700,fontSize:13,color:"#6366f1" }}>{inv.id}</span>
-          <span style={{ fontSize:11,fontWeight:600,padding:"3px 8px",borderRadius:6,background:inv.dtype==="incity"?"#dbeafe":"#fef3c7",color:inv.dtype==="incity"?"#1e40af":"#92400e" }}>
+          <span style={{ fontWeight:700,fontSize:14,color:"#6366f1" }}>{inv.id}</span>
+          <span style={{ fontSize:12,fontWeight:600,padding:"3px 8px",borderRadius:6,background:inv.dtype==="incity"?"#dbeafe":"#fef3c7",color:inv.dtype==="incity"?"#1e40af":"#92400e" }}>
             {inv.dtype==="incity"?"🏙️ "+t.inCity:"🛣️ "+t.outCity}
           </span>
         </div>
         <div style={{ fontWeight:700,fontSize:15,color:"#0f172a",marginBottom:4 }}>{inv.customer}</div>
-        <div style={{ fontSize:13,color:"#64748b",marginBottom:4 }}>📍 {inv.city} | 🌡️ {inv.storage}</div>
-        {inv.vehicle&&<div style={{ fontSize:13,color:"#64748b",marginBottom:4 }}>🚗 {inv.vehicle}</div>}
+        <div style={{ fontSize:14,color:"#64748b",marginBottom:4 }}>📍 {inv.city} | 🌡️ {inv.storage}</div>
+        {inv.vehicle&&<div style={{ fontSize:14,color:"#64748b",marginBottom:4 }}>🚗 {inv.vehicle}</div>}
 
         {active?.id===inv.id?(
           <div style={{ marginTop:12,border:"1px solid #e2e8f0",borderRadius:8,padding:14,background:"#f8fafc" }}>
             <div style={{ marginBottom:14 }}>
-              <div style={{ fontWeight:600,fontSize:13,marginBottom:6 }}>{t.gpsStep}</div>
+              <div style={{ fontWeight:600,fontSize:14,marginBottom:6 }}>{t.gpsStep}</div>
               <button onClick={getGPS} disabled={locating}
-                style={{ background:gps?"#10b981":"#0ea5e9",color:"white",border:"none",padding:"9px 16px",borderRadius:7,cursor:"pointer",fontWeight:600,fontSize:13,width:"100%" }}>
+                style={{ background:gps?"#10b981":"#0ea5e9",color:"white",border:"none",padding:"9px 16px",borderRadius:7,cursor:"pointer",fontWeight:600,fontSize:14,width:"100%" }}>
                 {locating?t.gettingGPS:gps?"✅ GPS: "+gps.lat.toFixed(4)+", "+gps.lng.toFixed(4):"📍 "+t.getGPS}
               </button>
             </div>
             <div style={{ marginBottom:14 }}>
-              <div style={{ fontWeight:600,fontSize:13,marginBottom:6 }}>{t.podStep}</div>
+              <div style={{ fontWeight:600,fontSize:14,marginBottom:6 }}>{t.podStep}</div>
               <input type="file" accept="image/*" capture="environment" id={"pod_"+inv.id} style={{ display:"none" }} onChange={handlePhoto} />
-              <label htmlFor={"pod_"+inv.id} style={{ display:"inline-block",background:"#8b5cf6",color:"white",border:"none",padding:"9px 16px",borderRadius:7,cursor:"pointer",fontWeight:600,fontSize:13 }}>
+              <label htmlFor={"pod_"+inv.id} style={{ display:"inline-block",background:"#8b5cf6",color:"white",border:"none",padding:"9px 16px",borderRadius:7,cursor:"pointer",fontWeight:600,fontSize:14 }}>
                 📸 {pod?"Change Photo":"Take Photo"}
               </label>
               {pod&&<img src={pod} alt="POD" style={{ display:"block",marginTop:8,width:"100%",maxWidth:200,borderRadius:8,border:"2px solid #e2e8f0" }} />}
             </div>
             <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
-              <button onClick={()=>submit(inv,"delivered")} style={{ background:"#10b981",color:"white",border:"none",padding:"10px 16px",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:13 }}>✅ {t.markDelivered}</button>
-              <button onClick={()=>submit(inv,"failed")} style={{ background:"#ef4444",color:"white",border:"none",padding:"10px 16px",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:13 }}>❌ {t.markFailed}</button>
-              <button onClick={()=>{setActive(null);setPod(null);setGps(null);}} style={{ background:"#f1f5f9",border:"none",padding:"10px 14px",borderRadius:8,fontWeight:600,cursor:"pointer",fontSize:13,color:"#64748b" }}>{t.cancel}</button>
+              <button onClick={()=>submit(inv,"delivered")} style={{ background:"#10b981",color:"white",border:"none",padding:"10px 16px",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:14 }}>✅ {t.markDelivered}</button>
+              <button onClick={()=>submit(inv,"failed")} style={{ background:"#ef4444",color:"white",border:"none",padding:"10px 16px",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:14 }}>❌ {t.markFailed}</button>
+              <button onClick={()=>{setActive(null);setPod(null);setGps(null);}} style={{ background:"#f1f5f9",border:"none",padding:"10px 14px",borderRadius:8,fontWeight:600,cursor:"pointer",fontSize:14,color:"#64748b" }}>{t.cancel}</button>
             </div>
           </div>
         ):(
           <button onClick={()=>{setActive(inv);setGps(null);setPod(null);}}
-            style={{ background:"#1A3A5C",color:"white",border:"none",padding:"10px 20px",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:13,marginTop:8,width:"100%" }}>
+            style={{ background:"#1A3A5C",color:"white",border:"none",padding:"10px 20px",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:14,marginTop:8,width:"100%" }}>
             {t.startDelivery} →
           </button>
         )}
@@ -221,7 +221,7 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
       <div style={{ display:"flex",gap:8,marginBottom:16 }}>
         {[["deliveries","📦","My Deliveries"],["history","📊","Delivery History"]].map(([v,icon,label])=>(
           <button key={v} onClick={()=>setView(v)}
-            style={{ padding:"8px 18px",borderRadius:8,border:"none",background:view===v?"#1A3A5C":"#f1f5f9",color:view===v?"white":"#374151",cursor:"pointer",fontSize:13,fontWeight:600 }}>
+            style={{ padding:"8px 18px",borderRadius:8,border:"none",background:view===v?"#1A3A5C":"#f1f5f9",color:view===v?"white":"#374151",cursor:"pointer",fontSize:14,fontWeight:600 }}>
             {icon} {label}
           </button>
         ))}
@@ -233,13 +233,13 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
           {assignedVehicle&&(
             <Card style={{ borderLeft:"4px solid #0891b2" }}>
               <CardTitle>🚗 {t.vehicle}: {assignedVehicle.plate}</CardTitle>
-              <div style={{ display:"flex",gap:16,fontSize:13,color:"#64748b",flexWrap:"wrap",marginBottom:8 }}>
+              <div style={{ display:"flex",gap:16,fontSize:14,color:"#64748b",flexWrap:"wrap",marginBottom:8 }}>
                 <span>{assignedVehicle.type} | {assignedVehicle.brand} {assignedVehicle.model}</span>
                 <span>⛽ {assignedVehicle.fuelLevel||0}L / {assignedVehicle.fuelCapacity||80}L</span>
                 <span>🛣️ {assignedVehicle.totalKM||0} KM</span>
               </div>
               {vAlerts.length>0&&vAlerts.map((a,i)=>(
-                <div key={i} style={{ background:a.type==="error"?"#fee2e2":"#fef3c7",color:a.type==="error"?"#991b1b":"#92400e",borderRadius:6,padding:"6px 12px",fontSize:13,fontWeight:600,marginBottom:4 }}>
+                <div key={i} style={{ background:a.type==="error"?"#fee2e2":"#fef3c7",color:a.type==="error"?"#991b1b":"#92400e",borderRadius:6,padding:"6px 12px",fontSize:14,fontWeight:600,marginBottom:4 }}>
                   {a.type==="error"?"🔴":"⚠️"} {a.msg}
                 </div>
               ))}
@@ -252,14 +252,14 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
               <div>
                 {tripStarted?(
                   <>
-                    <div style={{ fontWeight:700,fontSize:13,color:"#10b981",marginBottom:4 }}>🟢 {t.tripActive}</div>
-                    <div style={{ display:"flex",gap:20,fontSize:13 }}>
+                    <div style={{ fontWeight:700,fontSize:14,color:"#10b981",marginBottom:4 }}>🟢 {t.tripActive}</div>
+                    <div style={{ display:"flex",gap:20,fontSize:14 }}>
                       <span>⏱️ {t.elapsed}: <b style={{ fontFamily:"monospace",fontSize:16 }}>{formatTime(elapsed)}</b></span>
                       <span>🛣️ {t.distance}: <b>{tripDistance} km</b></span>
                     </div>
                   </>
                 ):(
-                  <div style={{ fontSize:13,color:"#64748b" }}>Press Start Trip to begin tracking time & distance</div>
+                  <div style={{ fontSize:14,color:"#64748b" }}>Press Start Trip to begin tracking time & distance</div>
                 )}
               </div>
               <div style={{ display:"flex",gap:8 }}>
@@ -277,7 +277,7 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
             {[[t.remaining,pending.length,"#0f172a"],[t.inCity,inCity.length,"#1e40af"],[t.outCity,outCity.length,"#92400e"],[t.completed,doneList.length,"#10b981"]].map(([l,v,c])=>(
               <div key={l} style={{ background:"white",borderRadius:10,padding:16,textAlign:"center",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
                 <div style={{ fontWeight:900,fontSize:24,color:c }}>{v}</div>
-                <div style={{ fontSize:12,color:"#94a3b8" }}>{l}</div>
+                <div style={{ fontSize:13,color:"#94a3b8" }}>{l}</div>
               </div>
             ))}
           </div>
@@ -302,7 +302,7 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
               {doneList.map(inv=>(
                 <Card key={inv.id} style={{ opacity:0.7 }}>
                   <div style={{ display:"flex",justifyContent:"space-between" }}>
-                    <span style={{ fontWeight:700,fontSize:13,color:"#6366f1" }}>{inv.id}</span>
+                    <span style={{ fontWeight:700,fontSize:14,color:"#6366f1" }}>{inv.id}</span>
                     <Badge status="delivered" />
                   </div>
                   <div style={{ fontWeight:600,fontSize:14 }}>{inv.customer}</div>
@@ -319,7 +319,7 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
           {history.length===0&&<div style={{ textAlign:"center",padding:30,color:"#94a3b8" }}>{t.noHistory}</div>}
           {history.length>0&&(
             <div style={{ overflowX:"auto" }}>
-              <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
+              <table style={{ width:"100%",borderCollapse:"collapse",fontSize:14 }}>
                 <thead>
                   <tr style={{ background:"#1A3A5C" }}>
                     {[t.histDate,t.histVehicle,t.histInvoices,"Delivered","Failed",t.histDistance,"Duration",t.histSuccess,t.histType].map(h=>(
@@ -340,7 +340,7 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
                       <td style={{ padding:"10px",textAlign:"center" }}>
                         <span style={{ fontWeight:700,color:h.successRate>=80?"#10b981":h.successRate>=50?"#f59e0b":"#ef4444" }}>{h.successRate}%</span>
                       </td>
-                      <td style={{ padding:"10px",fontSize:12 }}>
+                      <td style={{ padding:"10px",fontSize:13 }}>
                         🏙️{h.inCity} / 🛣️{h.outCity}
                       </td>
                     </tr>

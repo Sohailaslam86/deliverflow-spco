@@ -83,14 +83,14 @@ function DCReportBox({ dc, invoices, t }) {
         <StatCard icon="⏳" label={t.pending} value={inv.filter(i=>i.status==="pending").length} color="#f59e0b" />
         <StatCard icon="❌" label={t.failed} value={inv.filter(i=>i.status==="failed").length} color="#ef4444" />
       </div>
-      <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:3 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:3 }}>
         <span style={{ fontWeight:600 }}>{t.deliveryRate}</span>
         <span style={{ fontWeight:800, color:rate>=80?"#10b981":rate>=50?"#f59e0b":"#ef4444" }}>{rate}%</span>
       </div>
       <div style={{ background:"#f1f5f9", borderRadius:99, height:6, overflow:"hidden" }}>
         <div style={{ width:`${rate}%`, height:"100%", background:rate>=80?"#10b981":rate>=50?"#f59e0b":"#ef4444", borderRadius:99 }} />
       </div>
-      <div style={{ fontSize:11, color:"#94a3b8", marginTop:3 }}>{t.howCalc}: Delivered ÷ (Total - Scheduled) × 100</div>
+      <div style={{ fontSize:12, color:"#94a3b8", marginTop:3 }}>{t.howCalc}: Delivered ÷ (Total - Scheduled) × 100</div>
     </Card>
   );
 }
@@ -137,10 +137,10 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
 
       {/* Period Filter */}
       <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap", alignItems:"center" }}>
-        <span style={{ fontSize:13, fontWeight:600, color:"#374151", alignSelf:"center" }}>{t.period}:</span>
+        <span style={{ fontSize:14, fontWeight:600, color:"#374151", alignSelf:"center" }}>{t.period}:</span>
         {periods.map(([v,l])=>(
           <button key={v} onClick={()=>setPeriod(v)}
-            style={{ padding:"6px 14px", borderRadius:8, border:"none", background:period===v?"#1A3A5C":"#f1f5f9", color:period===v?"white":"#374151", cursor:"pointer", fontSize:13, fontWeight:600 }}>
+            style={{ padding:"6px 14px", borderRadius:8, border:"none", background:period===v?"#1A3A5C":"#f1f5f9", color:period===v?"white":"#374151", cursor:"pointer", fontSize:14, fontWeight:600 }}>
             {l}
           </button>
         ))}
@@ -168,7 +168,7 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
             <div style={{ background:"#f1f5f9", borderRadius:99, height:10, overflow:"hidden" }}>
               <div style={{ width:`${rate}%`, height:"100%", background:rate>=80?"#10b981":rate>=50?"#f59e0b":"#ef4444", borderRadius:99 }} />
             </div>
-            <div style={{ fontSize:11, color:"#94a3b8", marginTop:4 }}>{t.howCalc}: Delivered ÷ (Total - Scheduled) × 100</div>
+            <div style={{ fontSize:12, color:"#94a3b8", marginTop:4 }}>{t.howCalc}: Delivered ÷ (Total - Scheduled) × 100</div>
           </Card>
 
           {!dc&&(
@@ -186,7 +186,7 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
               const d=myInv.filter(i=>i.inst===inst&&i.status==="delivered").length;
               return (
                 <div key={inst} style={{ marginBottom:12 }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4, fontSize:13 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4, fontSize:14 }}>
                     <span style={{ fontWeight:600 }}>{inst==="Government"?"🏛️ "+t.govt:"🏥 "+t.priv}</span>
                     <span style={{ color:"#64748b" }}>{d}/{n} — {n>0?Math.round(d/n*100):0}%</span>
                   </div>
@@ -205,7 +205,7 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
         <Card>
           <CardTitle>👤 {t.driverPerf}
             <button onClick={()=>downloadCSV(driverStats.map(d=>({Driver:d.name,Total:d.total,Delivered:d.delivered,Failed:d.failed,Rate:d.rate+"%",InCity:d.incity,OutCity:d.outcity})),"driver_report.csv")}
-              style={{ marginLeft:"auto", background:"#10b981", color:"white", border:"none", padding:"5px 12px", borderRadius:6, cursor:"pointer", fontSize:12, fontWeight:600 }}>
+              style={{ marginLeft:"auto", background:"#10b981", color:"white", border:"none", padding:"5px 12px", borderRadius:6, cursor:"pointer", fontSize:13, fontWeight:600 }}>
               ⬇ {t.csvDownload}
             </button>
           </CardTitle>
@@ -216,7 +216,7 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
                 <span style={{ fontWeight:700, fontSize:14 }}>#{i+1} {d.name}</span>
                 <span style={{ fontWeight:800, fontSize:18, color:d.rate>=80?"#10b981":d.rate>=60?"#f59e0b":"#ef4444" }}>{d.rate}%</span>
               </div>
-              <div style={{ display:"flex", gap:16, fontSize:13, color:"#64748b", flexWrap:"wrap", marginBottom:6 }}>
+              <div style={{ display:"flex", gap:16, fontSize:14, color:"#64748b", flexWrap:"wrap", marginBottom:6 }}>
                 <span>📋 {d.total}</span>
                 <span style={{ color:"#10b981" }}>✅ {d.delivered}</span>
                 <span style={{ color:"#ef4444" }}>❌ {d.failed}</span>
@@ -256,9 +256,9 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
                 </div>
                 {dv.map(v=>(
                   <div key={v.plate} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
-                    <span style={{ fontWeight:700, fontSize:13, minWidth:100 }}>{v.plate}</span>
-                    <span style={{ fontSize:12, color:"#64748b", flex:1 }}>{v.type} | {(v.totalKM||0).toLocaleString()} km</span>
-                    <span style={{ fontSize:12, fontWeight:600, padding:"2px 8px", borderRadius:99, background:v.status==="Maintenance"?"#fef3c7":"#d1fae5", color:v.status==="Maintenance"?"#92400e":"#065f46" }}>{v.status}</span>
+                    <span style={{ fontWeight:700, fontSize:14, minWidth:100 }}>{v.plate}</span>
+                    <span style={{ fontSize:13, color:"#64748b", flex:1 }}>{v.type} | {(v.totalKM||0).toLocaleString()} km</span>
+                    <span style={{ fontSize:13, fontWeight:600, padding:"2px 8px", borderRadius:99, background:v.status==="Maintenance"?"#fef3c7":"#d1fae5", color:v.status==="Maintenance"?"#92400e":"#065f46" }}>{v.status}</span>
                   </div>
                 ))}
               </Card>
@@ -267,8 +267,8 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
           {dc&&myVeh.map(v=>(
             <div key={v.plate} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
               <span style={{ fontWeight:700, fontSize:14, minWidth:100 }}>{v.plate}</span>
-              <span style={{ fontSize:13, color:"#64748b", flex:1 }}>{v.type} {v.brand} | {(v.totalKM||0).toLocaleString()} km</span>
-              <span style={{ fontSize:12, fontWeight:600, padding:"3px 10px", borderRadius:99, background:v.status==="Maintenance"?"#fef3c7":"#d1fae5", color:v.status==="Maintenance"?"#92400e":"#065f46" }}>{v.status}</span>
+              <span style={{ fontSize:14, color:"#64748b", flex:1 }}>{v.type} {v.brand} | {(v.totalKM||0).toLocaleString()} km</span>
+              <span style={{ fontSize:13, fontWeight:600, padding:"3px 10px", borderRadius:99, background:v.status==="Maintenance"?"#fef3c7":"#d1fae5", color:v.status==="Maintenance"?"#92400e":"#065f46" }}>{v.status}</span>
             </div>
           ))}
         </div>
@@ -280,7 +280,7 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
           <Card style={{ borderTop:"4px solid #f59e0b" }}>
             <CardTitle>⛽ {t.fuelRep} — {t.overall}
               <button onClick={()=>downloadCSV(myLogs.map(l=>({ID:l.id,Date:l.date,Vehicle:l.vehicle,Driver:l.driver,Liters:l.liters,SAR:l.sar,KM:l.tripKM,Efficiency:l.liters>0?(l.tripKM/l.liters).toFixed(1)+" km/L":"-",DC:l.dc})),"fuel_report.csv")}
-                style={{ marginLeft:"auto", background:"#10b981", color:"white", border:"none", padding:"5px 12px", borderRadius:6, cursor:"pointer", fontSize:12, fontWeight:600 }}>
+                style={{ marginLeft:"auto", background:"#10b981", color:"white", border:"none", padding:"5px 12px", borderRadius:6, cursor:"pointer", fontSize:13, fontWeight:600 }}>
                 ⬇ {t.csvDownload}
               </button>
             </CardTitle>
@@ -306,7 +306,7 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
             );
           })}
           {myLogs.map(log=>(
-            <div key={log.id} style={{ display:"flex", gap:10, padding:"8px 0", borderBottom:"1px solid #f1f5f9", fontSize:13, flexWrap:"wrap" }}>
+            <div key={log.id} style={{ display:"flex", gap:10, padding:"8px 0", borderBottom:"1px solid #f1f5f9", fontSize:14, flexWrap:"wrap" }}>
               <span style={{ fontWeight:600, color:"#6366f1", minWidth:90 }}>{log.vehicle}</span>
               <span style={{ flex:1 }}>{log.driver||"-"}</span>
               <span>⛽ {log.liters}L</span>
@@ -323,12 +323,12 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
       {tab==="unassigned"&&(
         <Card>
           <CardTitle>⚪ Unassigned Driver Report — {period==="today"?"Today":period==="week"?"This Week":period==="month"?"This Month":"All Time"}</CardTitle>
-          <div style={{ marginBottom:16,fontSize:13,color:"#64748b" }}>
+          <div style={{ marginBottom:16,fontSize:14,color:"#64748b" }}>
             Shows drivers who had no deliveries assigned for the selected period. Use for monthly incentive calculation.
           </div>
           {driverStats.length===0&&<div style={{ textAlign:"center",padding:20,color:"#94a3b8" }}>{t.noData}</div>}
           <div style={{ overflowX:"auto" }}>
-            <table style={{ width:"100%",borderCollapse:"collapse",fontSize:13 }}>
+            <table style={{ width:"100%",borderCollapse:"collapse",fontSize:14 }}>
               <thead>
                 <tr style={{ background:"#1A3A5C" }}>
                   {["#","Driver","Total Invoices","Delivered","Success Rate","Unassigned Days","Status"].map(h=>(
@@ -353,7 +353,7 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
                         <span style={{ fontWeight:700,color:isUnassigned?"#f97316":"#10b981" }}>{isUnassigned?"Unassigned":"Active"}</span>
                       </td>
                       <td style={{ padding:"10px 12px" }}>
-                        <span style={{ fontSize:12,fontWeight:600,padding:"2px 8px",borderRadius:99,background:driver.status==="Active"?"#d1fae5":driver.status==="On Leave"?"#fef3c7":"#fee2e2",color:driver.status==="Active"?"#065f46":driver.status==="On Leave"?"#92400e":"#991b1b" }}>
+                        <span style={{ fontSize:13,fontWeight:600,padding:"2px 8px",borderRadius:99,background:driver.status==="Active"?"#d1fae5":driver.status==="On Leave"?"#fef3c7":"#fee2e2",color:driver.status==="Active"?"#065f46":driver.status==="On Leave"?"#92400e":"#991b1b" }}>
                           {driver.status||"Active"}
                         </span>
                       </td>
@@ -364,8 +364,8 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
             </table>
           </div>
           <div style={{ marginTop:12,display:"flex",gap:8 }}>
-            <div style={{ fontSize:12,color:"#f97316",fontWeight:600 }}>⚪ Unassigned: {users.filter(u=>u.role==="driver"&&(!dc||u.dc===dc)&&!driverStats.find(d=>d.name===u.name)).length} driver(s)</div>
-            <div style={{ fontSize:12,color:"#10b981",fontWeight:600 }}>✅ Active: {driverStats.length} driver(s)</div>
+            <div style={{ fontSize:13,color:"#f97316",fontWeight:600 }}>⚪ Unassigned: {users.filter(u=>u.role==="driver"&&(!dc||u.dc===dc)&&!driverStats.find(d=>d.name===u.name)).length} driver(s)</div>
+            <div style={{ fontSize:13,color:"#10b981",fontWeight:600 }}>✅ Active: {driverStats.length} driver(s)</div>
           </div>
         </Card>
       )}
@@ -380,16 +380,16 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
               { label:"🟡 "+t.aging2+" (2-3 "+t.days+")", count:agingInv.filter(i=>i.days>1&&i.days<=3).length, color:"#f59e0b" },
               { label:"🔴 "+t.critical+" (4+ "+t.days+")", count:agingInv.filter(i=>i.days>3).length, color:"#ef4444" },
             ].map(s=>(
-              <div key={s.label} style={{ fontSize:13, fontWeight:600, color:s.color }}>{s.label}: <b>{s.count}</b></div>
+              <div key={s.label} style={{ fontSize:14, fontWeight:600, color:s.color }}>{s.label}: <b>{s.count}</b></div>
             ))}
           </div>
           {agingInv.length===0&&<div style={{ textAlign:"center", padding:20, color:"#94a3b8" }}>{t.noData}</div>}
           {agingInv.map(inv=>(
             <div key={inv.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
-              <span style={{ fontWeight:700, fontSize:13, color:"#6366f1", minWidth:130 }}>{inv.id}</span>
-              <span style={{ flex:1, fontSize:13 }}>{inv.customer}</span>
-              <span style={{ fontSize:12, color:"#64748b" }}>{inv.dc} DC</span>
-              <span style={{ fontSize:12, fontWeight:600, padding:"2px 8px", borderRadius:99, background:inv.days<=1?"#d1fae5":inv.days<=3?"#fef3c7":"#fee2e2", color:inv.days<=1?"#065f46":inv.days<=3?"#92400e":"#991b1b" }}>
+              <span style={{ fontWeight:700, fontSize:14, color:"#6366f1", minWidth:130 }}>{inv.id}</span>
+              <span style={{ flex:1, fontSize:14 }}>{inv.customer}</span>
+              <span style={{ fontSize:13, color:"#64748b" }}>{inv.dc} DC</span>
+              <span style={{ fontSize:13, fontWeight:600, padding:"2px 8px", borderRadius:99, background:inv.days<=1?"#d1fae5":inv.days<=3?"#fef3c7":"#fee2e2", color:inv.days<=1?"#065f46":inv.days<=3?"#92400e":"#991b1b" }}>
                 {inv.days}{t.days} — {inv.days<=1?t.fresh:inv.days<=3?t.aging2:t.critical}
               </span>
             </div>
