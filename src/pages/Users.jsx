@@ -3,7 +3,7 @@ import { useState } from "react";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc, collection, addDoc, updateDoc, getDocs } from "firebase/firestore";
 import { auth, db } from "../firebase";
-import { uploadImage } from "../cloudinaryService.js";
+import CameraCapture from "../components/CameraCapture.jsx";
 import { Card, CardTitle, Btn, Input, Select, Textarea, SuccessMsg, TabBar } from "../components/Shared.jsx";
 import { DEPARTMENTS, RC, RI, genId } from "../data/masterData.js";
 
@@ -520,19 +520,15 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                       <input type="date" value={form.licExp} onChange={e=>F("licExp",e.target.value)}
                         style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box"}}/>
                     </div>
-                    <div style={{gridColumn:"1/-1",marginBottom:12}}>
-                      <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>{t.licPic}</label>
-                      {form.licPicUrl?(
-                        <div style={{display:"flex",alignItems:"center",gap:8}}>
-                          <img src={form.licPicUrl} alt="License" style={{width:80,height:55,objectFit:"cover",borderRadius:6,border:"1px solid #e2e8f0"}}/>
-                          <Btn small onClick={()=>F("licPicUrl","")} color="#ef4444">Remove</Btn>
-                        </div>
-                      ):(
-                        <div>
-                          <input type="file" accept="image/*" onChange={e=>handleImageUpload(e.target.files[0],"licPicUrl")} disabled={uploading} style={{fontSize:13}}/>
-                          {uploading&&<div style={{fontSize:12,color:"#6366f1",marginTop:4}}>⏳ {t.uploading}</div>}
-                        </div>
-                      )}
+                    <div style={{gridColumn:"1/-1"}}>
+                      <CameraCapture
+                        label={t.licPic}
+                        value={form.licPicUrl}
+                        onChange={url=>F("licPicUrl",url)}
+                        folder="drivers"
+                        lang={lang}
+                        required
+                      />
                     </div>
                     <Input label={t.driverCard} value={form.driverCard} onChange={v=>F("driverCard",v)}/>
                     <div style={{marginBottom:12}}>
@@ -540,19 +536,15 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                       <input type="date" value={form.driverCardExp} onChange={e=>F("driverCardExp",e.target.value)}
                         style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box"}}/>
                     </div>
-                    <div style={{gridColumn:"1/-1",marginBottom:12}}>
-                      <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>{t.driverCardPic}</label>
-                      {form.driverCardPicUrl?(
-                        <div style={{display:"flex",alignItems:"center",gap:8}}>
-                          <img src={form.driverCardPicUrl} alt="Card" style={{width:80,height:55,objectFit:"cover",borderRadius:6,border:"1px solid #e2e8f0"}}/>
-                          <Btn small onClick={()=>F("driverCardPicUrl","")} color="#ef4444">Remove</Btn>
-                        </div>
-                      ):(
-                        <div>
-                          <input type="file" accept="image/*" onChange={e=>handleImageUpload(e.target.files[0],"driverCardPicUrl")} disabled={uploading} style={{fontSize:13}}/>
-                          {uploading&&<div style={{fontSize:12,color:"#6366f1",marginTop:4}}>⏳ {t.uploading}</div>}
-                        </div>
-                      )}
+                    <div style={{gridColumn:"1/-1"}}>
+                      <CameraCapture
+                        label={t.driverCardPic}
+                        value={form.driverCardPicUrl}
+                        onChange={url=>F("driverCardPicUrl",url)}
+                        folder="drivers"
+                        lang={lang}
+                        required
+                      />
                     </div>
                   </>
                 ):(
