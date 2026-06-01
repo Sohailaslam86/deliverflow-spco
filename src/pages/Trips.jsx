@@ -163,8 +163,16 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
 
       // Update invoices to intransit
       if (selInv.length > 0) {
+        for (const invId of selInv) {
+          const inv = invoices.find(i => i.id === invId || i.firestoreId === invId);
+          if (inv?.firestoreId) {
+            try { await updateDoc(doc(db, "invoices", inv.firestoreId), {status:"intransit", tripId:tripNum}); } catch(e) { console.error(e); }
+          }
+        }
         setInvoices(prev => prev.map(i =>
-          selInv.includes(i.id) ? {...i, status:"intransit", tripId:tripNum} : i
+          selInv.includes(i.id) || selInv.includes(i.firestoreId)
+            ? {...i, status:"intransit", tripId:tripNum}
+            : i
         ));
       }
 
@@ -179,16 +187,65 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
   }
 
   async function receiveTrip(tripId) {
+    const trip = trips.find(tr => tr.id === tripId);
+    if (!trip) return;
+
     const updateData = {
       status: "received",
       receivedBy: user.name,
       receivedAt: new Date().toLocaleString()
     };
+
     try {
-      const trip = trips.find(tr => tr.id === tripId);
+      // Trip update karo
       if (trip?.firestoreId) {
         await updateDoc(doc(db, "trips", trip.firestoreId), updateData);
       }
+
+      // Trip mein attached invoices ko update karo
+      // Transit invoices ka dc aur status update karo
+      if (trip.invoiceIds && trip.invoiceIds.length > 0) {
+        const destDC = trip.toCity?.startsWith("DC-") ? trip.toCity.replace("DC-","") : null;
+
+        for (const invId of trip.invoiceIds) {
+          const inv = invoices.find(i => i.id === invId || i.firestoreId === invId);
+          if (!inv) continue;
+
+          let invUpdate = {};
+
+          if (inv.status === "intransit") {
+            // Normal assigned invoice — pending karo
+            invUpdate = { status:"pending", tripId:null };
+          } else if (inv.status === "hold_ship" && destDC) {
+            // Transit invoice — DC change karo aur pending karo
+            invUpdate = {
+              status:"pending",
+              dc: destDC,
+              city: destDC,
+              holdType: null,
+              holdReason: null,
+              holdOrigin: null,
+              tripId: null
+            };
+          }
+
+          if (Object.keys(invUpdate).length > 0) {
+            if (inv.firestoreId) {
+              try { await updateDoc(doc(db, "invoices", inv.firestoreId), invUpdate); } catch(e) { console.error(e); }
+            }
+          }
+        }
+
+        // State update
+        setInvoices(prev => prev.map(i => {
+          if (!trip.invoiceIds.includes(i.id) && !trip.invoiceIds.includes(i.firestoreId)) return i;
+          const destDC = trip.toCity?.startsWith("DC-") ? trip.toCity.replace("DC-","") : null;
+          if (i.status === "intransit") return {...i, status:"pending", tripId:null};
+          if (i.status === "hold_ship" && destDC) return {...i, status:"pending", dc:destDC, city:destDC, holdType:null, holdReason:null, holdOrigin:null, tripId:null};
+          return i;
+        }));
+      }
+
       setTrips(prev => prev.map(tr => tr.id===tripId ? {...tr,...updateData} : tr));
       setDone(t.tripReceived);
     } catch(e) {
@@ -338,24 +395,88 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
             </div>
           )}
 
-          {/* Pending invoices */}
-          {pendingForTrip.length>0&&(
-            <div style={{ marginBottom:14 }}>
-              <div style={{ fontWeight:600, fontSize:14, color:"#374151", marginBottom:8 }}>📋 {t.attachInv}</div>
-              <div style={{ display:"flex", gap:8, marginBottom:8 }}>
-                <Btn small onClick={()=>setSelInv(pendingForTrip.map(i=>i.id))} color="#6366f1">{t.selectAll}</Btn>
-                <Btn small onClick={()=>setSelInv([])} color="#64748b">{t.clearAll}</Btn>
+          {/* Invoice Selection — 2 types */}
+          {(()=>{
+            // Destination DC — agar DC trip hai
+            const destDC = form.toCity?.startsWith("DC-") ? form.toCity.replace("DC-","") : null;
+
+            // Type 1 — Assigned invoices in current DC (normal)
+            const assignedInvs = pendingForTrip;
+
+            // Type 2 — Hold Pending Shipment invoices
+            // Jeddah DC manager ne hold kiya, Origin: current DC (Riyadh)
+            // Sirf tab dikhen jab destination DC match kare
+            const transitInvs = destDC ? invoices.filter(i =>
+              i.status === "hold_ship" &&
+              i.holdOrigin === dc &&
+              i.dc === destDC
+            ) : [];
+
+            if (assignedInvs.length === 0 && transitInvs.length === 0) return null;
+
+            return (
+              <div style={{ marginBottom:14 }}>
+                {/* Normal assigned invoices */}
+                {assignedInvs.length>0&&(
+                  <div style={{ marginBottom:12 }}>
+                    <div style={{ fontWeight:700, fontSize:14, color:"#374151", marginBottom:8 }}>
+                      📋 {t.attachInv}
+                      <span style={{ fontSize:12, color:"#64748b", fontWeight:400, marginLeft:8 }}>
+                        (Assigned invoices — {dc} DC)
+                      </span>
+                    </div>
+                    <div style={{ display:"flex", gap:8, marginBottom:8 }}>
+                      <Btn small onClick={()=>setSelInv(p=>[...new Set([...p,...assignedInvs.map(i=>i.id)])])} color="#6366f1">{t.selectAll}</Btn>
+                      <Btn small onClick={()=>setSelInv([])} color="#64748b">{t.clearAll}</Btn>
+                    </div>
+                    {assignedInvs.map(inv=>(
+                      <div key={inv.id} onClick={()=>setSelInv(p=>p.includes(inv.id)?p.filter(x=>x!==inv.id):[...p,inv.id])}
+                        style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 12px", border:`1px solid ${selInv.includes(inv.id)?"#6366f1":"#e2e8f0"}`, background:selInv.includes(inv.id)?"#eef2ff":"white", borderRadius:8, cursor:"pointer", marginBottom:4 }}>
+                        <span style={{ color:"#6366f1", fontSize:18 }}>{selInv.includes(inv.id)?"☑":"☐"}</span>
+                        <div style={{ flex:1 }}>
+                          <span style={{ fontWeight:600, fontSize:14 }}>{inv.id}</span>
+                          <span style={{ fontSize:13, color:"#64748b", marginLeft:8 }}>{inv.customer}</span>
+                        </div>
+                        <span style={{ fontSize:12, color:"#3b82f6", fontWeight:600 }}>📍 {inv.dc}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Transit invoices — Hold Pending Shipment */}
+                {transitInvs.length>0&&(
+                  <div>
+                    <div style={{ fontWeight:700, fontSize:14, color:"#7c3aed", marginBottom:8 }}>
+                      🚚 Pending Shipment Invoices → {destDC} DC
+                      <span style={{ fontSize:12, color:"#64748b", fontWeight:400, marginLeft:8 }}>
+                        (Held by {destDC} DC, Origin: {dc})
+                      </span>
+                    </div>
+                    <div style={{ background:"#f5f3ff", border:"1px solid #c4b5fd", borderRadius:8, padding:"10px 14px", fontSize:13, color:"#6b21a8", marginBottom:8 }}>
+                      📌 These invoices are physically at {dc} DC — they will be sent to {destDC} DC via this trip
+                    </div>
+                    <div style={{ display:"flex", gap:8, marginBottom:8 }}>
+                      <Btn small onClick={()=>setSelInv(p=>[...new Set([...p,...transitInvs.map(i=>i.id||i.firestoreId)])])} color="#7c3aed">Select All Transit</Btn>
+                    </div>
+                    {transitInvs.map(inv=>(
+                      <div key={inv.id||inv.firestoreId} onClick={()=>{const id=inv.id||inv.firestoreId;setSelInv(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);}}
+                        style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 12px", border:`2px solid ${selInv.includes(inv.id||inv.firestoreId)?"#7c3aed":"#c4b5fd"}`, background:selInv.includes(inv.id||inv.firestoreId)?"#f5f3ff":"white", borderRadius:8, cursor:"pointer", marginBottom:4 }}>
+                        <span style={{ color:"#7c3aed", fontSize:18 }}>{selInv.includes(inv.id||inv.firestoreId)?"☑":"☐"}</span>
+                        <div style={{ flex:1 }}>
+                          <span style={{ fontWeight:600, fontSize:14, color:"#7c3aed" }}>{inv.id}</span>
+                          <span style={{ fontSize:13, color:"#64748b", marginLeft:8 }}>{inv.customer}</span>
+                        </div>
+                        <div style={{ textAlign:"right" }}>
+                          <div style={{ fontSize:12, color:"#7c3aed", fontWeight:600 }}>→ {destDC} DC</div>
+                          <div style={{ fontSize:11, color:"#94a3b8" }}>Hold by: {inv.holdReason||"-"}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              {pendingForTrip.map(inv=>(
-                <div key={inv.id} onClick={()=>setSelInv(p=>p.includes(inv.id)?p.filter(x=>x!==inv.id):[...p,inv.id])}
-                  style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 12px", border:`1px solid ${selInv.includes(inv.id)?"#6366f1":"#e2e8f0"}`, background:selInv.includes(inv.id)?"#eef2ff":"white", borderRadius:8, cursor:"pointer", marginBottom:4 }}>
-                  <span style={{ color:"#6366f1", fontSize:18 }}>{selInv.includes(inv.id)?"☑":"☐"}</span>
-                  <span style={{ fontWeight:600, fontSize:14 }}>{inv.id}</span>
-                  <span style={{ fontSize:13, color:"#64748b" }}>{inv.customer}</span>
-                </div>
-              ))}
-            </div>
-          )}
+            );
+          })()}
 
           <Btn onClick={createTrip} color="#10b981" style={{ width:"100%", padding:14, fontSize:15 }} disabled={!form.toCity||!form.driver||!form.vehicle}>
             🚀 {t.createBtn}

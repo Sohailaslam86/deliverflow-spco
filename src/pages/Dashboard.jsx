@@ -254,7 +254,7 @@ export default function Dashboard({ user, lang, invoices, setInvoices, vehicles,
 
       {/* Overall Performance */}
       <Card style={{ borderTop:"4px solid #1A3A5C" }}>
-        <CardTitle>📊 {t.allDC} — {t.deliveryRate}</CardTitle>
+        <CardTitle>{dc ? `📊 ${dcLabel(dc,t)} — ${t.deliveryRate}` : `📊 ${t.allDC} — ${t.deliveryRate}`}</CardTitle>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:16 }}>
           <div>
             <div style={{ fontSize:14, color:"#64748b", marginBottom:4 }}>{t.deliveryRate}</div>
