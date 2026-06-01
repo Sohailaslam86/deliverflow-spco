@@ -24,6 +24,9 @@ import {
   INITIAL_USER_REQUESTS, INITIAL_ALERTS, DEMO_USERS
 } from "./data/masterData.js";
 
+// Admin email hardcoded fallback
+const ADMIN_EMAIL = "sohail@spco.sa";
+
 export default function App() {
   const [user,     setUser]     = useState(null);
   const [loading,  setLoading]  = useState(true);
@@ -42,29 +45,47 @@ export default function App() {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
+          // Firestore se profile load karo
           const docRef = doc(db, "users", firebaseUser.uid);
           const docSnap = await getDoc(docRef);
+
           if (docSnap.exists()) {
+            // ✅ Firestore profile mili
             setUser({
               uid: firebaseUser.uid,
               email: firebaseUser.email,
               ...docSnap.data()
             });
-            setLoading(false);
           } else {
-            await signOut(auth);
-            setUser(null);
-            setLoading(false);
+            // ❌ Firestore document nahi mila — email se role decide karo
+            console.warn("No Firestore doc for:", firebaseUser.uid, firebaseUser.email);
+            setUser({
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              name: firebaseUser.email === ADMIN_EMAIL ? "Sohail Aslam" : firebaseUser.email,
+              role: firebaseUser.email === ADMIN_EMAIL ? "admin" : "viewonly",
+              dc: firebaseUser.email === ADMIN_EMAIL ? "Head Office" : "All",
+              department: "Management",
+              status: "active"
+            });
           }
         } catch (e) {
-          console.error("Firestore error:", e);
-          setUser(null);
-          setLoading(false);
+          console.error("Firestore error:", e.message);
+          // Error pe bhi login karo — admin fallback
+          setUser({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            name: firebaseUser.email === ADMIN_EMAIL ? "Sohail Aslam" : firebaseUser.email,
+            role: firebaseUser.email === ADMIN_EMAIL ? "admin" : "viewonly",
+            dc: firebaseUser.email === ADMIN_EMAIL ? "Head Office" : "All",
+            department: "Management",
+            status: "active"
+          });
         }
       } else {
         setUser(null);
-        setLoading(false);
       }
+      setLoading(false);
     });
     return () => unsub();
   }, []);
