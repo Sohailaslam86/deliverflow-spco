@@ -1,11 +1,15 @@
 import React from "react";
 import { useState } from "react";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc, collection, addDoc, updateDoc, getDocs } from "firebase/firestore";
+import { createUserWithEmailAndPassword, getAuth } from "firebase/auth";
+import { initializeApp, getApps } from "firebase/app";
+import { doc, setDoc, collection, addDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import CameraCapture from "../components/CameraCapture.jsx";
 import { Card, CardTitle, Btn, Input, Select, Textarea, SuccessMsg, TabBar } from "../components/Shared.jsx";
-import { DEPARTMENTS, RC, RI, genId } from "../data/masterData.js";
+
+// Secondary Firebase app — Admin ka session safe rahe
+const FIREBASE_CONFIG = { apiKey:"AIzaSyBg1IKFOcpRKJBOwIqiUh2oevdT6oqpYpU", authDomain:"deliverflow-spco.firebaseapp.com", projectId:"deliverflow-spco" };
+function getSecondaryAuth() { const ex=getApps().find(a=>a.name==="secondary"); const app=ex||initializeApp(FIREBASE_CONFIG,"secondary"); return getAuth(app); }
 
 const LOCATIONS = ["Distribution Center - Riyadh","Distribution Center - Jeddah","Distribution Center - Dammam","Head Office"];
 const LOCATION_TO_DC = { "Distribution Center - Riyadh":"Riyadh","Distribution Center - Jeddah":"Jeddah","Distribution Center - Dammam":"Dammam","Head Office":"Head Office" };
@@ -216,11 +220,12 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
     try {
       const defaultPassword = "spco2026";
       const uniqueRef = genId("USR");
-      const userCredential = await createUserWithEmailAndPassword(auth, req.email, defaultPassword);
+      const secondaryAuth = getSecondaryAuth();
+      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, req.email, defaultPassword);
       const newUID = userCredential.user.uid;
       const profileData = {
         name:req.name, email:req.email, mobile:req.mobile, empId:req.empId||"",
-        role:req.role, dept:req.dept, dc:req.dc, location:req.location,
+        role:req.role, dept:req.dept, dc:LOCATION_TO_DC[req.location]||req.dc||"Head Office", location:req.location,
         status:"active", empType:req.empType, uniqueRef,
         approvedBy:user.name, approvedAt:new Date().toISOString(),
         createdAt:new Date().toISOString(),
