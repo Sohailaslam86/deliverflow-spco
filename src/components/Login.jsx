@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "../firebase";
+import { auth } from "../firebase";
 import { DEMO_USERS, DEMO_PW, RC, RI, DEPARTMENTS, LOCATIONS, DCS } from "../data/masterData.js";
 import { Input, Select, Textarea, Btn } from "./Shared.jsx";
 
@@ -68,26 +67,13 @@ export default function Login({ onLogin, lang, setLang }) {
     setLoading(true);
     setErr(EMPTY);
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), pass);
-      const firebaseUser = userCredential.user;
-
-      // Firestore se profile load karo
-      const docSnap = await getDoc(doc(db, 'users', firebaseUser.uid));
-      if (docSnap.exists()) {
-        onLogin({ uid: firebaseUser.uid, email: firebaseUser.email, ...docSnap.data() });
-      } else {
-        // Firestore profile nahi — demo users se dhundho (temporary)
-        const demoUser = DEMO_USERS.find(u => u.email === firebaseUser.email);
-        if (demoUser) {
-          onLogin({ uid: firebaseUser.uid, ...demoUser });
-        } else {
-          onLogin({ uid: firebaseUser.uid, email: firebaseUser.email, name: firebaseUser.email, role: 'viewonly', dc: 'All' });
-        }
-      }
+      // Sirf Firebase Auth login — App.jsx Firestore se profile load karega
+      await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), pass);
+      // onLogin call karne ki zaroorat nahi — App.jsx ka onAuthStateChanged handle karega
     } catch (e) {
       setErr(t.invalidCreds);
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   return (
@@ -107,7 +93,7 @@ export default function Login({ onLogin, lang, setLang }) {
 
       <div style={{ display:"flex", width:"100%", maxWidth:960, margin:"0 auto", minHeight:"100vh", position:"relative", zIndex:10 }}>
 
-        {/* Left Panel — Logo */}
+        {/* Left Panel */}
         <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center", padding:"40px 32px", color:"white", direction:"ltr" }}>
           <div style={{ width:72, height:72, marginBottom:24, background:"linear-gradient(135deg,#c0392b,#e74c3c)", clipPath:"polygon(50% 0%,0% 100%,100% 100%)" }} />
           <div style={{ fontSize:20, fontWeight:700 }}>الشركة السعودية للأدوية</div>
@@ -122,7 +108,7 @@ export default function Login({ onLogin, lang, setLang }) {
           ))}
         </div>
 
-        {/* Right Panel — Form */}
+        {/* Right Panel */}
         <div style={{ flex:1, background:"#f8fafc", display:"flex", flexDirection:"column", justifyContent:"center", padding:"40px 32px", direction:rtl?"rtl":"ltr" }}>
           {screen === "login" ? (
             <div style={{ maxWidth:380, width:"100%", marginLeft:rtl?"auto":"0", marginRight:rtl?"0":"auto" }}>
@@ -149,6 +135,11 @@ export default function Login({ onLogin, lang, setLang }) {
               {demo && (
                 <div style={{ marginTop:10 }}>
                   <div style={{ fontSize:12, color:"#94a3b8", textAlign:"center", marginBottom:8 }}>Password: <b>spco2026</b></div>
+                  {DEMO_USERS.length === 0 && (
+                    <div style={{ fontSize:12, color:"#94a3b8", textAlign:"center", padding:8 }}>
+                      Use your assigned email & password to login
+                    </div>
+                  )}
                   {DEMO_USERS.map(u => (
                     <button key={u.uid} onClick={() => { setEmail(u.email); setPass(DEMO_PW); }}
                       style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px", border:"1px solid #e2e8f0", borderRadius:8, cursor:"pointer", background:"white", textAlign:"left", marginBottom:4, width:"100%" }}>
