@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebase";
 import { Card, CardTitle, Btn, SuccessMsg, InfoBox } from "../components/Shared.jsx";
 import { genId } from "../data/masterData.js";
@@ -30,6 +30,45 @@ const T = {
   }
 };
 
+// Auto-correct mappings
+const DC_AUTOCORRECT = {
+  "riyadh":"Riyadh","riyad":"Riyadh","riaydh":"Riyadh","ryiadh":"Riyadh","riyahd":"Riyadh",
+  "jeddah":"Jeddah","jedah":"Jeddah","jiddah":"Jeddah","jeda":"Jeddah","jeddha":"Jeddah",
+  "dammam":"Dammam","damam":"Dammam","dammm":"Dammam","daman":"Dammam"
+};
+const INST_AUTOCORRECT = {
+  "govt":"Govt","gov":"Govt","gvot":"Govt","govet":"Govt","government":"Govt","governmental":"Govt","goverment":"Govt",
+  "private":"Private","privat":"Private","privet":"Private","prvate":"Private","priv":"Private"
+};
+const VALID_DCS = ["Riyadh","Jeddah","Dammam"];
+const VALID_INSTS = ["Govt","Private"];
+
+function autoCorrectAndValidate(rows) {
+  const errors = [];
+  const corrected = rows.map((r, i) => {
+    const rowNum = i + 2;
+    let [inv, date, customer, inst, dc] = r;
+    const dcKey = (dc||"").trim().toLowerCase();
+    if (DC_AUTOCORRECT[dcKey]) {
+      dc = DC_AUTOCORRECT[dcKey];
+    } else if (!VALID_DCS.includes((dc||"").trim())) {
+      errors.push(`Row ${rowNum}: DC "${dc}" invalid — only Riyadh / Jeddah / Dammam allowed`);
+    } else {
+      dc = (dc||"").trim();
+    }
+    const instKey = (inst||"").trim().toLowerCase();
+    if (INST_AUTOCORRECT[instKey]) {
+      inst = INST_AUTOCORRECT[instKey];
+    } else if (!VALID_INSTS.includes((inst||"").trim())) {
+      errors.push(`Row ${rowNum}: Institution "${inst}" invalid — only Govt / Private allowed`);
+    } else {
+      inst = (inst||"").trim();
+    }
+    return [inv, date, customer, inst, dc];
+  });
+  return { corrected, errors };
+}
+
 export default function Upload({ user, invoices, setInvoices, uploads, setUploads, lang }) {
   const [file, setFile] = useState(null);
   const [drag, setDrag] = useState(false);
@@ -41,7 +80,6 @@ export default function Upload({ user, invoices, setInvoices, uploads, setUpload
   const t = T[lang]||T.en;
   const isAdmin = user.role==="admin";
 
-  // Firestore se uploads load karo
   useEffect(() => {
     loadUploads();
     loadInvoices();
@@ -63,51 +101,8 @@ export default function Upload({ user, invoices, setInvoices, uploads, setUpload
     } catch(e) { console.error("Invoices load error:", e); }
   }
 
-  // Auto-correct mappings
-  const DC_AUTOCORRECT = {
-    "riyadh":"Riyadh", "riyad":"Riyadh", "riaydh":"Riyadh", "ryiadh":"Riyadh", "riyahd":"Riyadh",
-    "jeddah":"Jeddah", "jedah":"Jeddah", "jiddah":"Jeddah", "jeda":"Jeddah", "jeddha":"Jeddah",
-    "dammam":"Dammam", "dammam":"Dammam", "damam":"Dammam", "dammm":"Dammam", "daman":"Dammam"
-  };
-  const INST_AUTOCORRECT = {
-    "govt":"Govt", "gov":"Govt", "gvot":"Govt", "govet":"Govt", "government":"Govt", "governmental":"Govt", "goverment":"Govt",
-    "private":"Private", "privat":"Private", "privet":"Private", "prvate":"Private", "priv":"Private"
-  };
-  const VALID_DCS = ["Riyadh","Jeddah","Dammam"];
-  const VALID_INSTS = ["Govt","Private"];
-
-  function autoCorrectAndValidate(rows) {
-    const errors = [];
-    const corrected = rows.map((r, i) => {
-      const rowNum = i + 2; // header skip, 1-indexed
-      let [inv, date, customer, inst, dc] = r;
-
-      // DC auto-correct
-      const dcKey = (dc||"").trim().toLowerCase();
-      if (DC_AUTOCORRECT[dcKey]) {
-        dc = DC_AUTOCORRECT[dcKey];
-      } else if (!VALID_DCS.includes((dc||"").trim())) {
-        errors.push(`Row ${rowNum}: DC "${dc}" invalid — only Riyadh / Jeddah / Dammam allowed`);
-      } else {
-        dc = (dc||"").trim();
-      }
-
-      // Institution auto-correct
-      const instKey = (inst||"").trim().toLowerCase();
-      if (INST_AUTOCORRECT[instKey]) {
-        inst = INST_AUTOCORRECT[instKey];
-      } else if (!VALID_INSTS.includes((inst||"").trim())) {
-        errors.push(`Row ${rowNum}: Institution "${inst}" invalid — only Govt / Private allowed`);
-      } else {
-        inst = (inst||"").trim();
-      }
-
-      return [inv, date, customer, inst, dc];
-    });
-
-    return { corrected, errors };
-  }
-    const csv = "Invoice Number,Invoice Date,Customer Name,Institution,DC\n6032151035,2026-05-27,Hospital Name,Government,Riyadh";
+  function dlTemplate() {
+    const csv = "Invoice Number,Invoice Date,Customer Name,Institution,DC\n6032151035,2026-05-27,Hospital Name,Govt,Riyadh";
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
     a.download = "SPCO_Invoice_Template.csv"; a.click();
@@ -119,10 +114,9 @@ export default function Upload({ user, invoices, setInvoices, uploads, setUpload
     const reader = new FileReader();
     reader.onload = (e) => {
       const text = e.target.result;
-      const lines = text.trim().split("\n").slice(1); // header skip
+      const lines = text.trim().split("\n").slice(1);
       const rows = lines.map(line => line.split(",").map(c => c.trim()));
       if (rows.length > 0 && rows[0].length >= 5) {
-        // Auto-correct + validate
         const { corrected, errors } = autoCorrectAndValidate(rows);
         if (errors.length > 0) {
           setDone("❌ Please fix these errors in your CSV:\n\n" + errors.join("\n"));
@@ -137,7 +131,6 @@ export default function Upload({ user, invoices, setInvoices, uploads, setUpload
       }
     };
     reader.readAsText(f);
-    setDone("");
   }
 
   async function postInvoices() {
@@ -145,9 +138,7 @@ export default function Upload({ user, invoices, setInvoices, uploads, setUpload
     setLoading(true);
     const { rows, batchId } = pendingBatch;
     const now = new Date();
-
     try {
-      // Har invoice Firestore mein save karo
       const newInvs = [];
       for (const r of rows) {
         const invData = {
@@ -162,8 +153,6 @@ export default function Upload({ user, invoices, setInvoices, uploads, setUpload
         const docRef = await addDoc(collection(db, "invoices"), invData);
         newInvs.push({ ...invData, firestoreId: docRef.id });
       }
-
-      // Upload batch Firestore mein save karo
       const uploadData = {
         batchId, date: rows[0][1] || now.toISOString().split("T")[0],
         time: now.toTimeString().slice(0,5),
@@ -171,12 +160,9 @@ export default function Upload({ user, invoices, setInvoices, uploads, setUpload
         postedAt: now.toLocaleString(), status: "posted",
         invoiceCount: rows.length,
         rows: rows.map(r => ({ inv: r[0], date: r[1], customer: r[2], inst: r[3], dc: r[4] })),
-        notes: "",
-        createdAt: serverTimestamp()
+        notes: "", createdAt: serverTimestamp()
       };
       await addDoc(collection(db, "uploads"), uploadData);
-
-      // State update
       setInvoices(prev => [...prev, ...newInvs]);
       setUploads(prev => [...prev, uploadData]);
       setDone("✅ Batch " + batchId + " posted — " + rows.length + " invoices live!");
@@ -191,19 +177,13 @@ export default function Upload({ user, invoices, setInvoices, uploads, setUpload
   async function deleteBatch(batchId) {
     if (!window.confirm(t.confirmDel)) return;
     try {
-      // Firestore se invoices delete karo
       const invSnap = await getDocs(collection(db, "invoices"));
       for (const d of invSnap.docs) {
-        if (d.data().uploadBatch === batchId) {
-          await deleteDoc(doc(db, "invoices", d.id));
-        }
+        if (d.data().uploadBatch === batchId) await deleteDoc(doc(db, "invoices", d.id));
       }
-      // Firestore se upload delete karo
       const upSnap = await getDocs(collection(db, "uploads"));
       for (const d of upSnap.docs) {
-        if (d.data().batchId === batchId) {
-          await deleteDoc(doc(db, "uploads", d.id));
-        }
+        if (d.data().batchId === batchId) await deleteDoc(doc(db, "uploads", d.id));
       }
       setUploads(prev => prev.filter(u => u.batchId !== batchId));
       setInvoices(prev => prev.filter(i => i.uploadBatch !== batchId));
@@ -257,7 +237,7 @@ export default function Upload({ user, invoices, setInvoices, uploads, setUpload
     <div style={{ direction:rtl?"rtl":"ltr" }}>
       {done&&(
         done.startsWith("❌") ? (
-          <div style={{ background:"#fee2e2", border:"1px solid #fca5a5", borderRadius:10, padding:"14px 18px", marginBottom:16, fontSize:13, color:"#991b1b", whiteSpace:"pre-line", lineHeight:1.8 }}>
+          <div style={{ background:"#fee2e2",border:"1px solid #fca5a5",borderRadius:10,padding:"14px 18px",marginBottom:16,fontSize:13,color:"#991b1b",whiteSpace:"pre-line",lineHeight:1.8 }}>
             {done}
           </div>
         ) : (
