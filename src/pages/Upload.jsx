@@ -63,7 +63,50 @@ export default function Upload({ user, invoices, setInvoices, uploads, setUpload
     } catch(e) { console.error("Invoices load error:", e); }
   }
 
-  function dlTemplate() {
+  // Auto-correct mappings
+  const DC_AUTOCORRECT = {
+    "riyadh":"Riyadh", "riyad":"Riyadh", "riaydh":"Riyadh", "ryiadh":"Riyadh", "riyahd":"Riyadh",
+    "jeddah":"Jeddah", "jedah":"Jeddah", "jiddah":"Jeddah", "jeda":"Jeddah", "jeddha":"Jeddah",
+    "dammam":"Dammam", "dammam":"Dammam", "damam":"Dammam", "dammm":"Dammam", "daman":"Dammam"
+  };
+  const INST_AUTOCORRECT = {
+    "govt":"Govt", "gov":"Govt", "gvot":"Govt", "govet":"Govt", "government":"Govt", "governmental":"Govt", "goverment":"Govt",
+    "private":"Private", "privat":"Private", "privet":"Private", "prvate":"Private", "priv":"Private"
+  };
+  const VALID_DCS = ["Riyadh","Jeddah","Dammam"];
+  const VALID_INSTS = ["Govt","Private"];
+
+  function autoCorrectAndValidate(rows) {
+    const errors = [];
+    const corrected = rows.map((r, i) => {
+      const rowNum = i + 2; // header skip, 1-indexed
+      let [inv, date, customer, inst, dc] = r;
+
+      // DC auto-correct
+      const dcKey = (dc||"").trim().toLowerCase();
+      if (DC_AUTOCORRECT[dcKey]) {
+        dc = DC_AUTOCORRECT[dcKey];
+      } else if (!VALID_DCS.includes((dc||"").trim())) {
+        errors.push(`Row ${rowNum}: DC "${dc}" invalid — only Riyadh / Jeddah / Dammam allowed`);
+      } else {
+        dc = (dc||"").trim();
+      }
+
+      // Institution auto-correct
+      const instKey = (inst||"").trim().toLowerCase();
+      if (INST_AUTOCORRECT[instKey]) {
+        inst = INST_AUTOCORRECT[instKey];
+      } else if (!VALID_INSTS.includes((inst||"").trim())) {
+        errors.push(`Row ${rowNum}: Institution "${inst}" invalid — only Govt / Private allowed`);
+      } else {
+        inst = (inst||"").trim();
+      }
+
+      return [inv, date, customer, inst, dc];
+    });
+
+    return { corrected, errors };
+  }
     const csv = "Invoice Number,Invoice Date,Customer Name,Institution,DC\n6032151035,2026-05-27,Hospital Name,Government,Riyadh";
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
@@ -79,15 +122,18 @@ export default function Upload({ user, invoices, setInvoices, uploads, setUpload
       const lines = text.trim().split("\n").slice(1); // header skip
       const rows = lines.map(line => line.split(",").map(c => c.trim()));
       if (rows.length > 0 && rows[0].length >= 5) {
-        setPendingBatch({ rows, batchId: genId("UPLOAD") });
+        // Auto-correct + validate
+        const { corrected, errors } = autoCorrectAndValidate(rows);
+        if (errors.length > 0) {
+          setDone("❌ Please fix these errors in your CSV:\n\n" + errors.join("\n"));
+          setPendingBatch(null);
+          return;
+        }
+        setPendingBatch({ rows: corrected, batchId: genId("UPLOAD") });
+        setDone("");
       } else {
-        // Demo rows if CSV empty
-        const demoRows = [
-          ["INV-"+Math.floor(6032151100+Math.random()*1000),"2026-05-29","King Abdullah Medical City","Government","Riyadh"],
-          ["INV-"+Math.floor(6032151100+Math.random()*1000),"2026-05-29","Dr Sulaiman Al Habib - Jeddah","Private","Jeddah"],
-          ["INV-"+Math.floor(6032151100+Math.random()*1000),"2026-05-29","Dammam Central Hospital","Government","Dammam"],
-        ];
-        setPendingBatch({ rows: demoRows, batchId: genId("UPLOAD") });
+        setDone("❌ CSV format incorrect — please download and use the template.");
+        setPendingBatch(null);
       }
     };
     reader.readAsText(f);
@@ -123,7 +169,9 @@ export default function Upload({ user, invoices, setInvoices, uploads, setUpload
         time: now.toTimeString().slice(0,5),
         uploadedBy: user.name, postedBy: user.name,
         postedAt: now.toLocaleString(), status: "posted",
-        invoiceCount: rows.length, rows, notes: "",
+        invoiceCount: rows.length,
+        rows: rows.map(r => ({ inv: r[0], date: r[1], customer: r[2], inst: r[3], dc: r[4] })),
+        notes: "",
         createdAt: serverTimestamp()
       };
       await addDoc(collection(db, "uploads"), uploadData);
@@ -189,7 +237,9 @@ export default function Upload({ user, invoices, setInvoices, uploads, setUpload
               <tbody>
                 {(viewPDF.rows||[]).map((r,i)=>(
                   <tr key={i} style={{ background:i%2===0?"white":"#f8fafc" }}>
-                    {r.map((c,j)=><td key={j} style={{ padding:"8px 12px",borderBottom:"1px solid #f1f5f9" }}>{c}</td>)}
+                    {[r.inv, r.date, r.customer, r.inst, r.dc].map((c,j)=>(
+                      <td key={j} style={{ padding:"8px 12px",borderBottom:"1px solid #f1f5f9" }}>{c}</td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
@@ -205,7 +255,15 @@ export default function Upload({ user, invoices, setInvoices, uploads, setUpload
 
   return (
     <div style={{ direction:rtl?"rtl":"ltr" }}>
-      {done&&<SuccessMsg msg={done} />}
+      {done&&(
+        done.startsWith("❌") ? (
+          <div style={{ background:"#fee2e2", border:"1px solid #fca5a5", borderRadius:10, padding:"14px 18px", marginBottom:16, fontSize:13, color:"#991b1b", whiteSpace:"pre-line", lineHeight:1.8 }}>
+            {done}
+          </div>
+        ) : (
+          <SuccessMsg msg={done} />
+        )
+      )}
       <Card>
         <CardTitle>{t.step1}</CardTitle>
         <p style={{ fontSize:13,color:"#64748b",marginBottom:14 }}>{t.fillCols||"Download CSV, fill 5 columns, then upload below."}</p>
