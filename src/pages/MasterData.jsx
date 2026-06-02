@@ -3,6 +3,7 @@ import { Card, CardTitle, Btn, Input, Select, Textarea, SuccessMsg, TabBar } fro
 import { STORAGE_CONDITIONS, CITIES, DCS } from "../data/masterData.js";
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import { db } from "../firebase";
+import { sendNotification } from "../notificationService.js";
 
 const T = {
   en: {
@@ -124,6 +125,9 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
     loadDriverLeaves();
     loadVehicleOffDays();
   }, []);
+    loadVehicleReqs();
+    loadDriverReqs();
+  }, []);
 
   // Issue #4 — Departments Firestore load
   async function loadDepartments() {
@@ -237,9 +241,15 @@ function VehiclesTab({ vehicles, setVehicles, setDone, t, isAdmin, isManager, us
       requestedAt:new Date().toLocaleDateString(), status:"pending"
     };
     try {
-      // Firestore mein save karo
       const docRef = await addDoc(collection(db, "vehicleRequests"), newReq);
       setVehicleReqs(prev=>[...prev,{...newReq, id:docRef.id}]);
+      // Notify Admin
+      await sendNotification({
+        toRole: "admin",
+        type: "vehicle",
+        title: "New Vehicle Request",
+        message: `${user.name} (${userDC||"Riyadh"} DC) has requested a new vehicle: ${reqForm.plate} (${reqForm.type} ${reqForm.brand}).`,
+      });
       setDone(t.reqSubmitted);
       setShowReq(false);
       setReqForm({ plate:"",type:"Dyna",brand:"",model:"",year:"",fuelCapacity:80,mileage:12,reason:"" });
@@ -509,9 +519,15 @@ function DriversTab({ users, setUsers, setDone, t, isAdmin, isManager, userDC, u
       requestedAt:new Date().toLocaleDateString(), status:"pending"
     };
     try {
-      // Firestore mein save karo
       const docRef = await addDoc(collection(db, "driverRequests"), newReq);
       setDriverReqs(prev=>[...prev,{...newReq, id:docRef.id}]);
+      // Notify Admin
+      await sendNotification({
+        toRole: "admin",
+        type: "request",
+        title: "New Driver Request",
+        message: `${user.name} (${userDC||"Riyadh"} DC) has requested a new driver: ${reqForm.name} — License: ${reqForm.licNo}.`,
+      });
       setDone(t.reqSubmitted);
       setShowReq(false);
       setReqForm({ name:"",mobile:"",licNo:"",licExp:"",driverCard:"",driverCardExp:"",reason:"" });
@@ -1034,6 +1050,15 @@ function DriverLeavesTab({ leaves, setLeaves, users, setDone, t, isAdmin, isMana
       const data = { ...f, driverName:driver?.name||f.driverName, dc:driver?.dc||user.dc, approvedBy:user.name, createdAt:new Date().toISOString() };
       const docRef = await addDoc(collection(db, "driverLeaves"), data);
       setLeaves(prev=>[...prev, { id:docRef.id, ...data }]);
+      // Notify Admin if Manager adds leave
+      if (!isAdmin) {
+        await sendNotification({
+          toRole: "admin",
+          type: "leave",
+          title: "Driver Leave Added",
+          message: `${user.name} (${user.dc} DC) has recorded ${f.type} for driver ${data.driverName} from ${f.from} to ${f.to}.`,
+        });
+      }
       setDone(data.driverName+" leave added!");
       setF({ driverId:"", driverName:"", from:"", to:"", type:"Annual Leave", reason:"" });
       setShowAdd(false);

@@ -8,6 +8,7 @@ import CameraCapture from "../components/CameraCapture.jsx";
 import { Card, CardTitle, Btn, Input, Select, Textarea, SuccessMsg, TabBar } from "../components/Shared.jsx";
 import { uploadImage } from "../cloudinaryService.js";
 import { DEPARTMENTS, RC, RI, genId } from "../data/masterData.js";
+import { sendNotification } from "../notificationService.js";
 
 // Secondary Firebase app — Admin ka session safe rahe
 const FIREBASE_CONFIG = { apiKey:"AIzaSyBg1IKFOcpRKJBOwIqiUh2oevdT6oqpYpU", authDomain:"deliverflow-spco.firebaseapp.com", projectId:"deliverflow-spco" };
@@ -233,6 +234,15 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
       reqDate:new Date().toLocaleDateString(), status:"pending",
     };
     try { await addDoc(collection(db, "requests"), req); } catch(e) { console.error(e); }
+
+    // Notify Admin
+    await sendNotification({
+      toRole: "admin",
+      type: "request",
+      title: "New Access Request",
+      message: `${user.name} has submitted a new access request for ${req.name} (${req.role} — ${req.dc}).`,
+    });
+
     setRequests(prev=>[...prev,req]);
     flash(t.requestSent);
     setShowForm(false);
@@ -271,13 +281,31 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
       setRequests(prev=>prev.map(r=>r.reqId===reqId?{...r,status:"approved",uniqueRef,firebaseUID:newUID,approvedBy:user.name}:r));
       setUsers(prev=>[...prev,{uid:newUID,...profileData}]);
       setIssuedCredentials({name:req.name,email:req.email,password:defaultPassword,role:getRoleLabel(req.role),dc:req.dc,ref:uniqueRef});
+
+      // Notify requester
+      const requester = (await loadUsersFromFirestore_silent()).find(u=>u.name===req.requestedBy);
+      if (requester?.uid) {
+        await sendNotification({
+          toUserId: requester.uid,
+          type: "request_action",
+          title: "Access Request Approved ✅",
+          message: `Your request for ${req.name} (${getRoleLabel(req.role)} — ${req.dc}) has been approved by ${user.name}. Login: ${req.email}`,
+        });
+      }
+
       flash(t.approvedMsg);
-      // Firestore se fresh reload
       await loadUsersFromFirestore();
     } catch(e) {
       flash(e.code==="auth/email-already-in-use"?"❌ Email already exists!":"❌ Error: "+e.message);
     }
     setApproving(false);
+  }
+
+  async function loadUsersFromFirestore_silent() {
+    try {
+      const snap = await getDocs(collection(db, "users"));
+      return snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+    } catch(e) { return []; }
   }
 
   async function rejectReq(reqId) {
@@ -287,6 +315,19 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
         await updateDoc(doc(db,"requests",req.firestoreId), { status:"rejected", rejectedBy:user.name });
       } catch(e) { console.error(e); }
     }
+
+    // Notify requester
+    const allUsers = await loadUsersFromFirestore_silent();
+    const requester = allUsers.find(u=>u.name===req?.requestedBy);
+    if (requester?.uid) {
+      await sendNotification({
+        toUserId: requester.uid,
+        type: "request_action",
+        title: "Access Request Rejected ❌",
+        message: `Your request for ${req.name} (${req.role} — ${req.dc}) has been rejected by ${user.name}.`,
+      });
+    }
+
     setRequests(prev=>prev.map(r=>r.reqId===reqId?{...r,status:"rejected",rejectedBy:user.name}:r));
     flash(t.rejectedMsg);
   }

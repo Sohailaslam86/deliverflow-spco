@@ -3,6 +3,7 @@ import { collection, getDocs, updateDoc, doc } from "firebase/firestore";
 import { db } from "../firebase";
 import { Card, CardTitle, Btn, Select, SuccessMsg } from "../components/Shared.jsx";
 import { STORAGE_CONDITIONS, CITIES } from "../data/masterData.js";
+import { sendNotification } from "../notificationService.js";
 
 const T = {
   en: {
@@ -148,6 +149,16 @@ export default function Assign({ user, invoices, setInvoices, lang }) {
         ? {...i, ...updateData}
         : i
     ));
+
+    // Notification to Driver
+    if (selDriverUser?.uid) {
+      await sendNotification({
+        toUserId: selDriverUser.uid,
+        type: "invoice_assigned",
+        title: "New Deliveries Assigned",
+        message: `${selected.length} new invoice${selected.length>1?"s have":" has"} been assigned to you by ${user.name}. Please check your My Deliveries tab.`,
+      });
+    }
 
     setDone(selected.length+" "+t.done+" "+driver+"!");
     setSelected([]); setDriver(""); setVehicle(""); setCity(""); setDtype(""); setStorage("");

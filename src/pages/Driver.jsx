@@ -3,6 +3,7 @@ import { Card, CardTitle, Btn, SuccessMsg, Badge } from "../components/Shared.js
 import CameraCapture from "../components/CameraCapture.jsx";
 import { updateDoc, doc, addDoc, collection } from "firebase/firestore";
 import { db } from "../firebase";
+import { sendNotification } from "../notificationService.js";
 
 const T = {
   en: {
@@ -98,7 +99,10 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
   const rtl = lang==="ar";
   const t = T[lang]||T.en;
 
-  const myInv = invoices.filter(i=>i.status==="assigned"&&i.driverId===user.uid);
+  const allMyInv = invoices.filter(i=>i.driverId===user.uid);
+  const myInv = allMyInv.filter(i=>i.status==="assigned"); // pending delivery
+  const deliveredInv = allMyInv.filter(i=>i.status==="delivered");
+  const failedInv = allMyInv.filter(i=>i.status==="failed");
   const pending = myInv.filter(i=>!completed.includes(i.id));
   const doneList = myInv.filter(i=>completed.includes(i.id));
   const inCity = pending.filter(i=>i.dtype==="incity");
@@ -288,6 +292,24 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
     }
     setInvoices(prev=>prev.map(i=>i.id===inv.id?{...i,...updateData}:i));
     setCompleted(p=>[...p,inv.id]);
+
+    // Notification to DC Manager
+    if (status==="delivered") {
+      await sendNotification({
+        toRole: "manager", toDC: inv.dc,
+        type: "delivered",
+        title: "Invoice Delivered",
+        message: `Invoice ${inv.id} (${inv.customer}) has been successfully delivered by ${user.name}.`,
+      });
+    } else if (status==="failed") {
+      await sendNotification({
+        toRole: "manager", toDC: inv.dc,
+        type: "failed",
+        title: "Invoice Delivery Failed",
+        message: `Invoice ${inv.id} (${inv.customer}) delivery failed by ${user.name}. Reason: ${failReason}. Please re-assign.`,
+      });
+    }
+
     setDone(status==="delivered"?"✅ "+inv.id+" delivered!":"❌ "+inv.id+" failed — "+failReason);
     setActive(null); setPod(null); setGps(null); setFailReason(""); setShowFailForm(false);
     setTimeout(()=>setDone(""),3000);
@@ -391,11 +413,19 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
     <div style={{ direction:rtl?"rtl":"ltr" }}>
       {done&&<SuccessMsg msg={done} />}
 
-      {/* Tab */}
-      <div style={{ display:"flex",gap:8,marginBottom:16 }}>
-        {[["deliveries","📦","My Deliveries"],["history","📊","Delivery History"]].map(([v,icon,label])=>(
+      {/* Tabs */}
+      <div style={{ display:"flex",gap:8,marginBottom:16,flexWrap:"wrap" }}>
+        {[
+          ["deliveries","📦",`Pending (${pending.length})`],
+          ["delivered","✅",`Delivered (${deliveredInv.length})`],
+          ["failed","❌",`Failed (${failedInv.length})`],
+          ["history","📊","Trip History"]
+        ].map(([v,icon,label])=>(
           <button key={v} onClick={()=>setView(v)}
-            style={{ padding:"10px 20px",borderRadius:8,border:"none",background:view===v?"#1A3A5C":"#f1f5f9",color:view===v?"white":"#374151",cursor:"pointer",fontSize:14,fontWeight:600 }}>
+            style={{ padding:"10px 18px",borderRadius:8,border:"none",
+              background:view===v?"#1A3A5C":"#f1f5f9",
+              color:view===v?"white":"#374151",
+              cursor:"pointer",fontSize:14,fontWeight:600 }}>
             {icon} {label}
           </button>
         ))}
@@ -478,6 +508,52 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
               {outCity.map(inv=><InvCard key={inv.id} inv={inv} />)}
             </div>
           )}
+        </div>
+      )}
+
+      {/* DELIVERED TAB */}
+      {view==="delivered"&&(
+        <div>
+          {deliveredInv.length===0&&(
+            <Card><div style={{ textAlign:"center",padding:32,color:"#94a3b8",fontSize:15 }}>No delivered invoices yet.</div></Card>
+          )}
+          {deliveredInv.map(inv=>(
+            <Card key={inv.id||inv.firestoreId}>
+              <div style={{ display:"flex",justifyContent:"space-between",marginBottom:8,flexWrap:"wrap",gap:6 }}>
+                <span style={{ fontWeight:700,fontSize:15,color:"#10b981" }}>✅ {inv.id}</span>
+                <span style={{ fontSize:12,color:"#64748b" }}>{inv.deliveredAt}</span>
+              </div>
+              <div style={{ fontWeight:600,fontSize:15,color:"#0f172a",marginBottom:4 }}>{inv.customer}</div>
+              <div style={{ fontSize:13,color:"#64748b",marginBottom:6 }}>📍 {inv.city} | 🚗 {inv.vehicle}</div>
+              {inv.podImage&&inv.podImage!=="demo_pod"&&(
+                <img src={inv.podImage} alt="POD" style={{ width:80,height:60,objectFit:"cover",borderRadius:6,border:"1px solid #e2e8f0" }} />
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* FAILED TAB */}
+      {view==="failed"&&(
+        <div>
+          {failedInv.length===0&&(
+            <Card><div style={{ textAlign:"center",padding:32,color:"#94a3b8",fontSize:15 }}>No failed invoices.</div></Card>
+          )}
+          {failedInv.map(inv=>(
+            <Card key={inv.id||inv.firestoreId} style={{ borderLeft:"4px solid #ef4444" }}>
+              <div style={{ display:"flex",justifyContent:"space-between",marginBottom:8,flexWrap:"wrap",gap:6 }}>
+                <span style={{ fontWeight:700,fontSize:15,color:"#ef4444" }}>❌ {inv.id}</span>
+                <span style={{ fontSize:12,color:"#64748b" }}>{inv.deliveredAt}</span>
+              </div>
+              <div style={{ fontWeight:600,fontSize:15,color:"#0f172a",marginBottom:4 }}>{inv.customer}</div>
+              <div style={{ fontSize:13,color:"#64748b",marginBottom:4 }}>📍 {inv.city} | 🚗 {inv.vehicle}</div>
+              {inv.failReason&&(
+                <div style={{ background:"#fee2e2",borderRadius:6,padding:"6px 10px",fontSize:13,color:"#991b1b" }}>
+                  📝 Reason: {inv.failReason}
+                </div>
+              )}
+            </Card>
+          ))}
         </div>
       )}
 

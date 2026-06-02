@@ -3,6 +3,7 @@ import { collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp } from "fi
 import { db } from "../firebase";
 import { Card, CardTitle, Btn, SuccessMsg, InfoBox } from "../components/Shared.jsx";
 import { genId } from "../data/masterData.js";
+import { sendNotification } from "../notificationService.js";
 
 const T = {
   en: {
@@ -163,6 +164,19 @@ export default function Upload({ user, invoices, setInvoices, uploads, setUpload
         notes: "", createdAt: serverTimestamp()
       };
       await addDoc(collection(db, "uploads"), uploadData);
+
+      // Notification — DC Managers ko batao kitni invoices upload huin
+      const dcCounts = {};
+      rows.forEach(r => { dcCounts[r[4]] = (dcCounts[r[4]]||0) + 1; });
+      for (const [dc, count] of Object.entries(dcCounts)) {
+        await sendNotification({
+          toRole: "manager", toDC: dc,
+          type: "upload",
+          title: "New Invoices Uploaded",
+          message: `${count} new invoice${count>1?"s":""} have been uploaded for your Distribution Center (${dc}) by ${user.name}.`,
+        });
+      }
+
       setInvoices(prev => [...prev, ...newInvs]);
       setUploads(prev => [...prev, uploadData]);
       setDone("✅ Batch " + batchId + " posted — " + rows.length + " invoices live!");
