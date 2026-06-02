@@ -31,7 +31,7 @@ const NAV = {
   admin:   [["dashboard","📊"],["invoices","📋"],["upload","📤"],["assign","🚚"],["trips","🔄"],["fleet","🚗"],["fuel","⛽"],["users","👥"],["masterdata","⚙️"],["reports","📈"],["download","📥"]],
   planning:[["dashboard","📊"],["upload","📤"],["invoices","📋"],["download","📥"],["users","👥"]],
   manager: [["dashboard","📊"],["invoices","📋"],["assign","🚚"],["trips","🔄"],["fleet","🚗"],["fuel","⛽"],["reports","📈"],["users","👥"],["masterdata","⚙️"]],
-  driver:  [["mydeliveries","📦"],["odometer","🔢"]],
+  driver:  [["mydeliveries","📦"],["odometer","🔢"],["masterdata","⚙️"]],
   viewonly:[["search","🔍"]],
 };
 
@@ -57,11 +57,20 @@ export default function Shell({ user, lang, setLang, page, setPage, onLogout, ch
   const activeAlerts = (alerts||[]).filter(a => a.status === "active" && (!user.dc || a.dc === user.dc || user.role === "admin"));
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  // Load notifications on mount + every 30 seconds
+  // Load notifications on mount + every 15 seconds + on page focus
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchNotifications, 15000);
+    // Refresh when user comes back to tab
+    const onFocus = () => fetchNotifications();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) fetchNotifications();
+    });
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
   }, []);
 
   async function fetchNotifications() {
@@ -156,7 +165,7 @@ export default function Shell({ user, lang, setLang, page, setPage, onLogout, ch
                 {user.displayName||user.name}
               </div>
               <div style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>
-                {t[user.role]||user.role} {user.dc&&user.dc!=="Head Office"?"— "+user.dc:""}
+                {t[user.role]||user.role} {user.dc&&user.dc!=="Head Office"?"— "+user.dc+" Distribution Center"+" Distribution Center":""}
               </div>
             </div>
           </div>
