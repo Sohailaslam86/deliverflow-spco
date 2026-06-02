@@ -133,10 +133,6 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
     setDeptLoading(false);
   }
 
-  }
-
-  }
-
   async function loadHolidays() {
     try {
       const snap = await getDocs(collection(db, "publicHolidays"));
