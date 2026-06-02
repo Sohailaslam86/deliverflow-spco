@@ -86,6 +86,7 @@ const T = {
     uploading:"Uploading...", approving:"Creating account...",
     loginIdHint:"Username only — @spco.sa added automatically",
     newRequest:"+ New Request", pendingReqs:"Pending Requests",
+    approvedReqs:"Approved Requests", rejectedReqs:"Rejected Requests",
     previousReqs:"Previous Requests", noRequests:"No requests yet",
     editUser:"Edit User", saveMatrix:"Save Matrix", matrixSaved:"✅ Matrix saved!",
     addRole:"+ Add Role", permission:"Permission",
@@ -110,6 +111,7 @@ const T = {
     approving:"جاري إنشاء الحساب...",
     loginIdHint:"أدخل اسم المستخدم فقط",
     newRequest:"+ طلب جديد", pendingReqs:"الطلبات المعلقة",
+    approvedReqs:"الطلبات الموافق عليها", rejectedReqs:"الطلبات المرفوضة",
     previousReqs:"الطلبات السابقة", noRequests:"لا توجد طلبات",
     editUser:"تعديل المستخدم", saveMatrix:"حفظ المصفوفة",
     matrixSaved:"✅ تم الحفظ!", addRole:"+ إضافة دور",
@@ -349,9 +351,11 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
     flash("Role added!");
   }
 
-  const visibleRequests = isAdmin?requests:requests.filter(r=>r.requestedByDC===user.dc||r.requestedBy===user.name);
+  // Har user sirf apni khud ki requests dekhe
+  const visibleRequests = isAdmin ? requests : requests.filter(r=>r.requestedBy===user.name);
   const pendingRequests = visibleRequests.filter(r=>r.status==="pending");
-  const otherRequests = visibleRequests.filter(r=>r.status!=="pending");
+  const approvedRequests = visibleRequests.filter(r=>r.status==="approved");
+  const rejectedRequests = visibleRequests.filter(r=>r.status==="rejected");
   const isDriverForm = form.empType==="driver";
 
   return (
@@ -646,7 +650,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
           )}
 
           <div style={{fontWeight:700,fontSize:15,color:"#0f172a",marginBottom:8}}>
-            📋 {t.pendingReqs} ({pendingRequests.length})
+            ⏳ {t.pendingReqs} ({pendingRequests.length})
           </div>
 
           {pendingRequests.length===0&&(
@@ -716,21 +720,42 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
             </Card>
           ))}
 
-          {/* PREVIOUS REQUESTS */}
-          {otherRequests.length>0&&(
-            <div style={{marginTop:20}}>
-              <div style={{fontWeight:700,fontSize:15,color:"#0f172a",marginBottom:8}}>📋 {t.previousReqs}</div>
-              {otherRequests.map(req=>(
-                <Card key={req.reqId} style={{borderLeft:`4px solid ${req.status==="approved"?"#10b981":"#ef4444"}`}}>
+          {/* APPROVED REQUESTS */}
+          {approvedRequests.length>0&&(
+            <div style={{marginTop:24}}>
+              <div style={{fontWeight:700,fontSize:15,color:"#065f46",marginBottom:8}}>✅ {t.approvedReqs} ({approvedRequests.length})</div>
+              {approvedRequests.map(req=>(
+                <Card key={req.reqId} style={{borderLeft:"4px solid #10b981"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
                     <div>
                       <div style={{fontWeight:700,fontSize:14}}>{req.name}</div>
                       <div style={{fontSize:12,color:"#64748b"}}>{req.email} | {req.dc} | {getRoleLabel(req.role)}</div>
                       <div style={{fontSize:11,color:"#94a3b8"}}>{req.reqId} | {req.reqDate}</div>
-                      {req.uniqueRef&&<div style={{fontSize:11,color:"#10b981",fontWeight:700}}>✅ {req.uniqueRef} | By: {req.approvedBy}</div>}
+                      {req.uniqueRef&&<div style={{fontSize:11,color:"#10b981",fontWeight:700}}>✅ Ref: {req.uniqueRef} | Approved by: {req.approvedBy}</div>}
                     </div>
-                    <span style={{fontSize:12,fontWeight:600,padding:"4px 12px",borderRadius:99,background:req.status==="approved"?"#d1fae5":"#fee2e2",color:req.status==="approved"?"#065f46":"#991b1b"}}>
-                      {req.status.toUpperCase()}
+                    <span style={{fontSize:12,fontWeight:600,padding:"4px 12px",borderRadius:99,background:"#d1fae5",color:"#065f46"}}>
+                      ✅ APPROVED
+                    </span>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* REJECTED REQUESTS */}
+          {rejectedRequests.length>0&&(
+            <div style={{marginTop:24}}>
+              <div style={{fontWeight:700,fontSize:15,color:"#991b1b",marginBottom:8}}>❌ {t.rejectedReqs} ({rejectedRequests.length})</div>
+              {rejectedRequests.map(req=>(
+                <Card key={req.reqId} style={{borderLeft:"4px solid #ef4444"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+                    <div>
+                      <div style={{fontWeight:700,fontSize:14}}>{req.name}</div>
+                      <div style={{fontSize:12,color:"#64748b"}}>{req.email} | {req.dc} | {getRoleLabel(req.role)}</div>
+                      <div style={{fontSize:11,color:"#94a3b8"}}>{req.reqId} | {req.reqDate}</div>
+                    </div>
+                    <span style={{fontSize:12,fontWeight:600,padding:"4px 12px",borderRadius:99,background:"#fee2e2",color:"#991b1b"}}>
+                      ❌ REJECTED
                     </span>
                   </div>
                 </Card>
