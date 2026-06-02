@@ -86,7 +86,7 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
   // DC filter — ALWAYS apply
   const userDC = getUserDC(user);
 
-  const allInv = userDC ? invoices.filter(i=>i.dc===userDC) : invoices;
+  const allInv = userDC ? invoices.filter(i=>i.dc===userDC&&i.uploadBatch) : invoices.filter(i=>i.uploadBatch);
   const myInv = filterByPeriod(allInv, period);
   const myLogs = userDC ? fuelLogs.filter(l=>l.dc===userDC) : fuelLogs;
   const myVeh = userDC ? vehicles.filter(v=>v.dc===userDC) : vehicles;

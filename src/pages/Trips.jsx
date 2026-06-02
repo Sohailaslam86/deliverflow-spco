@@ -145,7 +145,7 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
   const destDC = form.toCity?.startsWith("DC-") ? form.toCity.replace("DC-","") : null;
 
   // Assigned invoices in current DC
-  const assignedInvs = invoices.filter(i=>i.dc===userDC&&i.status==="assigned");
+  const assignedInvs = invoices.filter(i=>i.dc===userDC&&i.uploadBatch&&i.status==="assigned");
 
   // Hold_ship invoices — Jeddah/Dammam ne mark kiya, origin: Riyadh (current DC)
   const transitInvs = destDC ? invoices.filter(i=>

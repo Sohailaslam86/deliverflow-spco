@@ -40,7 +40,8 @@ export default function Search({ user, invoices, lang }) {
       const mS = statusF==="all"||i.status===statusF;
       const mDC = dcF==="all"||i.dc===dcF;
       const mView = !userDC||i.dc===userDC;
-      return mQ&&mS&&mDC&&mView;
+      const mPosted = !!i.uploadBatch; // sirf posted invoices
+      return mQ&&mS&&mDC&&mView&&mPosted;
     }));
     setSearched(true);
   }

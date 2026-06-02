@@ -88,7 +88,7 @@ export default function Assign({ user, invoices, setInvoices, lang }) {
 
   // Only pending/outstanding invoices for this DC (NOT hold_ship)
   const myInvoices = invoices.filter(i =>
-    i.dc === userDC &&
+    i.dc === userDC && i.uploadBatch &&
     ["pending","outstanding"].includes(i.status)
   );
 

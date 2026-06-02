@@ -171,20 +171,22 @@ export default function Dashboard({ user, lang, invoices, setInvoices, vehicles,
   const allUsers = fsUsers.length > 0 ? fsUsers : (users||[]);
 
   const myInv = dc ? invoices.filter(i=>i.dc===dc) : invoices;
+  // Sirf posted invoices count karo (status field se nahi, uploadBatch se — jo POST hue hain)
+  const postedInv = postedInv.filter(i=>i.uploadBatch); // sirf uploaded & posted invoices
   const myVeh = dc ? allVehicles.filter(v=>v.dc===dc) : allVehicles;
   const myAlerts = dc ? (alerts||[]).filter(a=>a.dc===dc&&a.status==="active") : (alerts||[]).filter(a=>a.status==="active");
 
-  const countable = myInv.filter(i=>!["scheduled","hold_await","hold_ship","intransit"].includes(i.status));
-  const del = myInv.filter(i=>i.status==="delivered").length;
+  const countable = postedInv.filter(i=>!["scheduled","hold_await","hold_ship","intransit"].includes(i.status));
+  const del = postedInv.filter(i=>i.status==="delivered").length;
   const deliveryRate = countable.length>0?Math.round(del/countable.length*100):0;
   const activeV = myVeh.filter(v=>v.status==="Active").length;
-  const assignedD = myInv.filter(i=>i.status==="assigned").length;
+  const assignedD = postedInv.filter(i=>i.status==="assigned").length;
   const alertByType = {};
   myAlerts.forEach(a=>{ alertByType[a.type]=(alertByType[a.type]||0)+1; });
 
   const dcDrivers = dc?(allUsers).filter(u=>u.role==="driver"&&u.dc===dc&&(u.status==="active"||u.status==="Active")):[];
-  const assignedDriverNames = new Set(myInv.filter(i=>i.status==="assigned"&&i.driverName).map(i=>i.driverName));
-  const assignedVehicles = new Set(myInv.filter(i=>i.status==="assigned"&&i.vehicle).map(i=>i.vehicle));
+  const assignedDriverNames = new Set(postedInv.filter(i=>i.status==="assigned"&&i.driverName).map(i=>i.driverName));
+  const assignedVehicles = new Set(postedInv.filter(i=>i.status==="assigned"&&i.vehicle).map(i=>i.vehicle));
   const idleVeh = myVeh.filter(v=>v.status==="Active"&&!assignedVehicles.has(v.plate));
   const idleDrv = dcDrivers.filter(d=>!assignedDriverNames.has(d.name));
 
@@ -196,10 +198,10 @@ export default function Dashboard({ user, lang, invoices, setInvoices, vehicles,
         <h2 style={{ fontSize:24, fontWeight:900, color:"#0f172a", marginBottom:4 }}>{t.welcome}, {user.name}!</h2>
         <p style={{ fontSize:15, color:"#64748b", marginBottom:20 }}>{t.planningTitle}</p>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:16 }}>
-          <StatCard icon="📋" label={t.totalUploaded} value={myInv.length} color="#6366f1" />
+          <StatCard icon="📋" label={t.totalUploaded} value={postedInv.length} color="#6366f1" />
           <StatCard icon="📦" label={t.totalBatches} value={uploads.length} color="#0891b2" />
-          <StatCard icon="🏛️" label={t.govt} value={myInv.filter(i=>i.inst==="Government").length} color="#1A3A5C" />
-          <StatCard icon="🏢" label={t.priv} value={myInv.filter(i=>i.inst==="Private").length} color="#7c3aed" />
+          <StatCard icon="🏛️" label={t.govt} value={postedInv.filter(i=>i.inst==="Govt"||i.inst==="Government").length} color="#1A3A5C" />
+          <StatCard icon="🏢" label={t.priv} value={postedInv.filter(i=>i.inst==="Private").length} color="#7c3aed" />
         </div>
         {todayUploads.length>0&&(
           <Card>
@@ -241,14 +243,14 @@ export default function Dashboard({ user, lang, invoices, setInvoices, vehicles,
 
       {/* Overall KPIs */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(100px,1fr))", gap:12, marginBottom:16 }}>
-        <StatCard icon="📋" label={t.total} value={myInv.length} color="#6366f1" />
+        <StatCard icon="📋" label={t.total} value={postedInv.length} color="#6366f1" />
         <StatCard icon="✅" label={t.delivered} value={del} color="#10b981" />
-        <StatCard icon="⏳" label={t.pending} value={myInv.filter(i=>i.status==="pending").length} color="#f59e0b" />
+        <StatCard icon="⏳" label={t.pending} value={postedInv.filter(i=>i.status==="pending").length} color="#f59e0b" />
         <StatCard icon="👤" label={t.assigned} value={assignedD} color="#3b82f6" />
-        <StatCard icon="❌" label={t.failed} value={myInv.filter(i=>i.status==="failed").length} color="#ef4444" />
-        <StatCard icon="⚠️" label={t.outstanding} value={myInv.filter(i=>i.status==="outstanding").length} color="#f97316" />
-        <StatCard icon="🚚" label={t.inTransit} value={myInv.filter(i=>i.status==="intransit").length} color="#8b5cf6" />
-        <StatCard icon="📅" label={t.scheduled} value={myInv.filter(i=>["scheduled","hold_await","hold_ship"].includes(i.status)).length} color="#a855f7" />
+        <StatCard icon="❌" label={t.failed} value={postedInv.filter(i=>i.status==="failed").length} color="#ef4444" />
+        <StatCard icon="⚠️" label={t.outstanding} value={postedInv.filter(i=>i.status==="outstanding").length} color="#f97316" />
+        <StatCard icon="🚚" label={t.inTransit} value={postedInv.filter(i=>i.status==="intransit").length} color="#8b5cf6" />
+        <StatCard icon="📅" label={t.scheduled} value={postedInv.filter(i=>["scheduled","hold_await","hold_ship"].includes(i.status)).length} color="#a855f7" />
         <StatCard icon="🔔" label={t.alerts} value={myAlerts.length} color="#ef4444" />
       </div>
 

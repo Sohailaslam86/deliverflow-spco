@@ -91,7 +91,7 @@ export default function Invoices({ user, invoices, setInvoices, lang }) {
   }
 
   // Base — filtered by user's DC
-  const base = userDC ? invoices.filter(i=>i.dc===userDC) : invoices;
+  const base = userDC ? invoices.filter(i=>i.dc===userDC&&i.uploadBatch) : invoices.filter(i=>i.uploadBatch);
 
   const filtered = base.filter(inv=>{
     const mQ = !search||inv.id?.toLowerCase().includes(search.toLowerCase())||inv.customer?.toLowerCase().includes(search.toLowerCase());
