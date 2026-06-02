@@ -3,6 +3,7 @@ import { collection, getDocs, updateDoc, doc, addDoc } from "firebase/firestore"
 import { db } from "../firebase";
 import { Card, CardTitle, Btn, Input, Select, SuccessMsg, StatCard, TabBar } from "../components/Shared.jsx";
 import { MAINTENANCE_TYPES, DCS } from "../data/masterData.js";
+import { sendNotification } from "../notificationService.js";
 
 const T = {
   en: {
@@ -23,7 +24,13 @@ const T = {
     unassigned:"Unassigned Today", loading:"Loading fleet data...",
     vehicleUtil:"Vehicle Utilization", driverUtil:"Driver Utilization",
     addVehicle:"+ Add Vehicle (Request)", noVehicles:"No vehicles found",
-    noDrivers:"No drivers found"
+    noDrivers:"No drivers found",
+    requestVehicle:"Request New Vehicle", reqPlate:"Plate Number *",
+    reqType:"Vehicle Type", reqBrand:"Brand", reqModel:"Model",
+    reqYear:"Year", reqFuelCap:"Fuel Capacity (L)", reqReason:"Reason *",
+    reqSubmit:"Submit Request", reqSubmitted:"Vehicle request submitted!",
+    reqPending:"Pending Requests", reqApprove:"✅ Approve", reqReject:"❌ Reject",
+    reqApproved:"Vehicle request approved!", reqRejected:"Request rejected.",
   },
   ar: {
     vehicles:"المركبات", drivers:"السائقون", maintenance:"سجل الصيانة",
@@ -43,7 +50,13 @@ const T = {
     unassigned:"غير مخصص اليوم", loading:"جاري التحميل...",
     vehicleUtil:"استخدام المركبات", driverUtil:"استخدام السائقين",
     addVehicle:"+ إضافة مركبة (طلب)", noVehicles:"لا توجد مركبات",
-    noDrivers:"لا يوجد سائقون"
+    noDrivers:"لا يوجد سائقون",
+    requestVehicle:"طلب مركبة جديدة", reqPlate:"رقم اللوحة *",
+    reqType:"نوع المركبة", reqBrand:"الماركة", reqModel:"الموديل",
+    reqYear:"السنة", reqFuelCap:"سعة الخزان", reqReason:"السبب *",
+    reqSubmit:"إرسال الطلب", reqSubmitted:"تم إرسال طلب المركبة!",
+    reqPending:"الطلبات المعلقة", reqApprove:"✅ موافقة", reqReject:"❌ رفض",
+    reqApproved:"تمت الموافقة على الطلب!", reqRejected:"تم الرفض.",
   }
 };
 
@@ -60,11 +73,13 @@ export default function Fleet({ user, vehicles: masterVehicles, setVehicles: set
   const [done, setDone] = useState("");
   const [fsVehicles, setFsVehicles] = useState([]);
   const [fsDrivers, setFsDrivers] = useState([]);
+  const [vehicleRequests, setVehicleRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const rtl = lang==="ar";
   const t = T[lang]||T.en;
   const dc = user.dc==="Head Office"?null:user.dc;
   const isAdmin = user.role==="admin";
+  const isManager = user.role==="manager";
   const canManage = user.role==="admin"||user.role==="manager";
 
   const tabs = isAdmin
@@ -83,6 +98,9 @@ export default function Fleet({ user, vehicles: masterVehicles, setVehicles: set
 
       const uSnap = await getDocs(collection(db, "users"));
       setFsDrivers(uSnap.docs.map(d => ({ uid: d.id, ...d.data() })).filter(u => u.role === "driver"));
+
+      const rSnap = await getDocs(collection(db, "vehicleRequests"));
+      setVehicleRequests(rSnap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch(e) { console.error(e); }
     setLoading(false);
   }
@@ -201,7 +219,7 @@ export default function Fleet({ user, vehicles: masterVehicles, setVehicles: set
 
       {/* VEHICLES TAB */}
       {tab==="vehicles"&&(
-        <VehiclesTab vehicles={myVehicles} dc={dc} t={t} canManage={canManage} user={user} onSendMaint={sendMaint} onReactivate={reactivate} />
+        <VehiclesTab vehicles={myVehicles} dc={dc} t={t} canManage={canManage} user={user} onSendMaint={sendMaint} onReactivate={reactivate} isAdmin={isAdmin} isManager={isManager} vehicleRequests={vehicleRequests} setVehicleRequests={setVehicleRequests} setFsVehicles={setFsVehicles} flash={flash} />
       )}
 
       {/* DRIVERS TAB */}
@@ -217,14 +235,154 @@ export default function Fleet({ user, vehicles: masterVehicles, setVehicles: set
   );
 }
 
-function VehiclesTab({ vehicles, dc, t, canManage, user, onSendMaint, onReactivate }) {
+function VehiclesTab({ vehicles, dc, t, canManage, user, onSendMaint, onReactivate, isAdmin, isManager, vehicleRequests, setVehicleRequests, setFsVehicles, flash }) {
   const [showMaint, setShowMaint] = useState(null);
   const [maintForm, setMaintForm] = useState({ type:"Scheduled Service", startDate:"", returnDate:"", cost:"", notes:"" });
+  const [showReqForm, setShowReqForm] = useState(false);
+  const [reqForm, setReqForm] = useState({ plate:"", type:"Dyna", brand:"", model:"", year:"", fuelCapacity:80, reason:"" });
+  const [submitting, setSubmitting] = useState(false);
 
   const alerts = vehicles.filter(v => v.fahas && Math.ceil((new Date(v.fahas)-new Date())/(1000*60*60*24))<=60);
 
+  // Manager pending requests (own DC)
+  const myPendingReqs = (vehicleRequests||[]).filter(r=>r.status==="pending"&&(!dc||r.dc===dc));
+  // Admin sees all pending
+  const allPendingReqs = isAdmin ? (vehicleRequests||[]).filter(r=>r.status==="pending") : [];
+
+  async function submitVehicleRequest() {
+    if (!reqForm.plate||!reqForm.reason) { flash("❌ Plate number and reason are required!"); return; }
+    setSubmitting(true);
+    try {
+      const newReq = {
+        ...reqForm, dc: dc||user.dc,
+        requestedBy: user.name, requestedAt: new Date().toLocaleDateString(),
+        status: "pending"
+      };
+      const docRef = await addDoc(collection(db, "vehicleRequests"), newReq);
+      setVehicleRequests(prev=>[...prev, { id:docRef.id, ...newReq }]);
+      await sendNotification({
+        toRole: "admin",
+        type: "vehicle",
+        title: "New Vehicle Request",
+        message: `${user.name} (${dc||user.dc} DC) has requested a new vehicle: ${reqForm.plate} (${reqForm.type} ${reqForm.brand}).`,
+      });
+      flash(t.reqSubmitted);
+      setShowReqForm(false);
+      setReqForm({ plate:"", type:"Dyna", brand:"", model:"", year:"", fuelCapacity:80, reason:"" });
+    } catch(e) { flash("❌ Error: "+e.message); }
+    setSubmitting(false);
+  }
+
+  async function approveVehicleRequest(req) {
+    try {
+      // Add to vehicles Firestore
+      const vData = {
+        plate:req.plate, type:req.type, brand:req.brand||"", model:req.model||"",
+        year:req.year||"", dc:req.dc, fuelCapacity:req.fuelCapacity||80,
+        fuelLevel:req.fuelCapacity||80, mileage:12, status:"Active",
+        totalKM:0, maintHistory:[], photos:[], fahas:"", insurance:"",
+        approvedBy:user.name, approvedAt:new Date().toISOString()
+      };
+      const vDocRef = await addDoc(collection(db, "vehicles"), vData);
+      setFsVehicles(prev=>[...prev, { firestoreId:vDocRef.id, ...vData }]);
+      // Update request status
+      await updateDoc(doc(db, "vehicleRequests", req.id), { status:"approved", approvedBy:user.name });
+      setVehicleRequests(prev=>prev.map(r=>r.id===req.id?{...r,status:"approved"}:r));
+      // Notify Manager
+      await sendNotification({
+        toRole:"manager", toDC:req.dc, type:"request_action",
+        title:"Vehicle Request Approved ✅",
+        message:`Your vehicle request for ${req.plate} (${req.type}) has been approved by ${user.name}.`,
+      });
+      flash(t.reqApproved);
+    } catch(e) { flash("❌ Error: "+e.message); }
+  }
+
+  async function rejectVehicleRequest(req) {
+    try {
+      await updateDoc(doc(db, "vehicleRequests", req.id), { status:"rejected", rejectedBy:user.name });
+      setVehicleRequests(prev=>prev.map(r=>r.id===req.id?{...r,status:"rejected"}:r));
+      // Notify Manager
+      await sendNotification({
+        toRole:"manager", toDC:req.dc, type:"request_action",
+        title:"Vehicle Request Rejected ❌",
+        message:`Your vehicle request for ${req.plate} (${req.type}) has been rejected by ${user.name}.`,
+      });
+      flash(t.reqRejected);
+    } catch(e) { flash("❌ Error: "+e.message); }
+  }
+
   return (
     <div>
+      {/* Manager — Request Button */}
+      {isManager&&!isAdmin&&(
+        <div style={{ marginBottom:12 }}>
+          <Btn small onClick={()=>setShowReqForm(!showReqForm)} color="#7c3aed">🚗 {t.requestVehicle}</Btn>
+        </div>
+      )}
+
+      {/* Manager — Request Form */}
+      {showReqForm&&isManager&&!isAdmin&&(
+        <Card style={{ borderLeft:"4px solid #7c3aed", marginBottom:16 }}>
+          <CardTitle>🚗 {t.requestVehicle}</CardTitle>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 12px" }}>
+            <Input label={t.reqPlate} value={reqForm.plate} onChange={v=>setReqForm({...reqForm,plate:v})} />
+            <Select label={t.reqType} value={reqForm.type} onChange={v=>setReqForm({...reqForm,type:v})} options={["Dyna","Bus","Truck"]} />
+            <Input label={t.reqBrand} value={reqForm.brand} onChange={v=>setReqForm({...reqForm,brand:v})} placeholder="Toyota" />
+            <Input label={t.reqModel} value={reqForm.model} onChange={v=>setReqForm({...reqForm,model:v})} />
+            <Input label={t.reqYear} value={reqForm.year} onChange={v=>setReqForm({...reqForm,year:v})} type="number" />
+            <Input label={t.reqFuelCap} value={reqForm.fuelCapacity} onChange={v=>setReqForm({...reqForm,fuelCapacity:Number(v)})} type="number" />
+            <div style={{ gridColumn:"1/-1" }}>
+              <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{t.reqReason}</label>
+              <textarea value={reqForm.reason} onChange={e=>setReqForm({...reqForm,reason:e.target.value})} rows={2}
+                style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", boxSizing:"border-box", resize:"vertical" }} />
+            </div>
+          </div>
+          <div style={{ display:"flex", gap:8, marginTop:8 }}>
+            <Btn onClick={submitVehicleRequest} color="#7c3aed" style={{ flex:1 }} disabled={submitting}>
+              {submitting?"Submitting...":"📤 "+t.reqSubmit}
+            </Btn>
+            <Btn onClick={()=>setShowReqForm(false)} color="#64748b">Cancel</Btn>
+          </div>
+        </Card>
+      )}
+
+      {/* Manager — My Pending Requests */}
+      {isManager&&!isAdmin&&myPendingReqs.length>0&&(
+        <Card style={{ borderLeft:"4px solid #f59e0b", marginBottom:16 }}>
+          <CardTitle>⏳ {t.reqPending} ({myPendingReqs.length})</CardTitle>
+          {myPendingReqs.map(req=>(
+            <div key={req.id} style={{ padding:"10px 0", borderBottom:"1px solid #f1f5f9", fontSize:14 }}>
+              <div style={{ fontWeight:700 }}>🚗 {req.plate} — {req.type} {req.brand}</div>
+              <div style={{ color:"#64748b", fontSize:13 }}>Requested: {req.requestedAt} | Status: <span style={{ color:"#f59e0b", fontWeight:600 }}>Pending Admin Approval</span></div>
+              {req.reason&&<div style={{ color:"#94a3b8", fontSize:12 }}>📝 {req.reason}</div>}
+            </div>
+          ))}
+        </Card>
+      )}
+
+      {/* Admin — Pending Requests to Approve */}
+      {isAdmin&&allPendingReqs.length>0&&(
+        <Card style={{ borderLeft:"4px solid #6366f1", marginBottom:16 }}>
+          <CardTitle>📋 Vehicle Requests — Pending Approval ({allPendingReqs.length})</CardTitle>
+          {allPendingReqs.map(req=>(
+            <div key={req.id} style={{ padding:"12px 0", borderBottom:"1px solid #f1f5f9" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
+                <div>
+                  <div style={{ fontWeight:700, fontSize:14 }}>🚗 {req.plate} — {req.type} {req.brand} {req.model}</div>
+                  <div style={{ fontSize:13, color:"#64748b" }}>DC: {req.dc} | By: {req.requestedBy} | {req.requestedAt}</div>
+                  <div style={{ fontSize:13, color:"#64748b" }}>Fuel: {req.fuelCapacity}L | Year: {req.year}</div>
+                  {req.reason&&<div style={{ fontSize:12, color:"#94a3b8" }}>📝 {req.reason}</div>}
+                </div>
+                <div style={{ display:"flex", gap:8, alignItems:"flex-start" }}>
+                  <Btn small onClick={()=>approveVehicleRequest(req)} color="#10b981">{t.reqApprove}</Btn>
+                  <Btn small onClick={()=>rejectVehicleRequest(req)} color="#ef4444">{t.reqReject}</Btn>
+                </div>
+              </div>
+            </div>
+          ))}
+        </Card>
+      )}
       {alerts.length>0&&(
         <Card style={{ border:"1px solid #fbbf24" }}>
           <CardTitle>⚠️ {t.expiryAlerts}</CardTitle>

@@ -108,9 +108,6 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
   const [deptList, setDeptList] = useState([]);
   const [deptLoading, setDeptLoading] = useState(false);
 
-  // Issue #5 — Vehicle/Driver Requests: Firestore se load
-  const [vehicleReqs, setVehicleReqs] = useState([]);
-  const [driverReqs, setDriverReqs] = useState([]);
 
   // Holidays + Leaves
   const [holidays, setHolidays] = useState([]);
@@ -136,20 +133,8 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
     setDeptLoading(false);
   }
 
-  // Issue #5 — Vehicle Requests Firestore load
-  async function loadVehicleReqs() {
-    try {
-      const snap = await getDocs(collection(db, "vehicleRequests"));
-      setVehicleReqs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch(e) { console.error("VehReq load error:", e); }
   }
 
-  // Issue #5 — Driver Requests Firestore load
-  async function loadDriverReqs() {
-    try {
-      const snap = await getDocs(collection(db, "driverRequests"));
-      setDriverReqs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch(e) { console.error("DrvReq load error:", e); }
   }
 
   async function loadHolidays() {
@@ -182,8 +167,7 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
     ["departments","🏢",t.departments],
     ["holidays","🏖️",t.holidays],
     ...(isAdmin||isManager?[["driverleaves","👤",t.driverLeaves],["vehicleoff","🚗",t.vehicleOff]]:[]),
-    ...(isAdmin?[["allusers","👥",t.allUsers],["vehreqs","📋",t.vehReqTab],["drvreqs","📋",t.drvReqTab]]:[]),
-    ...(isManager?[["vehreqs","📋",t.vehReqTab],["drvreqs","📋",t.drvReqTab]]:[]),
+    ...(isAdmin?[["allusers","👥",t.allUsers]]:[[]]),
   ];
 
   function flash(msg) { setDone(msg); setTimeout(()=>setDone(""),3000); }
@@ -192,8 +176,8 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
     <div style={{ direction:rtl?"rtl":"ltr" }}>
       {done&&<SuccessMsg msg={done} />}
       <TabBar tabs={tabs} active={tab} onChange={setTab} />
-      {tab==="vehicles"&&<VehiclesTab vehicles={vehicles} setVehicles={setVehicles} setDone={flash} t={t} isAdmin={isAdmin} isManager={isManager} userDC={user.dc} user={user} vehicleReqs={vehicleReqs} setVehicleReqs={setVehicleReqs} loadVehicleReqs={loadVehicleReqs} />}
-      {tab==="drivers"&&<DriversTab users={users} setUsers={setUsers} setDone={flash} t={t} isAdmin={isAdmin} isManager={isManager} userDC={user.dc} user={user} driverReqs={driverReqs} setDriverReqs={setDriverReqs} loadDriverReqs={loadDriverReqs} />}
+      {tab==="vehicles"&&<VehiclesTab vehicles={vehicles} setVehicles={setVehicles} setDone={flash} t={t} isAdmin={isAdmin} userDC={user.dc} />}
+      {tab==="drivers"&&<DriversTab users={users} setUsers={setUsers} setDone={flash} t={t} isAdmin={isAdmin} userDC={user.dc} />}
       {tab==="dcs"&&<DCsTab dcList={dcList} setDcList={setDcList} setDone={flash} t={t} isAdmin={isAdmin} />}
       {tab==="storage"&&<StorageTab storageList={storageList} setStorageList={setStorageList} setDone={flash} t={t} isAdmin={isAdmin} />}
       {tab==="cities"&&<CitiesTab cityList={cityList} setCityList={setCityList} setDone={flash} t={t} isAdmin={isAdmin} />}
@@ -202,155 +186,49 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
       {tab==="driverleaves"&&<DriverLeavesTab leaves={driverLeaves} setLeaves={setDriverLeaves} users={users} setDone={flash} t={t} isAdmin={isAdmin} isManager={isManager} user={user} reload={loadDriverLeaves} />}
       {tab==="vehicleoff"&&<VehicleOffTab offDays={vehicleOffDays} setOffDays={setVehicleOffDays} vehicles={vehicles} setDone={flash} t={t} isAdmin={isAdmin} isManager={isManager} user={user} reload={loadVehicleOffDays} />}
       {tab==="allusers"&&isAdmin&&<AllUsersTab users={users} setUsers={setUsers} setDone={flash} t={t} />}
-      {tab==="vehreqs"&&<VehicleRequestsTab vehicleReqs={vehicleReqs} setVehicleReqs={setVehicleReqs} vehicles={vehicles} setVehicles={setVehicles} setDone={flash} t={t} isAdmin={isAdmin} isManager={isManager} user={user} loadVehicleReqs={loadVehicleReqs} />}
-      {tab==="drvreqs"&&<DriverRequestsTab driverReqs={driverReqs} setDriverReqs={setDriverReqs} users={users} setUsers={setUsers} setDone={flash} t={t} isAdmin={isAdmin} isManager={isManager} user={user} loadDriverReqs={loadDriverReqs} />}
     </div>
   );
 }
 
-function VehiclesTab({ vehicles, setVehicles, setDone, t, isAdmin, isManager, userDC, user, vehicleReqs, setVehicleReqs, loadVehicleReqs }) {
-  const [showAdd, setShowAdd] = useState(false);
-  const [showReq, setShowReq] = useState(false);
-  const [f, setF] = useState(EMPTY_VEH);
-  const [reqForm, setReqForm] = useState({ plate:"",type:"Dyna",brand:"",model:"",year:"",fuelCapacity:80,mileage:12,reason:"" });
-  const [photos, setPhotos] = useState([]);
-  const [aiStatus, setAiStatus] = useState(null);
-  const photoRef = useRef();
-  const myVehicles = userDC?vehicles.filter(v=>v.dc===userDC):vehicles;
+function VehiclesTab({ vehicles, setVehicles, setDone, t, isAdmin, userDC }) {
+  const myVehicles = userDC ? vehicles.filter(v=>v.dc===userDC) : vehicles;
   const allDCs = [...new Set(vehicles.map(v=>v.dc))];
 
-  function handlePhotos(e) {
-    const files=Array.from(e.target.files).slice(0,4);
-    Promise.all(files.map(file=>new Promise(res=>{const r=new FileReader();r.onload=ev=>res(ev.target.result);r.readAsDataURL(file);}))).then(setPhotos);
+  function toggleStatus(plate) {
+    setVehicles(prev=>prev.map(v=>v.plate===plate?{...v,status:v.status==="Active"?"Maintenance":"Active"}:v));
   }
-
-  function add() {
-    if (!f.plate) return;
-    setVehicles(prev=>[...prev,{...f,status:"Active",fuelLevel:f.fuelCapacity,totalKM:0,maintHistory:[],photos}]);
-    setDone(f.plate+" added!"); setShowAdd(false); setF(EMPTY_VEH); setPhotos([]); setAiStatus(null);
+  function toggleDC(plate, dc) {
+    setVehicles(prev=>prev.map(v=>v.plate===plate?{...v,dc}:v));
+    setDone(plate+" transferred to "+dc);
   }
-
-  async function submitRequest() {
-    if (!reqForm.plate) return;
-    const newReq = {
-      id:"VREQ-"+Date.now(), ...reqForm,
-      dc:userDC||"Riyadh", requestedBy:user.name,
-      requestedAt:new Date().toLocaleDateString(), status:"pending"
-    };
-    try {
-      const docRef = await addDoc(collection(db, "vehicleRequests"), newReq);
-      setVehicleReqs(prev=>[...prev,{...newReq, id:docRef.id}]);
-      // Notify Admin
-      await sendNotification({
-        toRole: "admin",
-        type: "vehicle",
-        title: "New Vehicle Request",
-        message: `${user.name} (${userDC||"Riyadh"} DC) has requested a new vehicle: ${reqForm.plate} (${reqForm.type} ${reqForm.brand}).`,
-      });
-      setDone(t.reqSubmitted);
-      setShowReq(false);
-      setReqForm({ plate:"",type:"Dyna",brand:"",model:"",year:"",fuelCapacity:80,mileage:12,reason:"" });
-      if (loadVehicleReqs) loadVehicleReqs();
-    } catch(e) { console.error(e); setDone("❌ Error: "+e.message); }
-  }
-
-  function toggleStatus(plate) { setVehicles(prev=>prev.map(v=>v.plate===plate?{...v,status:v.status==="Active"?"Maintenance":"Active"}:v)); }
-  function toggleDC(plate,dc) { setVehicles(prev=>prev.map(v=>v.plate===plate?{...v,dc}:v)); setDone(plate+" transferred to "+dc); }
 
   return (
     <div>
-      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8 }}>
-        <div style={{ fontSize:14,color:"#64748b" }}>{myVehicles.length} {t.registered}</div>
-        <div style={{ display:"flex",gap:8 }}>
-          {isManager&&!isAdmin&&<Btn small onClick={()=>setShowReq(!showReq)} color="#7c3aed">📋 {t.requestVehicle}</Btn>}
-          {isAdmin&&<Btn small onClick={()=>setShowAdd(!showAdd)}>🚗 {t.addVehicle}</Btn>}
-        </div>
+      <div style={{ fontSize:14, color:"#64748b", marginBottom:12 }}>
+        {myVehicles.length} {t.registered}
+        <span style={{ marginLeft:12, color:"#94a3b8", fontSize:13 }}>
+          (To add a vehicle, use Fleet Management)
+        </span>
       </div>
-
-      {/* DC Manager Vehicle Request Form */}
-      {showReq&&isManager&&!isAdmin&&(
-        <Card style={{ borderLeft:"4px solid #7c3aed" }}>
-          <CardTitle>📋 {t.requestVehicle}</CardTitle>
-          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px" }}>
-            <Input label={t.plate+" *"} value={reqForm.plate} onChange={v=>setReqForm({...reqForm,plate:v})} required />
-            <Select label={t.type} value={reqForm.type} onChange={v=>setReqForm({...reqForm,type:v})} options={["Dyna","Bus"]} />
-            <Input label={t.brand} value={reqForm.brand} onChange={v=>setReqForm({...reqForm,brand:v})} />
-            <Input label={t.model} value={reqForm.model} onChange={v=>setReqForm({...reqForm,model:v})} />
-            <Input label={t.year} value={reqForm.year} onChange={v=>setReqForm({...reqForm,year:v})} type="number" />
-            <Input label={t.fuelCap} value={reqForm.fuelCapacity} onChange={v=>setReqForm({...reqForm,fuelCapacity:Number(v)})} type="number" />
-            <div style={{ gridColumn:"1/-1" }}><Textarea label={t.reqReason+" *"} value={reqForm.reason} onChange={v=>setReqForm({...reqForm,reason:v})} required /></div>
-          </div>
-          <div style={{ display:"flex",gap:8 }}>
-            <Btn onClick={submitRequest} color="#7c3aed" style={{ flex:1 }}>📤 Submit Request</Btn>
-            <Btn onClick={()=>setShowReq(false)} color="#64748b">{t.cancel}</Btn>
-          </div>
-        </Card>
+      {myVehicles.length===0&&(
+        <Card><div style={{ textAlign:"center", padding:32, color:"#94a3b8", fontSize:15 }}>🚗 No vehicles found</div></Card>
       )}
-
-      {/* Admin Add Vehicle Form */}
-      {showAdd&&isAdmin&&(
-        <Card>
-          <CardTitle>➕ {t.addVehicle}</CardTitle>
-          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px" }}>
-            <Input label={t.plate+" *"} value={f.plate} onChange={v=>setF({...f,plate:v})} required />
-            <Select label={t.type+" *"} value={f.type} onChange={v=>setF({...f,type:v})} options={["Dyna","Bus"]} />
-            <Select label={t.homeDC+" *"} value={f.dc} onChange={v=>setF({...f,dc:v})} options={DCS} />
-            <Input label={t.brand} value={f.brand} onChange={v=>setF({...f,brand:v})} placeholder="Toyota" />
-            <Input label={t.model} value={f.model} onChange={v=>setF({...f,model:v})} />
-            <Input label={t.chassis} value={f.chassis} onChange={v=>setF({...f,chassis:v})} />
-            <Input label={t.year} value={f.year} onChange={v=>setF({...f,year:v})} type="number" />
-            <Input label={t.fuelCap} value={f.fuelCapacity} onChange={v=>setF({...f,fuelCapacity:Number(v)})} type="number" />
-            <Input label={t.mileage} value={f.mileage} onChange={v=>setF({...f,mileage:Number(v)})} type="number" />
-            <Input label={t.fahas} value={f.fahas} onChange={v=>setF({...f,fahas:v})} type="date" />
-            <Input label={t.istimara} value={f.istimara} onChange={v=>setF({...f,istimara:v})} type="date" />
-            <Input label={t.insurance} value={f.insurance} onChange={v=>setF({...f,insurance:v})} type="date" />
-            <Input label={t.nextOilKM} value={f.nextOilKM} onChange={v=>setF({...f,nextOilKM:v})} type="number" />
-            <Input label={t.nextOilDate} value={f.nextOilDate} onChange={v=>setF({...f,nextOilDate:v})} type="date" />
-          </div>
-          <div style={{ marginBottom:12 }}>
-            <label style={{ fontSize:14,fontWeight:600,color:"#374151",display:"block",marginBottom:8 }}>📸 {t.photos}</label>
-            <input ref={photoRef} type="file" accept="image/*" multiple onChange={handlePhotos} style={{ display:"none" }} />
-            <Btn small onClick={()=>photoRef.current.click()} color="#6366f1">📸 {t.uploadPhoto}</Btn>
-            {photos.length>0&&(
-              <div style={{ display:"flex",gap:8,marginTop:10,flexWrap:"wrap" }}>
-                {photos.map((p,i)=><img key={i} src={p} alt={"v"+i} style={{ width:90,height:68,objectFit:"cover",borderRadius:8,border:"2px solid #e2e8f0" }} />)}
-              </div>
-            )}
-          </div>
-          <div style={{ background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:8,padding:"10px 14px",marginBottom:12 }}>
-            <div style={{ fontWeight:600,fontSize:14,color:"#0369a1",marginBottom:6 }}>🤖 {t.aiCheck}</div>
-            <div style={{ display:"flex",gap:8,alignItems:"center" }}>
-              <Btn small onClick={()=>{if(!photos.length){setAiStatus("noplate");return;}setAiStatus("checking");setTimeout(()=>setAiStatus(f.plate&&f.plate.length>2?"match":"mismatch"),1500);}} color="#0369a1" disabled={aiStatus==="checking"}>
-                {aiStatus==="checking"?t.aiChecking:"✔️ "+t.aiCheck}
-              </Btn>
-              {aiStatus==="match"&&<span style={{ color:"#065f46",fontWeight:600,fontSize:14 }}>✅ {t.aiMatch}</span>}
-              {aiStatus==="mismatch"&&<span style={{ color:"#991b1b",fontWeight:600,fontSize:14 }}>⚠️ {t.aiMismatch}</span>}
-              {aiStatus==="noplate"&&<span style={{ color:"#92400e",fontSize:14 }}>{t.aiNoPlate}</span>}
-            </div>
-          </div>
-          <div style={{ display:"flex",gap:8 }}>
-            <Btn onClick={add} color="#10b981" style={{ flex:1 }}>✅ {t.addBtn}</Btn>
-            <Btn onClick={()=>setShowAdd(false)} color="#64748b">{t.cancel}</Btn>
-          </div>
-        </Card>
-      )}
-
       {allDCs.filter(dc=>!userDC||dc===userDC).map(dc=>{
-        const dv=vehicles.filter(v=>v.dc===dc);
+        const dv = vehicles.filter(v=>v.dc===dc);
         if (!dv.length) return null;
         return (
           <Card key={dc}>
             <CardTitle>📍 {dc} Distribution Center — {dv.length} {t.vehicles}</CardTitle>
             {dv.map(v=>(
-              <div key={v.plate} style={{ display:"flex",alignItems:"flex-start",gap:10,padding:"12px 0",borderBottom:"1px solid #f1f5f9",flexWrap:"wrap" }}>
+              <div key={v.plate} style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"12px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:700,fontSize:14 }}>{v.plate} <span style={{ fontSize:13,color:"#64748b" }}>({v.type}) {v.brand} {v.model}</span></div>
-                  <div style={{ fontSize:12,color:"#94a3b8" }}>{t.fahas}: {v.fahas||"-"} | {t.insurance}: {v.insurance||"-"}</div>
+                  <div style={{ fontWeight:700, fontSize:14 }}>{v.plate} <span style={{ fontSize:13, color:"#64748b" }}>({v.type}) {v.brand} {v.model}</span></div>
+                  <div style={{ fontSize:12, color:"#94a3b8" }}>{t.fahas}: {v.fahas||"-"} | {t.insurance}: {v.insurance||"-"}</div>
                 </div>
-                <span style={{ fontSize:13,fontWeight:600,padding:"3px 10px",borderRadius:99,background:v.status==="Maintenance"?"#fef3c7":"#d1fae5",color:v.status==="Maintenance"?"#92400e":"#065f46" }}>{v.status}</span>
+                <span style={{ fontSize:13, fontWeight:600, padding:"3px 10px", borderRadius:99, background:v.status==="Maintenance"?"#fef3c7":"#d1fae5", color:v.status==="Maintenance"?"#92400e":"#065f46" }}>{v.status}</span>
                 {isAdmin&&(
                   <select value={v.dc} onChange={e=>toggleDC(v.plate,e.target.value)}
-                    style={{ border:"1px solid #e2e8f0",borderRadius:6,padding:"5px 8px",fontSize:13,cursor:"pointer" }}>
+                    style={{ border:"1px solid #e2e8f0", borderRadius:6, padding:"5px 8px", fontSize:13, cursor:"pointer" }}>
                     {DCS.map(d=><option key={d} value={d}>{d}</option>)}
                   </select>
                 )}
@@ -364,248 +242,35 @@ function VehiclesTab({ vehicles, setVehicles, setDone, t, isAdmin, isManager, us
   );
 }
 
-function DriverRequestsTab({ driverReqs, setDriverReqs, users, setUsers, setDone, t, isAdmin, isManager, user, loadDriverReqs }) {
-  const myReqs = isAdmin ? driverReqs : driverReqs.filter(r=>r.dc===user.dc);
-
-  async function approve(id) {
-    const req = driverReqs.find(r=>r.id===id);
-    if (req) {
-      try {
-        await updateDoc(doc(db, "driverRequests", id), { status:"approved", approvedBy:user.name, approvedAt:new Date().toLocaleDateString() });
-        setUsers(prev=>[...prev,{
-          uid:"d"+Date.now(), name:req.name, displayName:req.name,
-          phone:req.mobile, email:"", role:"driver",
-          dept:"Logistics", dc:req.dc, location:"Distribution Center - "+req.dc,
-          status:"Active", licNo:req.licNo, licExp:req.licExp,
-          driverCard:req.driverCard||"", driverCardExp:req.driverCardExp||"",
-          viewDC:req.dc, password:"spco2026"
-        }]);
-        setDone(t.reqApproved);
-        loadDriverReqs();
-      } catch(e) { console.error(e); setDone("❌ Error: "+e.message); }
-    }
-  }
-
-  async function reject(id) {
-    try {
-      await updateDoc(doc(db, "driverRequests", id), { status:"rejected", rejectedBy:user.name });
-      setDone(t.reqRejected);
-      loadDriverReqs();
-    } catch(e) { console.error(e); }
-  }
-
-  return (
-    <Card>
-      <CardTitle>📋 {t.drvReqTab} ({myReqs.length})</CardTitle>
-      {myReqs.length===0&&<div style={{ textAlign:"center",padding:20,color:"#94a3b8" }}>No driver requests yet</div>}
-      {myReqs.map(req=>(
-        <div key={req.id} style={{ border:`1px solid ${req.status==="pending"?"#fbbf24":req.status==="approved"?"#10b981":"#ef4444"}`,borderRadius:8,padding:14,marginBottom:8 }}>
-          <div style={{ display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:6,marginBottom:6 }}>
-            <div>
-              <div style={{ fontWeight:700,fontSize:14 }}>{req.name}</div>
-              <div style={{ fontSize:13,color:"#64748b" }}>{req.mobile} | {req.dc} DC | Lic: {req.licNo} Exp: {req.licExp}</div>
-              <div style={{ fontSize:13,color:"#374151",marginTop:4 }}>📝 {req.reason}</div>
-              <div style={{ fontSize:12,color:"#94a3b8" }}>By: {req.requestedBy} | {req.requestedAt}</div>
-            </div>
-            <div>
-              <span style={{ fontSize:13,fontWeight:600,padding:"3px 10px",borderRadius:99,background:req.status==="pending"?"#fef3c7":req.status==="approved"?"#d1fae5":"#fee2e2",color:req.status==="pending"?"#92400e":req.status==="approved"?"#065f46":"#991b1b" }}>{req.status.toUpperCase()}</span>
-              {isAdmin&&req.status==="pending"&&(
-                <div style={{ display:"flex",gap:6,marginTop:8 }}>
-                  <Btn small onClick={()=>approve(req.id)} color="#10b981">✅ {t.reqApprove}</Btn>
-                  <Btn small onClick={()=>reject(req.id)} color="#ef4444">❌ {t.reqReject}</Btn>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      ))}
-    </Card>
-  );
-}
-
-function VehicleRequestsTab({ vehicleReqs, setVehicleReqs, vehicles, setVehicles, setDone, t, isAdmin, isManager, user, loadVehicleReqs }) {
-  const myReqs = isAdmin ? vehicleReqs : vehicleReqs.filter(r=>r.dc===user.dc);
-
-  async function approve(id) {
-    const req = vehicleReqs.find(r=>r.id===id);
-    if (req) {
-      try {
-        // Firestore vehicles collection mein add karo
-        await addDoc(collection(db, "vehicles"), {
-          plate:req.plate, type:req.type, brand:req.brand||"",
-          model:req.model||"", year:req.year||"", dc:req.dc,
-          fuelCapacity:req.fuelCapacity||80, fuelLevel:req.fuelCapacity||80,
-          mileage:req.mileage||12, status:"Active", totalKM:0,
-          maintHistory:[], photos:[], fahas:"", insurance:"",
-          addedAt:new Date().toISOString(), approvedBy:user.name
-        });
-        // Request status update karo Firestore mein
-        await updateDoc(doc(db, "vehicleRequests", id), { status:"approved", approvedBy:user.name, approvedAt:new Date().toLocaleDateString() });
-        // Local state bhi update karo
-        setVehicles(prev=>[...prev,{
-          plate:req.plate, type:req.type, brand:req.brand||"",
-          model:req.model||"", year:req.year||"", dc:req.dc,
-          fuelCapacity:req.fuelCapacity||80, fuelLevel:req.fuelCapacity||80,
-          mileage:req.mileage||12, status:"Active", totalKM:0,
-          maintHistory:[], photos:[], fahas:"", insurance:""
-        }]);
-        setDone(t.reqApproved);
-        loadVehicleReqs();
-      } catch(e) { console.error(e); setDone("❌ Error: "+e.message); }
-    }
-  }
-
-  async function reject(id) {
-    try {
-      await updateDoc(doc(db, "vehicleRequests", id), { status:"rejected", rejectedBy:user.name });
-      setDone(t.reqRejected);
-      loadVehicleReqs();
-    } catch(e) { console.error(e); }
-  }
-
-  return (
-    <Card>
-      <CardTitle>📋 {t.vehReqTab} ({myReqs.length})</CardTitle>
-      {myReqs.length===0&&<div style={{ textAlign:"center",padding:20,color:"#94a3b8" }}>No vehicle requests yet</div>}
-      {myReqs.map(req=>(
-        <div key={req.id} style={{ border:`1px solid ${req.status==="pending"?"#fbbf24":req.status==="approved"?"#10b981":"#ef4444"}`,borderRadius:8,padding:14,marginBottom:8 }}>
-          <div style={{ display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:6,marginBottom:6 }}>
-            <div>
-              <div style={{ fontWeight:700,fontSize:14 }}>{req.plate} — {req.type} {req.brand} {req.model}</div>
-              <div style={{ fontSize:13,color:"#64748b" }}>{req.dc} DC | Year: {req.year} | Fuel: {req.fuelCapacity}L | {req.mileage} km/L</div>
-              <div style={{ fontSize:13,color:"#374151",marginTop:4 }}>📝 {req.reason}</div>
-              <div style={{ fontSize:12,color:"#94a3b8" }}>By: {req.requestedBy} | {req.requestedAt}</div>
-            </div>
-            <div>
-              <span style={{ fontSize:13,fontWeight:600,padding:"3px 10px",borderRadius:99,background:req.status==="pending"?"#fef3c7":req.status==="approved"?"#d1fae5":"#fee2e2",color:req.status==="pending"?"#92400e":req.status==="approved"?"#065f46":"#991b1b" }}>{req.status.toUpperCase()}</span>
-              {isAdmin&&req.status==="pending"&&(
-                <div style={{ display:"flex",gap:6,marginTop:8 }}>
-                  <Btn small onClick={()=>approve(req.id)} color="#10b981">✅ {t.reqApprove}</Btn>
-                  <Btn small onClick={()=>reject(req.id)} color="#ef4444">❌ {t.reqReject}</Btn>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      ))}
-    </Card>
-  );
-}
-
-function DriversTab({ users, setUsers, setDone, t, isAdmin, isManager, userDC, user, driverReqs, setDriverReqs, loadDriverReqs }) {
-  const [showAdd, setShowAdd] = useState(false);
-  const [showReq, setShowReq] = useState(false);
-  const [f, setF] = useState(EMPTY_DRV);
-  const [reqForm, setReqForm] = useState({ name:"",mobile:"",licNo:"",licExp:"",driverCard:"",driverCardExp:"",reason:"" });
-  const [editId, setEditId] = useState(null);
-  const drivers = users.filter(u=>u.role==="driver"&&(!userDC||u.dc===userDC));
+function DriversTab({ users, setUsers, setDone, t, isAdmin, userDC }) {
   const allDCsForDrivers = [...new Set(users.filter(u=>u.role==="driver").map(u=>u.dc))];
-
-  function save() {
-    if (!f.name||!f.mobile) return;
-    if (editId) { setUsers(prev=>prev.map(u=>u.uid===editId?{...u,...f}:u)); setDone(f.name+" updated!"); }
-    else { setUsers(prev=>[...prev,{uid:"d"+Date.now(),...f,role:"driver",email:"",displayName:f.name,phone:f.mobile,viewDC:f.dc,location:"Distribution Center - "+f.dc,dept:"Logistics",password:"spco2026"}]); setDone(f.name+" added!"); }
-    setShowAdd(false); setF(EMPTY_DRV); setEditId(null);
-  }
-
-  async function submitDriverRequest() {
-    if (!reqForm.name||!reqForm.mobile) return;
-    const newReq = {
-      id:"DREQ-"+Date.now(), ...reqForm,
-      dc:userDC||"Riyadh", requestedBy:user.name,
-      requestedAt:new Date().toLocaleDateString(), status:"pending"
-    };
-    try {
-      const docRef = await addDoc(collection(db, "driverRequests"), newReq);
-      setDriverReqs(prev=>[...prev,{...newReq, id:docRef.id}]);
-      // Notify Admin
-      await sendNotification({
-        toRole: "admin",
-        type: "request",
-        title: "New Driver Request",
-        message: `${user.name} (${userDC||"Riyadh"} DC) has requested a new driver: ${reqForm.name} — License: ${reqForm.licNo}.`,
-      });
-      setDone(t.reqSubmitted);
-      setShowReq(false);
-      setReqForm({ name:"",mobile:"",licNo:"",licExp:"",driverCard:"",driverCardExp:"",reason:"" });
-      if (loadDriverReqs) loadDriverReqs();
-    } catch(e) { console.error(e); setDone("❌ Error: "+e.message); }
-  }
-
-  function startEdit(u) { setEditId(u.uid); setF({name:u.name,mobile:u.phone||u.mobile||"",dc:u.dc||"Riyadh",licNo:u.licNo||"",licExp:u.licExp||"",driverCard:u.driverCard||"",driverCardExp:u.driverCardExp||"",status:u.status||"Active"}); setShowAdd(true); }
-  function toggleStatus(uid,cur) { const next=cur==="Active"?"On Leave":cur==="On Leave"?"Inactive":"Active"; setUsers(prev=>prev.map(u=>u.uid===uid?{...u,status:next}:u)); }
 
   return (
     <div>
-      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8 }}>
-        <div style={{ fontSize:14,color:"#64748b" }}>{drivers.length} drivers</div>
-        <div style={{ display:"flex",gap:8 }}>
-          {isManager&&!isAdmin&&<Btn small onClick={()=>setShowReq(!showReq)} color="#7c3aed">📋 {t.requestDriver}</Btn>}
-          {isAdmin&&<Btn small onClick={()=>{setShowAdd(!showAdd);setEditId(null);setF(EMPTY_DRV);}}>👤 {t.addDriver}</Btn>}
-        </div>
+      <div style={{ fontSize:14, color:"#64748b", marginBottom:12 }}>
+        {users.filter(u=>u.role==="driver"&&(!userDC||u.dc===userDC)).length} drivers
+        <span style={{ marginLeft:12, color:"#94a3b8", fontSize:13 }}>
+          (To add a driver, use User Management → Access Requests)
+        </span>
       </div>
-
-      {/* DC Manager Driver Request */}
-      {showReq&&isManager&&!isAdmin&&(
-        <Card style={{ borderLeft:"4px solid #7c3aed" }}>
-          <CardTitle>📋 {t.requestDriver}</CardTitle>
-          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px" }}>
-            <div style={{ gridColumn:"1/-1" }}><Input label={t.driverName+" *"} value={reqForm.name} onChange={v=>setReqForm({...reqForm,name:v})} required /></div>
-            <Input label={t.mobile+" *"} value={reqForm.mobile} onChange={v=>setReqForm({...reqForm,mobile:v})} required />
-            <Input label={t.licNo+" *"} value={reqForm.licNo} onChange={v=>setReqForm({...reqForm,licNo:v})} required />
-            <Input label={t.licExp+" *"} value={reqForm.licExp} onChange={v=>setReqForm({...reqForm,licExp:v})} type="date" required />
-            <Input label={t.driverCard} value={reqForm.driverCard} onChange={v=>setReqForm({...reqForm,driverCard:v})} />
-            <Input label={t.driverCardExp} value={reqForm.driverCardExp} onChange={v=>setReqForm({...reqForm,driverCardExp:v})} type="date" />
-            <div style={{ gridColumn:"1/-1" }}><Textarea label={t.reqReason+" *"} value={reqForm.reason} onChange={v=>setReqForm({...reqForm,reason:v})} required /></div>
-          </div>
-          <div style={{ display:"flex",gap:8 }}>
-            <Btn onClick={submitDriverRequest} color="#7c3aed" style={{ flex:1 }}>📤 Submit Request</Btn>
-            <Btn onClick={()=>setShowReq(false)} color="#64748b">{t.cancel}</Btn>
-          </div>
-        </Card>
-      )}
-
-      {showAdd&&isAdmin&&(
-        <Card>
-          <CardTitle>{editId?"Edit Driver":"➕ "+t.addDriver}</CardTitle>
-          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px" }}>
-            <div style={{ gridColumn:"1/-1" }}><Input label={t.driverName+" *"} value={f.name} onChange={v=>setF({...f,name:v})} required /></div>
-            <Input label={t.mobile+" *"} value={f.mobile} onChange={v=>setF({...f,mobile:v})} required />
-            <Select label={t.homeDC+" *"} value={f.dc} onChange={v=>setF({...f,dc:v})} options={DCS} />
-            <Input label={t.licNo+" *"} value={f.licNo} onChange={v=>setF({...f,licNo:v})} required />
-            <Input label={t.licExp+" *"} value={f.licExp} onChange={v=>setF({...f,licExp:v})} type="date" required />
-            <Input label={t.driverCard} value={f.driverCard} onChange={v=>setF({...f,driverCard:v})} />
-            <Input label={t.driverCardExp} value={f.driverCardExp} onChange={v=>setF({...f,driverCardExp:v})} type="date" />
-            <Select label={t.status} value={f.status} onChange={v=>setF({...f,status:v})} options={["Active","On Leave","Inactive"]} />
-          </div>
-          <div style={{ display:"flex",gap:8 }}>
-            <Btn onClick={save} color="#10b981" style={{ flex:1 }}>✅ {editId?t.save:t.addBtn}</Btn>
-            <Btn onClick={()=>{setShowAdd(false);setEditId(null);setF(EMPTY_DRV);}} color="#64748b">{t.cancel}</Btn>
-          </div>
-        </Card>
-      )}
-
       {allDCsForDrivers.filter(dc=>!userDC||dc===userDC).map(dc=>{
-        const dv=users.filter(u=>u.role==="driver"&&u.dc===dc);
+        const dv = users.filter(u=>u.role==="driver"&&u.dc===dc);
         if (!dv.length) return null;
         return (
           <Card key={dc}>
             <CardTitle>📍 {dc} Distribution Center — {dv.length} Drivers</CardTitle>
             {dv.map(d=>(
-              <div key={d.uid} style={{ display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:"1px solid #f1f5f9",flexWrap:"wrap" }}>
-                <div style={{ width:36,height:36,borderRadius:"50%",background:"#b45309",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontWeight:700,fontSize:14,flexShrink:0 }}>{d.name.charAt(0)}</div>
+              <div key={d.uid} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
+                <div style={{ width:36, height:36, borderRadius:"50%", background:"#b45309", display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontWeight:700, fontSize:14, flexShrink:0 }}>{(d.name||"?").charAt(0)}</div>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:600,fontSize:14 }}>{d.name}</div>
-                  <div style={{ fontSize:13,color:"#64748b" }}>{d.phone||d.mobile}</div>
-                  {d.licNo&&<div style={{ fontSize:12,color:"#6366f1" }}>📄 Lic: {d.licNo} | Exp: {d.licExp}</div>}
+                  <div style={{ fontWeight:600, fontSize:14 }}>{d.name}</div>
+                  <div style={{ fontSize:13, color:"#64748b" }}>{d.phone||d.mobile}</div>
+                  {d.licNo&&<div style={{ fontSize:12, color:"#6366f1" }}>📄 Lic: {d.licNo} | Exp: {d.licExp}</div>}
                 </div>
-                <span style={{ fontSize:13,fontWeight:600,padding:"3px 10px",borderRadius:99,background:d.status==="Active"?"#d1fae5":d.status==="On Leave"?"#fef3c7":"#fee2e2",color:d.status==="Active"?"#065f46":d.status==="On Leave"?"#92400e":"#991b1b" }}>{d.status||"Active"}</span>
-                {isAdmin&&(
-                  <div style={{ display:"flex",gap:4 }}>
-                    <Btn small onClick={()=>startEdit(d)} color="#6366f1">✎</Btn>
-                    <Btn small onClick={()=>toggleStatus(d.uid,d.status||"Active")} color="#f59e0b">↕</Btn>
-                  </div>
-                )}
+                <span style={{ fontSize:13, fontWeight:600, padding:"3px 10px", borderRadius:99,
+                  background:d.status==="active"||d.status==="Active"?"#d1fae5":d.status==="On Leave"?"#fef3c7":"#fee2e2",
+                  color:d.status==="active"||d.status==="Active"?"#065f46":d.status==="On Leave"?"#92400e":"#991b1b"
+                }}>{d.status||"Active"}</span>
               </div>
             ))}
           </Card>
@@ -614,6 +279,7 @@ function DriversTab({ users, setUsers, setDone, t, isAdmin, isManager, userDC, u
     </div>
   );
 }
+
 
 function DCsTab({ dcList, setDcList, setDone, t, isAdmin }) {
   const [showAdd, setShowAdd] = useState(false);
