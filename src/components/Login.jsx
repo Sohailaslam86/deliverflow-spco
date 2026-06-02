@@ -87,15 +87,13 @@ export default function Login({ onLogin, lang, setLang }) {
         {/* ── LEFT PANEL — Branding ── */}
         <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center", alignItems:"center", padding:"40px 32px", color:"white", direction:"ltr" }}>
 
-          {/* Logo Image — actual JPG */}
-          <img
-            src="/Logo_-_Elseif.jpg"
-            alt="Al Seif Logo"
-            style={{ width:180, height:"auto", marginBottom:10, objectFit:"contain" }}
-          />
+          {/* SVG Triangle Logo — same as before */}
+          <svg viewBox="0 0 100 90" width="120" height="108" style={{ marginBottom:16 }}>
+            <polygon points="50,4 96,86 4,86" fill="#c0392b"/>
+          </svg>
 
           {/* Arabic name */}
-          <div style={{ fontSize:20, fontWeight:900, color:"white", marginBottom:2, fontFamily:"Arial", direction:"rtl" }}>
+          <div style={{ fontSize:20, fontWeight:900, color:"white", marginBottom:4, fontFamily:"Arial", direction:"rtl" }}>
             الشركة السعودية للأدوية
           </div>
 
@@ -111,20 +109,23 @@ export default function Login({ onLogin, lang, setLang }) {
           <div style={{ fontSize:40, fontWeight:900, letterSpacing:"-1px", marginBottom:6 }}>DeliverFlow</div>
           <div style={{ fontSize:15, color:"rgba(255,255,255,0.5)", marginBottom:36 }}>Logistics and Delivery Management</div>
 
-          {/* Distribution Centers */}
-          {DCS.map(dc => (
-            <div key={dc} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10, fontSize:15, color:"rgba(255,255,255,0.75)" }}>
-              <span style={{ width:9, height:9, borderRadius:"50%", background:"#e74c3c", flexShrink:0 }} />
-              {dc}
-            </div>
-          ))}
+          {/* Distribution Centers — LEFT ALIGNED */}
+          <div style={{ width:"100%", maxWidth:280 }}>
+            {DCS.map(dc => (
+              <div key={dc} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10, fontSize:15, color:"rgba(255,255,255,0.75)" }}>
+                <span style={{ width:9, height:9, borderRadius:"50%", background:"#e74c3c", flexShrink:0 }} />
+                {dc}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* ── RIGHT PANEL — Login Form ── */}
-        <div style={{ flex:1, background:"#f8fafc", display:"flex", flexDirection:"column", justifyContent:"center", padding:"40px 32px", direction:rtl?"rtl":"ltr" }}>
-          <div style={{ maxWidth:380, width:"100%", marginLeft:rtl?"auto":"0", marginRight:rtl?"0":"auto" }}>
-            <h1 style={{ fontSize:30, fontWeight:900, color:"#0f172a", margin:"0 0 6px" }}>{t.welcome}</h1>
-            <p style={{ fontSize:16, color:"#64748b", marginBottom:28 }}>{t.signin}</p>
+        <div style={{ flex:1, background:"#f8fafc", display:"flex", flexDirection:"column", justifyContent:"center", padding:"40px 40px", direction:rtl?"rtl":"ltr" }}>
+          <div style={{ maxWidth:400, width:"100%", marginLeft:rtl?"auto":"0", marginRight:rtl?"0":"auto", flex:1, display:"flex", flexDirection:"column", justifyContent:"center" }}>
+
+            <h1 style={{ fontSize:32, fontWeight:900, color:"#0f172a", margin:"0 0 6px" }}>{t.welcome}</h1>
+            <p style={{ fontSize:17, color:"#64748b", marginBottom:30 }}>{t.signin}</p>
 
             <Input label={t.email} value={email} onChange={setEmail} placeholder="name@spco.sa" />
             <div onKeyDown={handleKey}>
@@ -137,7 +138,7 @@ export default function Login({ onLogin, lang, setLang }) {
               </div>
             )}
 
-            <Btn onClick={doLogin} disabled={loading||!isOnline} style={{ width:"100%", padding:14, fontSize:17, marginBottom:12 }}>
+            <Btn onClick={doLogin} disabled={loading||!isOnline} style={{ width:"100%", padding:15, fontSize:17, marginBottom:16 }}>
               {loading ? "Signing in..." : t.signInBtn}
             </Btn>
 
@@ -147,13 +148,18 @@ export default function Login({ onLogin, lang, setLang }) {
               </div>
             )}
 
-            <div style={{ textAlign:"center", fontSize:14, color:"#94a3b8" }}>
+            {/* Contact admin — center aligned */}
+            <div style={{ textAlign:"center", fontSize:15, color:"#94a3b8" }}>
               {t.contactAdmin}
             </div>
           </div>
 
-          <div style={{ marginTop:32, textAlign:"center", fontSize:13, color:"#94a3b8" }}>{t.footer}</div>
+          {/* Footer — center aligned */}
+          <div style={{ textAlign:"center", fontSize:13, color:"#94a3b8", paddingBottom:8 }}>
+            {t.footer}
+          </div>
         </div>
+
       </div>
     </div>
   );
