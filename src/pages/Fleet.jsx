@@ -15,7 +15,7 @@ const T = {
     noMaint:"No maintenance history", onLeave:"On Leave", inactive:"Inactive",
     expired:"Expiring Soon", allDrivers:"All Drivers — Overview",
     allVehicles:"All Vehicles — Overview",
-    riyadhDC:"Riyadh DC", jeddahDC:"Jeddah DC", dammamDC:"Dammam DC",
+    riyadhDC:"Riyadh Distribution Center", jeddahDC:"Jeddah Distribution Center", dammamDC:"Dammam Distribution Center",
     maintType:"Type", cost:"Cost (SAR)", startDate:"Start Date",
     returnDate:"Expected Return", notes:"Notes",
     confirm:"Confirm", cancel:"Cancel", edit:"Edit", save:"Save",
@@ -248,7 +248,7 @@ function VehiclesTab({ vehicles, dc, t, canManage, user, onSendMaint, onReactiva
         if (!dv.length) return null;
         return (
           <Card key={dcName}>
-            <CardTitle style={{ color:DC_COLORS[dcName] }}>📍 {dcName} DC — {dv.length} vehicles</CardTitle>
+            <CardTitle style={{ color:DC_COLORS[dcName] }}>📍 {dcName} Distribution Center — {dv.length} vehicles</CardTitle>
             {dv.map(v=>{
               const fuelPct = Math.round((v.fuelLevel||0)/(v.fuelCapacity||80)*100);
               return (
@@ -322,7 +322,7 @@ function DriversTab({ drivers, dc, t, canManage, onSetStatus, isAdmin, DCS, dcLa
         if (!dv.length) return null;
         return (
           <Card key={dcName}>
-            <CardTitle style={{ color:DC_COLORS[dcName] }}>📍 {dcName} DC — {dv.length} drivers</CardTitle>
+            <CardTitle style={{ color:DC_COLORS[dcName] }}>📍 {dcName} Distribution Center — {dv.length} drivers</CardTitle>
             {dv.map(dr=>(
               <div key={dr.uid} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
                 <div style={{ width:40, height:40, borderRadius:"50%", background:"#b45309", display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontWeight:700, fontSize:16, flexShrink:0 }}>

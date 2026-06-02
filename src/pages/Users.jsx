@@ -88,7 +88,7 @@ const T = {
     editUser:"Edit User", saveMatrix:"Save Matrix", matrixSaved:"✅ Matrix saved!",
     addRole:"+ Add Role", permission:"Permission",
     newRolePlaceholder:"e.g. Supervisor...",
-    dcLabel:"DC / Location", statusLabel:"Status",
+    dcLabel:"Distribution Center", statusLabel:"Status",
   },
   ar:{
     userDir:"دليل المستخدمين", accessReq:"طلبات الوصول", authMatrix:"مصفوفة التفويض",

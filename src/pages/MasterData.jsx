@@ -1,13 +1,17 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Card, CardTitle, Btn, Input, Select, Textarea, SuccessMsg, TabBar } from "../components/Shared.jsx";
 import { STORAGE_CONDITIONS, CITIES, DCS } from "../data/masterData.js";
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
+import { db } from "../firebase";
 
 const T = {
   en: {
     vehicles:"Vehicles", drivers:"Drivers", dcLocs:"Distribution Center Locations",
     storage:"Storage Conditions", cities:"Cities", allUsers:"User Directory",
+    departments:"Departments",
     addVehicle:"Add Vehicle", addDriver:"Add Driver", addDC:"Add DC",
     addStorage:"Add Storage Condition", addCity:"Add City",
+    addDept:"Add Department", deptName:"Department Name",
     plate:"Plate Number", type:"Type", homeDC:"Home DC",
     brand:"Brand", model:"Model", chassis:"Chassis", year:"Year",
     fuelCap:"Fuel Capacity (L)", mileage:"Mileage (km/L)",
@@ -37,8 +41,10 @@ const T = {
   ar: {
     vehicles:"المركبات", drivers:"السائقون", dcLocs:"مواقع مراكز التوزيع",
     storage:"ظروف التخزين", cities:"مدن التسليم", allUsers:"دليل المستخدمين",
+    departments:"الأقسام",
     addVehicle:"إضافة مركبة", addDriver:"إضافة سائق", addDC:"إضافة مركز",
     addStorage:"إضافة حالة تخزين", addCity:"إضافة مدينة",
+    addDept:"إضافة قسم", deptName:"اسم القسم",
     plate:"رقم اللوحة", type:"النوع", homeDC:"مركز التوزيع",
     brand:"الماركة", model:"الموديل", chassis:"رقم الهيكل", year:"السنة",
     fuelCap:"سعة الخزان (L)", mileage:"كفاءة الوقود (km/L)",
@@ -86,8 +92,46 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
   ]);
   const [storageList, setStorageList] = useState(STORAGE_CONDITIONS.map(s=>({...s})));
   const [cityList, setCityList] = useState([...CITIES]);
+
+  // Issue #4 — Departments: Firestore se load
+  const [deptList, setDeptList] = useState([]);
+  const [deptLoading, setDeptLoading] = useState(false);
+
+  // Issue #5 — Vehicle/Driver Requests: Firestore se load
   const [vehicleReqs, setVehicleReqs] = useState([]);
   const [driverReqs, setDriverReqs] = useState([]);
+
+  useEffect(() => {
+    loadDepartments();
+    loadVehicleReqs();
+    loadDriverReqs();
+  }, []);
+
+  // Issue #4 — Departments Firestore load
+  async function loadDepartments() {
+    setDeptLoading(true);
+    try {
+      const snap = await getDocs(collection(db, "departments"));
+      setDeptList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch(e) { console.error("Dept load error:", e); }
+    setDeptLoading(false);
+  }
+
+  // Issue #5 — Vehicle Requests Firestore load
+  async function loadVehicleReqs() {
+    try {
+      const snap = await getDocs(collection(db, "vehicleRequests"));
+      setVehicleReqs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch(e) { console.error("VehReq load error:", e); }
+  }
+
+  // Issue #5 — Driver Requests Firestore load
+  async function loadDriverReqs() {
+    try {
+      const snap = await getDocs(collection(db, "driverRequests"));
+      setDriverReqs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch(e) { console.error("DrvReq load error:", e); }
+  }
 
   const tabs = [
     ["vehicles","🚗",t.vehicles],
@@ -95,6 +139,7 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
     ["dcs","📍",t.dcLocs],
     ["storage","🌡️",t.storage],
     ["cities","🌆",t.cities],
+    ["departments","🏢",t.departments],
     ...(isAdmin?[["allusers","👥",t.allUsers],["vehreqs","📋",t.vehReqTab],["drvreqs","📋",t.drvReqTab]]:[]),
     ...(isManager?[["vehreqs","📋",t.vehReqTab],["drvreqs","📋",t.drvReqTab]]:[]),
   ];
@@ -105,19 +150,20 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
     <div style={{ direction:rtl?"rtl":"ltr" }}>
       {done&&<SuccessMsg msg={done} />}
       <TabBar tabs={tabs} active={tab} onChange={setTab} />
-      {tab==="vehicles"&&<VehiclesTab vehicles={vehicles} setVehicles={setVehicles} setDone={flash} t={t} isAdmin={isAdmin} isManager={isManager} userDC={user.dc} user={user} vehicleReqs={vehicleReqs} setVehicleReqs={setVehicleReqs} />}
-      {tab==="drivers"&&<DriversTab users={users} setUsers={setUsers} setDone={flash} t={t} isAdmin={isAdmin} isManager={isManager} userDC={user.dc} user={user} driverReqs={driverReqs} setDriverReqs={setDriverReqs} />}
+      {tab==="vehicles"&&<VehiclesTab vehicles={vehicles} setVehicles={setVehicles} setDone={flash} t={t} isAdmin={isAdmin} isManager={isManager} userDC={user.dc} user={user} vehicleReqs={vehicleReqs} setVehicleReqs={setVehicleReqs} loadVehicleReqs={loadVehicleReqs} />}
+      {tab==="drivers"&&<DriversTab users={users} setUsers={setUsers} setDone={flash} t={t} isAdmin={isAdmin} isManager={isManager} userDC={user.dc} user={user} driverReqs={driverReqs} setDriverReqs={setDriverReqs} loadDriverReqs={loadDriverReqs} />}
       {tab==="dcs"&&<DCsTab dcList={dcList} setDcList={setDcList} setDone={flash} t={t} isAdmin={isAdmin} />}
       {tab==="storage"&&<StorageTab storageList={storageList} setStorageList={setStorageList} setDone={flash} t={t} isAdmin={isAdmin} />}
       {tab==="cities"&&<CitiesTab cityList={cityList} setCityList={setCityList} setDone={flash} t={t} isAdmin={isAdmin} />}
+      {tab==="departments"&&<DepartmentsTab deptList={deptList} setDeptList={setDeptList} setDone={flash} t={t} isAdmin={isAdmin} loading={deptLoading} reload={loadDepartments} />}
       {tab==="allusers"&&isAdmin&&<AllUsersTab users={users} setUsers={setUsers} setDone={flash} t={t} />}
-      {tab==="vehreqs"&&<VehicleRequestsTab vehicleReqs={vehicleReqs} setVehicleReqs={setVehicleReqs} vehicles={vehicles} setVehicles={setVehicles} setDone={flash} t={t} isAdmin={isAdmin} isManager={isManager} user={user} />}
-      {tab==="drvreqs"&&<DriverRequestsTab driverReqs={driverReqs} setDriverReqs={setDriverReqs} users={users} setUsers={setUsers} setDone={flash} t={t} isAdmin={isAdmin} isManager={isManager} user={user} />}
+      {tab==="vehreqs"&&<VehicleRequestsTab vehicleReqs={vehicleReqs} setVehicleReqs={setVehicleReqs} vehicles={vehicles} setVehicles={setVehicles} setDone={flash} t={t} isAdmin={isAdmin} isManager={isManager} user={user} loadVehicleReqs={loadVehicleReqs} />}
+      {tab==="drvreqs"&&<DriverRequestsTab driverReqs={driverReqs} setDriverReqs={setDriverReqs} users={users} setUsers={setUsers} setDone={flash} t={t} isAdmin={isAdmin} isManager={isManager} user={user} loadDriverReqs={loadDriverReqs} />}
     </div>
   );
 }
 
-function VehiclesTab({ vehicles, setVehicles, setDone, t, isAdmin, isManager, userDC, user, vehicleReqs, setVehicleReqs }) {
+function VehiclesTab({ vehicles, setVehicles, setDone, t, isAdmin, isManager, userDC, user, vehicleReqs, setVehicleReqs, loadVehicleReqs }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showReq, setShowReq] = useState(false);
   const [f, setF] = useState(EMPTY_VEH);
@@ -139,15 +185,22 @@ function VehiclesTab({ vehicles, setVehicles, setDone, t, isAdmin, isManager, us
     setDone(f.plate+" added!"); setShowAdd(false); setF(EMPTY_VEH); setPhotos([]); setAiStatus(null);
   }
 
-  function submitRequest() {
+  async function submitRequest() {
     if (!reqForm.plate) return;
-    setVehicleReqs(prev=>[...prev,{
+    const newReq = {
       id:"VREQ-"+Date.now(), ...reqForm,
       dc:userDC||"Riyadh", requestedBy:user.name,
       requestedAt:new Date().toLocaleDateString(), status:"pending"
-    }]);
-    setDone(t.reqSubmitted); setShowReq(false);
-    setReqForm({ plate:"",type:"Dyna",brand:"",model:"",year:"",fuelCapacity:80,mileage:12,reason:"" });
+    };
+    try {
+      // Firestore mein save karo
+      const docRef = await addDoc(collection(db, "vehicleRequests"), newReq);
+      setVehicleReqs(prev=>[...prev,{...newReq, id:docRef.id}]);
+      setDone(t.reqSubmitted);
+      setShowReq(false);
+      setReqForm({ plate:"",type:"Dyna",brand:"",model:"",year:"",fuelCapacity:80,mileage:12,reason:"" });
+      if (loadVehicleReqs) loadVehicleReqs();
+    } catch(e) { console.error(e); setDone("❌ Error: "+e.message); }
   }
 
   function toggleStatus(plate) { setVehicles(prev=>prev.map(v=>v.plate===plate?{...v,status:v.status==="Active"?"Maintenance":"Active"}:v)); }
@@ -260,28 +313,34 @@ function VehiclesTab({ vehicles, setVehicles, setDone, t, isAdmin, isManager, us
   );
 }
 
-function DriverRequestsTab({ driverReqs, setDriverReqs, users, setUsers, setDone, t, isAdmin, isManager, user }) {
+function DriverRequestsTab({ driverReqs, setDriverReqs, users, setUsers, setDone, t, isAdmin, isManager, user, loadDriverReqs }) {
   const myReqs = isAdmin ? driverReqs : driverReqs.filter(r=>r.dc===user.dc);
 
-  function approve(id) {
+  async function approve(id) {
     const req = driverReqs.find(r=>r.id===id);
     if (req) {
-      setUsers(prev=>[...prev,{
-        uid:"d"+Date.now(), name:req.name, displayName:req.name,
-        phone:req.mobile, email:"", role:"driver",
-        dept:"Logistics", dc:req.dc, location:"Distribution Center - "+req.dc,
-        status:"Active", licNo:req.licNo, licExp:req.licExp,
-        driverCard:req.driverCard||"", driverCardExp:req.driverCardExp||"",
-        viewDC:req.dc, password:"spco2026"
-      }]);
+      try {
+        await updateDoc(doc(db, "driverRequests", id), { status:"approved", approvedBy:user.name, approvedAt:new Date().toLocaleDateString() });
+        setUsers(prev=>[...prev,{
+          uid:"d"+Date.now(), name:req.name, displayName:req.name,
+          phone:req.mobile, email:"", role:"driver",
+          dept:"Logistics", dc:req.dc, location:"Distribution Center - "+req.dc,
+          status:"Active", licNo:req.licNo, licExp:req.licExp,
+          driverCard:req.driverCard||"", driverCardExp:req.driverCardExp||"",
+          viewDC:req.dc, password:"spco2026"
+        }]);
+        setDone(t.reqApproved);
+        loadDriverReqs();
+      } catch(e) { console.error(e); setDone("❌ Error: "+e.message); }
     }
-    setDriverReqs(prev=>prev.map(r=>r.id===id?{...r,status:"approved",approvedBy:user.name,approvedAt:new Date().toLocaleDateString()}:r));
-    setDone(t.reqApproved);
   }
 
-  function reject(id) {
-    setDriverReqs(prev=>prev.map(r=>r.id===id?{...r,status:"rejected"}:r));
-    setDone(t.reqRejected);
+  async function reject(id) {
+    try {
+      await updateDoc(doc(db, "driverRequests", id), { status:"rejected", rejectedBy:user.name });
+      setDone(t.reqRejected);
+      loadDriverReqs();
+    } catch(e) { console.error(e); }
   }
 
   return (
@@ -313,27 +372,44 @@ function DriverRequestsTab({ driverReqs, setDriverReqs, users, setUsers, setDone
   );
 }
 
-function VehicleRequestsTab({ vehicleReqs, setVehicleReqs, vehicles, setVehicles, setDone, t, isAdmin, isManager, user }) {
+function VehicleRequestsTab({ vehicleReqs, setVehicleReqs, vehicles, setVehicles, setDone, t, isAdmin, isManager, user, loadVehicleReqs }) {
   const myReqs = isAdmin ? vehicleReqs : vehicleReqs.filter(r=>r.dc===user.dc);
 
-  function approve(id) {
+  async function approve(id) {
     const req = vehicleReqs.find(r=>r.id===id);
     if (req) {
-      setVehicles(prev=>[...prev,{
-        plate:req.plate, type:req.type, brand:req.brand||"",
-        model:req.model||"", year:req.year||"", dc:req.dc,
-        fuelCapacity:req.fuelCapacity||80, fuelLevel:req.fuelCapacity||80,
-        mileage:req.mileage||12, status:"Active", totalKM:0,
-        maintHistory:[], photos:[], fahas:"", insurance:""
-      }]);
+      try {
+        // Firestore vehicles collection mein add karo
+        await addDoc(collection(db, "vehicles"), {
+          plate:req.plate, type:req.type, brand:req.brand||"",
+          model:req.model||"", year:req.year||"", dc:req.dc,
+          fuelCapacity:req.fuelCapacity||80, fuelLevel:req.fuelCapacity||80,
+          mileage:req.mileage||12, status:"Active", totalKM:0,
+          maintHistory:[], photos:[], fahas:"", insurance:"",
+          addedAt:new Date().toISOString(), approvedBy:user.name
+        });
+        // Request status update karo Firestore mein
+        await updateDoc(doc(db, "vehicleRequests", id), { status:"approved", approvedBy:user.name, approvedAt:new Date().toLocaleDateString() });
+        // Local state bhi update karo
+        setVehicles(prev=>[...prev,{
+          plate:req.plate, type:req.type, brand:req.brand||"",
+          model:req.model||"", year:req.year||"", dc:req.dc,
+          fuelCapacity:req.fuelCapacity||80, fuelLevel:req.fuelCapacity||80,
+          mileage:req.mileage||12, status:"Active", totalKM:0,
+          maintHistory:[], photos:[], fahas:"", insurance:""
+        }]);
+        setDone(t.reqApproved);
+        loadVehicleReqs();
+      } catch(e) { console.error(e); setDone("❌ Error: "+e.message); }
     }
-    setVehicleReqs(prev=>prev.map(r=>r.id===id?{...r,status:"approved",approvedBy:user.name,approvedAt:new Date().toLocaleDateString()}:r));
-    setDone(t.reqApproved);
   }
 
-  function reject(id) {
-    setVehicleReqs(prev=>prev.map(r=>r.id===id?{...r,status:"rejected"}:r));
-    setDone(t.reqRejected);
+  async function reject(id) {
+    try {
+      await updateDoc(doc(db, "vehicleRequests", id), { status:"rejected", rejectedBy:user.name });
+      setDone(t.reqRejected);
+      loadVehicleReqs();
+    } catch(e) { console.error(e); }
   }
 
   return (
@@ -365,7 +441,7 @@ function VehicleRequestsTab({ vehicleReqs, setVehicleReqs, vehicles, setVehicles
   );
 }
 
-function DriversTab({ users, setUsers, setDone, t, isAdmin, isManager, userDC, user, driverReqs, setDriverReqs }) {
+function DriversTab({ users, setUsers, setDone, t, isAdmin, isManager, userDC, user, driverReqs, setDriverReqs, loadDriverReqs }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showReq, setShowReq] = useState(false);
   const [f, setF] = useState(EMPTY_DRV);
@@ -381,15 +457,22 @@ function DriversTab({ users, setUsers, setDone, t, isAdmin, isManager, userDC, u
     setShowAdd(false); setF(EMPTY_DRV); setEditId(null);
   }
 
-  function submitDriverRequest() {
+  async function submitDriverRequest() {
     if (!reqForm.name||!reqForm.mobile) return;
-    setDriverReqs(prev=>[...prev,{
+    const newReq = {
       id:"DREQ-"+Date.now(), ...reqForm,
       dc:userDC||"Riyadh", requestedBy:user.name,
       requestedAt:new Date().toLocaleDateString(), status:"pending"
-    }]);
-    setDone(t.reqSubmitted); setShowReq(false);
-    setReqForm({ name:"",mobile:"",licNo:"",licExp:"",driverCard:"",driverCardExp:"",reason:"" });
+    };
+    try {
+      // Firestore mein save karo
+      const docRef = await addDoc(collection(db, "driverRequests"), newReq);
+      setDriverReqs(prev=>[...prev,{...newReq, id:docRef.id}]);
+      setDone(t.reqSubmitted);
+      setShowReq(false);
+      setReqForm({ name:"",mobile:"",licNo:"",licExp:"",driverCard:"",driverCardExp:"",reason:"" });
+      if (loadDriverReqs) loadDriverReqs();
+    } catch(e) { console.error(e); setDone("❌ Error: "+e.message); }
   }
 
   function startEdit(u) { setEditId(u.uid); setF({name:u.name,mobile:u.phone||u.mobile||"",dc:u.dc||"Riyadh",licNo:u.licNo||"",licExp:u.licExp||"",driverCard:u.driverCard||"",driverCardExp:u.driverCardExp||"",status:u.status||"Active"}); setShowAdd(true); }
@@ -630,6 +713,112 @@ function CitiesTab({ cityList, setCityList, setDone, t, isAdmin }) {
           </div>
         ))}
       </div>
+    </Card>
+  );
+}
+
+// Issue #4 — Departments Tab — Firestore CRUD
+function DepartmentsTab({ deptList, setDeptList, setDone, t, isAdmin, loading, reload }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [newDeptName, setNewDeptName] = useState("");
+  const [editId, setEditId] = useState(null);
+  const [editVal, setEditVal] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function addDept() {
+    if (!newDeptName.trim()) return;
+    setSaving(true);
+    try {
+      const docRef = await addDoc(collection(db, "departments"), {
+        name: newDeptName.trim(),
+        createdAt: new Date().toISOString()
+      });
+      setDeptList(prev=>[...prev, { id:docRef.id, name:newDeptName.trim() }]);
+      setDone(newDeptName+" added!");
+      setNewDeptName("");
+      setShowAdd(false);
+    } catch(e) { setDone("❌ Error: "+e.message); }
+    setSaving(false);
+  }
+
+  async function saveDeptEdit(id) {
+    if (!editVal.trim()) return;
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, "departments", id), { name: editVal.trim() });
+      setDeptList(prev=>prev.map(d=>d.id===id?{...d,name:editVal.trim()}:d));
+      setDone(editVal+" updated!");
+      setEditId(null);
+      setEditVal("");
+    } catch(e) { setDone("❌ Error: "+e.message); }
+    setSaving(false);
+  }
+
+  async function deleteDept(id, name) {
+    if (!window.confirm("Delete '"+name+"'?")) return;
+    try {
+      await deleteDoc(doc(db, "departments", id));
+      setDeptList(prev=>prev.filter(d=>d.id!==id));
+      setDone(name+" deleted!");
+    } catch(e) { setDone("❌ Error: "+e.message); }
+  }
+
+  return (
+    <Card>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+        <CardTitle style={{ margin:0 }}>🏢 {t.departments}</CardTitle>
+        {isAdmin&&<Btn small onClick={()=>setShowAdd(!showAdd)} color="#6366f1">➕ {t.addDept}</Btn>}
+      </div>
+
+      {loading&&<div style={{ textAlign:"center", padding:16, color:"#94a3b8" }}>⏳ Loading...</div>}
+
+      {showAdd&&isAdmin&&(
+        <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+          <input
+            value={newDeptName}
+            onChange={e=>setNewDeptName(e.target.value)}
+            placeholder={t.deptName}
+            style={{ flex:1, border:"1.5px solid #6366f1", borderRadius:8, padding:"9px 14px", fontSize:14, outline:"none" }}
+            onKeyDown={e=>e.key==="Enter"&&addDept()}
+          />
+          <Btn onClick={addDept} color="#10b981" disabled={saving}>✅</Btn>
+          <Btn onClick={()=>{setShowAdd(false);setNewDeptName("");}} color="#64748b">✕</Btn>
+        </div>
+      )}
+
+      {deptList.length===0&&!loading&&(
+        <div style={{ textAlign:"center", padding:24, color:"#94a3b8", fontSize:15 }}>
+          No departments yet. {isAdmin?"Click '+ Add Department' to add one.":""}
+        </div>
+      )}
+
+      {deptList.map(dept=>(
+        <div key={dept.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 0", borderBottom:"1px solid #f1f5f9" }}>
+          {editId===dept.id?(
+            <>
+              <input
+                value={editVal}
+                onChange={e=>setEditVal(e.target.value)}
+                style={{ flex:1, border:"1.5px solid #6366f1", borderRadius:8, padding:"7px 12px", fontSize:14, outline:"none" }}
+                onKeyDown={e=>e.key==="Enter"&&saveDeptEdit(dept.id)}
+                autoFocus
+              />
+              <Btn small onClick={()=>saveDeptEdit(dept.id)} color="#10b981" disabled={saving}>✅</Btn>
+              <Btn small onClick={()=>{setEditId(null);setEditVal("");}} color="#64748b">✕</Btn>
+            </>
+          ):(
+            <>
+              <div style={{ flex:1, fontWeight:600, fontSize:14, color:"#0f172a" }}>🏢 {dept.name}</div>
+              {isAdmin&&(
+                <div style={{ display:"flex", gap:4 }}>
+                  <Btn small onClick={()=>{setEditId(dept.id);setEditVal(dept.name);}} color="#6366f1">✎</Btn>
+                  <Btn small onClick={()=>deleteDept(dept.id, dept.name)} color="#ef4444">🗑</Btn>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      ))}
     </Card>
   );
 }
