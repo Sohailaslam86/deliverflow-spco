@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardTitle, StatCard, TabBar } from "../components/Shared.jsx";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "../firebase";
 
 const T = {
   en: {
@@ -50,7 +52,63 @@ function dcLabel(dc, t) {
   return t.dammamDC;
 }
 
-// Central DC filter
+// Working days calculator — exclude Fri/Sat/public holidays/leaves
+function getWorkingDays(from, to, holidays=[], leaveDates=[]) {
+  let count = 0;
+  let date = new Date(from);
+  const end = new Date(to);
+  while (date <= end) {
+    const day = date.getDay();
+    const dateStr = date.toISOString().split("T")[0];
+    const isFriSat = day === 5 || day === 6; // 5=Fri, 6=Sat
+    const isHoliday = holidays.some(h=>dateStr>=h.from&&dateStr<=h.to);
+    const isLeave = leaveDates.includes(dateStr);
+    if (!isFriSat && !isHoliday && !isLeave) count++;
+    date.setDate(date.getDate() + 1);
+  }
+  return count;
+}
+
+// Get all dates in a leave period
+function getLeaveDates(leaves, driverId) {
+  const dates = [];
+  leaves.filter(l=>l.driverId===driverId).forEach(l=>{
+    let d = new Date(l.from);
+    const end = new Date(l.to);
+    while (d <= end) { dates.push(d.toISOString().split("T")[0]); d.setDate(d.getDate()+1); }
+  });
+  return dates;
+}
+
+// Get all dates in vehicle off period
+function getVehicleOffDates(offDays, plate) {
+  const dates = [];
+  offDays.filter(o=>o.vehiclePlate===plate).forEach(o=>{
+    let d = new Date(o.from);
+    const end = new Date(o.to);
+    while (d <= end) { dates.push(d.toISOString().split("T")[0]); d.setDate(d.getDate()+1); }
+  });
+  return dates;
+}
+
+// Period date range
+function getPeriodRange(period) {
+  const now = new Date();
+  const today = now.toISOString().split("T")[0];
+  if (period==="today") return { from:today, to:today };
+  if (period==="week") {
+    const d = new Date(now); d.setDate(d.getDate()-6);
+    return { from:d.toISOString().split("T")[0], to:today };
+  }
+  if (period==="month") {
+    const d = new Date(now); d.setDate(1);
+    return { from:d.toISOString().split("T")[0], to:today };
+  }
+  // all time — use last year
+  const d = new Date(now); d.setFullYear(d.getFullYear()-1);
+  return { from:d.toISOString().split("T")[0], to:today };
+}
+
 function getUserDC(user) {
   if (!user.dc || user.dc === "Head Office") return null;
   return user.dc;
@@ -79,9 +137,31 @@ function filterByPeriod(invoices, period) {
 export default function Reports({ user, invoices, fuelLogs, vehicles, users, lang }) {
   const [tab, setTab] = useState("daily");
   const [period, setPeriod] = useState("month");
+  const [tripLogs, setTripLogs] = useState([]);
+  const [holidays, setHolidays] = useState([]);
+  const [driverLeaves, setDriverLeaves] = useState([]);
+  const [vehicleOffDays, setVehicleOffDays] = useState([]);
   const rtl = lang==="ar";
   const t = T[lang]||T.en;
   const isAdmin = user.role==="admin";
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [tSnap, hSnap, lSnap, vSnap] = await Promise.all([
+          getDocs(collection(db, "tripLogs")),
+          getDocs(collection(db, "publicHolidays")),
+          getDocs(collection(db, "driverLeaves")),
+          getDocs(collection(db, "vehicleOffDays")),
+        ]);
+        setTripLogs(tSnap.docs.map(d=>({id:d.id,...d.data()})));
+        setHolidays(hSnap.docs.map(d=>({id:d.id,...d.data()})));
+        setDriverLeaves(lSnap.docs.map(d=>({id:d.id,...d.data()})));
+        setVehicleOffDays(vSnap.docs.map(d=>({id:d.id,...d.data()})));
+      } catch(e) { console.error("Reports load:", e); }
+    }
+    loadData();
+  }, []);
 
   // DC filter — ALWAYS apply
   const userDC = getUserDC(user);
@@ -99,16 +179,43 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
   ];
   const periods = [["today",t.today],["week",t.week],["month",t.month],["all",t.all]];
 
+  const periodRange = getPeriodRange(period);
+
   const driverMap = {};
   myInv.filter(i=>i.driverId).forEach(i=>{
-    if(!driverMap[i.driverId]) driverMap[i.driverId]={name:i.driverName||i.driverId,delivered:0,failed:0,total:0,incity:0,outcity:0};
+    if(!driverMap[i.driverId]) driverMap[i.driverId]={name:i.driverName||i.driverId,driverId:i.driverId,delivered:0,failed:0,total:0,incity:0,outcity:0,totalKM:0,fuelUsed:0,activeDays:0};
     driverMap[i.driverId].total++;
     if(i.status==="delivered") driverMap[i.driverId].delivered++;
     if(i.status==="failed") driverMap[i.driverId].failed++;
     if(i.dtype==="incity") driverMap[i.driverId].incity++;
     if(i.dtype==="outcity") driverMap[i.driverId].outcity++;
   });
-  const driverStats = Object.values(driverMap).map(d=>({...d,rate:d.total>0?Math.round(d.delivered/d.total*100):0})).sort((a,b)=>b.rate-a.rate);
+
+  // Add KM + active days from tripLogs
+  const myTripLogs = tripLogs.filter(tl=>{
+    const inPeriod = tl.startDate>=periodRange.from && tl.startDate<=periodRange.to;
+    const inDC = !userDC || tl.dc===userDC;
+    return inPeriod && inDC;
+  });
+  myTripLogs.forEach(tl=>{
+    if(!driverMap[tl.driverId]) driverMap[tl.driverId]={name:tl.driverName,driverId:tl.driverId,delivered:0,failed:0,total:0,incity:0,outcity:0,totalKM:0,fuelUsed:0,activeDays:0};
+    driverMap[tl.driverId].totalKM = Math.round(((driverMap[tl.driverId].totalKM||0)+(tl.totalKM||0))*10)/10;
+    driverMap[tl.driverId].fuelUsed = Math.round(((driverMap[tl.driverId].fuelUsed||0)+(tl.fuelUsed||0))*10)/10;
+    driverMap[tl.driverId].activeDays = Math.round(((driverMap[tl.driverId].activeDays||0)+(tl.daysActive||1))*2)/2;
+  });
+
+  // Add working days + productivity to each driver
+  const driverStats = Object.values(driverMap).map(d=>{
+    const leaveDates = getLeaveDates(driverLeaves, d.driverId);
+    const workingDays = getWorkingDays(periodRange.from, periodRange.to, holidays, leaveDates);
+    const unassignedDays = Math.max(0, workingDays - d.activeDays);
+    const productivity = workingDays>0?Math.round(d.activeDays/workingDays*100):0;
+    return {
+      ...d,
+      rate: d.total>0?Math.round(d.delivered/d.total*100):0,
+      workingDays, unassignedDays, productivity
+    };
+  }).sort((a,b)=>b.rate-a.rate);
 
   const agingInv = allInv.filter(i=>["pending","assigned","outstanding"].includes(i.status))
     .map(i=>({...i,days:Math.floor((new Date()-new Date(i.date))/(1000*60*60*24))}))
@@ -229,11 +336,18 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
                 <span style={{ fontWeight:800, fontSize:20, color:d.rate>=80?"#10b981":d.rate>=60?"#f59e0b":"#ef4444" }}>{d.rate}%</span>
               </div>
               <div style={{ display:"flex", gap:16, fontSize:14, color:"#64748b", flexWrap:"wrap", marginBottom:6 }}>
-                <span>📋 {d.total}</span>
-                <span style={{ color:"#10b981" }}>✅ {d.delivered}</span>
-                <span style={{ color:"#ef4444" }}>❌ {d.failed}</span>
+                <span>📋 {d.total} invoices</span>
+                <span style={{ color:"#10b981" }}>✅ {d.delivered} delivered</span>
+                <span style={{ color:"#ef4444" }}>❌ {d.failed} failed</span>
                 <span>🏙️ {t.inCity}: {d.incity}</span>
                 <span>🛣️ {t.outCity}: {d.outcity}</span>
+              </div>
+              <div style={{ display:"flex", gap:16, fontSize:13, color:"#64748b", flexWrap:"wrap", marginBottom:8 }}>
+                <span>📍 {d.totalKM} km covered</span>
+                <span>⛽ {d.fuelUsed}L fuel used</span>
+                <span style={{ color:"#6366f1", fontWeight:600 }}>✅ {d.activeDays} active days / {d.workingDays} working days</span>
+                <span style={{ color:d.unassignedDays>0?"#ef4444":"#10b981", fontWeight:600 }}>⚪ {d.unassignedDays} unassigned days</span>
+                <span style={{ fontWeight:700, color:d.productivity>=80?"#10b981":d.productivity>=60?"#f59e0b":"#ef4444" }}>🎯 {d.productivity}% productivity</span>
               </div>
               <div style={{ background:"#f1f5f9", borderRadius:99, height:8, overflow:"hidden" }}>
                 <div style={{ width:`${d.rate}%`, height:"100%", background:d.rate>=80?"#10b981":d.rate>=60?"#f59e0b":"#ef4444", borderRadius:99 }} />
@@ -276,13 +390,33 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
               </Card>
             );
           })}
-          {userDC&&myVeh.map(v=>(
-            <div key={v.plate||v.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
-              <span style={{ fontWeight:700, fontSize:15, minWidth:100 }}>{v.plate}</span>
-              <span style={{ fontSize:14, color:"#64748b", flex:1 }}>{v.type} {v.brand} | {(v.totalKM||0).toLocaleString()} km</span>
-              <span style={{ fontSize:13, fontWeight:600, padding:"4px 12px", borderRadius:99, background:v.status==="Maintenance"?"#fef3c7":"#d1fae5", color:v.status==="Maintenance"?"#92400e":"#065f46" }}>{v.status}</span>
-            </div>
-          ))}
+          {userDC&&myVeh.map(v=>{
+            const vOffDates = getVehicleOffDates(vehicleOffDays, v.plate);
+            const workingDays = getWorkingDays(periodRange.from, periodRange.to, holidays, vOffDates);
+            const vTrips = myTripLogs.filter(tl=>tl.vehiclePlate===v.plate);
+            const activeDays = vTrips.reduce((s,tl)=>s+(tl.daysActive||1),0);
+            const periodKM = vTrips.reduce((s,tl)=>s+(tl.totalKM||0),0);
+            const periodFuel = vTrips.reduce((s,tl)=>s+(tl.fuelUsed||0),0);
+            const unassignedDays = Math.max(0, workingDays - activeDays);
+            const productivity = workingDays>0?Math.round(activeDays/workingDays*100):0;
+            return (
+              <div key={v.plate||v.id} style={{ border:"1px solid #e2e8f0", borderRadius:10, padding:14, marginBottom:10 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:8 }}>
+                  <span style={{ fontWeight:700, fontSize:15, minWidth:100 }}>{v.plate}</span>
+                  <span style={{ fontSize:14, color:"#64748b", flex:1 }}>{v.type} {v.brand}</span>
+                  <span style={{ fontSize:13, fontWeight:600, padding:"4px 12px", borderRadius:99, background:v.status==="Maintenance"?"#fef3c7":"#d1fae5", color:v.status==="Maintenance"?"#92400e":"#065f46" }}>{v.status}</span>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:8, fontSize:13 }}>
+                  <span style={{ color:"#0891b2", fontWeight:600 }}>🛣️ Total KM: {(v.totalKM||0).toLocaleString()}</span>
+                  <span style={{ color:"#6366f1", fontWeight:600 }}>📅 Period KM: {Math.round(periodKM*10)/10}</span>
+                  <span style={{ color:"#f59e0b" }}>⛽ Fuel Used: {Math.round(periodFuel*10)/10}L</span>
+                  <span style={{ color:"#10b981", fontWeight:600 }}>✅ Active: {Math.round(activeDays*2)/2} days</span>
+                  <span style={{ color:unassignedDays>0?"#ef4444":"#10b981", fontWeight:600 }}>⚪ Unassigned: {Math.round(unassignedDays*2)/2} days</span>
+                  <span style={{ color:productivity>=80?"#10b981":productivity>=60?"#f59e0b":"#ef4444", fontWeight:700 }}>🎯 {productivity}% productivity</span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

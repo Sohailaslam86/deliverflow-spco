@@ -9,6 +9,11 @@ const T = {
     vehicles:"Vehicles", drivers:"Drivers", dcLocs:"Distribution Center Locations",
     storage:"Storage Conditions", cities:"Cities", allUsers:"User Directory",
     departments:"Departments",
+    holidays:"Public Holidays", driverLeaves:"Driver Leaves", vehicleOff:"Vehicle Off Days",
+    addHoliday:"Add Holiday", addLeave:"Add Leave", addVehicleOff:"Add Vehicle Off",
+    holidayName:"Holiday Name", fromDate:"From Date", toDate:"To Date",
+    leaveType:"Leave Type", annualLeave:"Annual Leave", sickLeave:"Sick Leave", emergencyLeave:"Emergency Leave",
+    selectDriver:"Select Driver", selectVehicle:"Select Vehicle", reason:"Reason",
     addVehicle:"Add Vehicle", addDriver:"Add Driver", addDC:"Add DC",
     addStorage:"Add Storage Condition", addCity:"Add City",
     addDept:"Add Department", deptName:"Department Name",
@@ -42,6 +47,11 @@ const T = {
     vehicles:"المركبات", drivers:"السائقون", dcLocs:"مواقع مراكز التوزيع",
     storage:"ظروف التخزين", cities:"مدن التسليم", allUsers:"دليل المستخدمين",
     departments:"الأقسام",
+    holidays:"الإجازات الرسمية", driverLeaves:"إجازات السائقين", vehicleOff:"أيام توقف المركبات",
+    addHoliday:"إضافة إجازة رسمية", addLeave:"إضافة إجازة", addVehicleOff:"إضافة يوم توقف",
+    holidayName:"اسم الإجازة", fromDate:"من تاريخ", toDate:"إلى تاريخ",
+    leaveType:"نوع الإجازة", annualLeave:"إجازة سنوية", sickLeave:"إجازة مرضية", emergencyLeave:"إجازة طارئة",
+    selectDriver:"اختر السائق", selectVehicle:"اختر المركبة", reason:"السبب",
     addVehicle:"إضافة مركبة", addDriver:"إضافة سائق", addDC:"إضافة مركز",
     addStorage:"إضافة حالة تخزين", addCity:"إضافة مدينة",
     addDept:"إضافة قسم", deptName:"اسم القسم",
@@ -101,8 +111,19 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
   const [vehicleReqs, setVehicleReqs] = useState([]);
   const [driverReqs, setDriverReqs] = useState([]);
 
+  // Holidays + Leaves
+  const [holidays, setHolidays] = useState([]);
+  const [driverLeaves, setDriverLeaves] = useState([]);
+  const [vehicleOffDays, setVehicleOffDays] = useState([]);
+
   useEffect(() => {
     loadDepartments();
+    loadVehicleReqs();
+    loadDriverReqs();
+    loadHolidays();
+    loadDriverLeaves();
+    loadVehicleOffDays();
+  }, []);
     loadVehicleReqs();
     loadDriverReqs();
   }, []);
@@ -133,6 +154,27 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
     } catch(e) { console.error("DrvReq load error:", e); }
   }
 
+  async function loadHolidays() {
+    try {
+      const snap = await getDocs(collection(db, "publicHolidays"));
+      setHolidays(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch(e) { console.error("Holidays load error:", e); }
+  }
+
+  async function loadDriverLeaves() {
+    try {
+      const snap = await getDocs(collection(db, "driverLeaves"));
+      setDriverLeaves(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch(e) { console.error("DriverLeaves load error:", e); }
+  }
+
+  async function loadVehicleOffDays() {
+    try {
+      const snap = await getDocs(collection(db, "vehicleOffDays"));
+      setVehicleOffDays(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch(e) { console.error("VehicleOff load error:", e); }
+  }
+
   const tabs = [
     ["vehicles","🚗",t.vehicles],
     ["drivers","👤",t.drivers],
@@ -140,6 +182,8 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
     ["storage","🌡️",t.storage],
     ["cities","🌆",t.cities],
     ["departments","🏢",t.departments],
+    ["holidays","🏖️",t.holidays],
+    ...(isAdmin||isManager?[["driverleaves","👤",t.driverLeaves],["vehicleoff","🚗",t.vehicleOff]]:[]),
     ...(isAdmin?[["allusers","👥",t.allUsers],["vehreqs","📋",t.vehReqTab],["drvreqs","📋",t.drvReqTab]]:[]),
     ...(isManager?[["vehreqs","📋",t.vehReqTab],["drvreqs","📋",t.drvReqTab]]:[]),
   ];
@@ -156,6 +200,9 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
       {tab==="storage"&&<StorageTab storageList={storageList} setStorageList={setStorageList} setDone={flash} t={t} isAdmin={isAdmin} />}
       {tab==="cities"&&<CitiesTab cityList={cityList} setCityList={setCityList} setDone={flash} t={t} isAdmin={isAdmin} />}
       {tab==="departments"&&<DepartmentsTab deptList={deptList} setDeptList={setDeptList} setDone={flash} t={t} isAdmin={isAdmin} loading={deptLoading} reload={loadDepartments} />}
+      {tab==="holidays"&&<HolidaysTab holidays={holidays} setHolidays={setHolidays} setDone={flash} t={t} isAdmin={isAdmin} reload={loadHolidays} />}
+      {tab==="driverleaves"&&<DriverLeavesTab leaves={driverLeaves} setLeaves={setDriverLeaves} users={users} setDone={flash} t={t} isAdmin={isAdmin} isManager={isManager} user={user} reload={loadDriverLeaves} />}
+      {tab==="vehicleoff"&&<VehicleOffTab offDays={vehicleOffDays} setOffDays={setVehicleOffDays} vehicles={vehicles} setDone={flash} t={t} isAdmin={isAdmin} isManager={isManager} user={user} reload={loadVehicleOffDays} />}
       {tab==="allusers"&&isAdmin&&<AllUsersTab users={users} setUsers={setUsers} setDone={flash} t={t} />}
       {tab==="vehreqs"&&<VehicleRequestsTab vehicleReqs={vehicleReqs} setVehicleReqs={setVehicleReqs} vehicles={vehicles} setVehicles={setVehicles} setDone={flash} t={t} isAdmin={isAdmin} isManager={isManager} user={user} loadVehicleReqs={loadVehicleReqs} />}
       {tab==="drvreqs"&&<DriverRequestsTab driverReqs={driverReqs} setDriverReqs={setDriverReqs} users={users} setUsers={setUsers} setDone={flash} t={t} isAdmin={isAdmin} isManager={isManager} user={user} loadDriverReqs={loadDriverReqs} />}
@@ -889,6 +936,289 @@ function AllUsersTab({ users, setUsers, setDone, t }) {
           </tbody>
         </table>
       </div>
+    </Card>
+  );
+}
+
+// ── PUBLIC HOLIDAYS TAB ──────────────────────────────────────
+function HolidaysTab({ holidays, setHolidays, setDone, t, isAdmin, reload }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [f, setF] = useState({ name:"", from:"", to:"" });
+  const [saving, setSaving] = useState(false);
+
+  async function addHoliday() {
+    if (!f.name||!f.from||!f.to) return;
+    setSaving(true);
+    try {
+      const docRef = await addDoc(collection(db, "publicHolidays"), { ...f, createdAt: new Date().toISOString() });
+      setHolidays(prev=>[...prev, { id:docRef.id, ...f }]);
+      setDone(f.name+" added!");
+      setF({ name:"", from:"", to:"" });
+      setShowAdd(false);
+    } catch(e) { setDone("❌ Error: "+e.message); }
+    setSaving(false);
+  }
+
+  async function deleteHoliday(id, name) {
+    if (!window.confirm("Delete '"+name+"'?")) return;
+    try {
+      await deleteDoc(doc(db, "publicHolidays", id));
+      setHolidays(prev=>prev.filter(h=>h.id!==id));
+      setDone(name+" deleted!");
+    } catch(e) { setDone("❌ Error: "+e.message); }
+  }
+
+  // Days count between 2 dates
+  function daysBetween(from, to) {
+    const d = (new Date(to) - new Date(from)) / (1000*60*60*24);
+    return Math.round(d) + 1;
+  }
+
+  return (
+    <Card>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+        <CardTitle style={{ margin:0 }}>🏖️ {t.holidays}</CardTitle>
+        {isAdmin&&<Btn small onClick={()=>setShowAdd(!showAdd)} color="#6366f1">➕ {t.addHoliday}</Btn>}
+      </div>
+      {showAdd&&isAdmin&&(
+        <div style={{ background:"#f8fafc", borderRadius:8, padding:14, marginBottom:16, border:"1px solid #e2e8f0" }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 12px" }}>
+            <div style={{ gridColumn:"1/-1", marginBottom:12 }}>
+              <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{t.holidayName} *</label>
+              <input value={f.name} onChange={e=>setF({...f,name:e.target.value})}
+                placeholder="e.g. Eid Al Fitr 2026"
+                style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", boxSizing:"border-box" }} />
+            </div>
+            <div style={{ marginBottom:12 }}>
+              <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{t.fromDate} *</label>
+              <input type="date" value={f.from} onChange={e=>setF({...f,from:e.target.value})}
+                style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", boxSizing:"border-box" }} />
+            </div>
+            <div style={{ marginBottom:12 }}>
+              <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{t.toDate} *</label>
+              <input type="date" value={f.to} onChange={e=>setF({...f,to:e.target.value})}
+                style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", boxSizing:"border-box" }} />
+            </div>
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <Btn onClick={addHoliday} color="#10b981" style={{ flex:1 }} disabled={saving}>✅ {saving?"Saving...":"Add Holiday"}</Btn>
+            <Btn onClick={()=>setShowAdd(false)} color="#64748b">Cancel</Btn>
+          </div>
+        </div>
+      )}
+      {holidays.length===0&&<div style={{ textAlign:"center", padding:24, color:"#94a3b8", fontSize:15 }}>No public holidays defined yet.</div>}
+      {holidays.map(h=>(
+        <div key={h.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontWeight:700, fontSize:14 }}>🏖️ {h.name}</div>
+            <div style={{ fontSize:13, color:"#64748b" }}>📅 {h.from} → {h.to} <span style={{ color:"#6366f1", fontWeight:600 }}>({daysBetween(h.from,h.to)} days)</span></div>
+          </div>
+          {isAdmin&&<Btn small onClick={()=>deleteHoliday(h.id,h.name)} color="#ef4444">🗑️</Btn>}
+        </div>
+      ))}
+    </Card>
+  );
+}
+
+// ── DRIVER LEAVES TAB ────────────────────────────────────────
+function DriverLeavesTab({ leaves, setLeaves, users, setDone, t, isAdmin, isManager, user, reload }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [f, setF] = useState({ driverId:"", driverName:"", from:"", to:"", type:"Annual Leave", reason:"" });
+  const [saving, setSaving] = useState(false);
+
+  const drivers = users.filter(u=>u.role==="driver"&&(!user.dc||u.dc===user.dc||user.dc==="Head Office"));
+  const myLeaves = isAdmin ? leaves : leaves.filter(l=>l.dc===user.dc);
+
+  async function addLeave() {
+    if (!f.driverId||!f.from||!f.to) { setDone("❌ Please fill all required fields"); return; }
+    setSaving(true);
+    try {
+      const driver = drivers.find(d=>d.uid===f.driverId);
+      const data = { ...f, driverName:driver?.name||f.driverName, dc:driver?.dc||user.dc, approvedBy:user.name, createdAt:new Date().toISOString() };
+      const docRef = await addDoc(collection(db, "driverLeaves"), data);
+      setLeaves(prev=>[...prev, { id:docRef.id, ...data }]);
+      setDone(data.driverName+" leave added!");
+      setF({ driverId:"", driverName:"", from:"", to:"", type:"Annual Leave", reason:"" });
+      setShowAdd(false);
+    } catch(e) { setDone("❌ Error: "+e.message); }
+    setSaving(false);
+  }
+
+  async function deleteLeave(id) {
+    if (!window.confirm("Delete this leave record?")) return;
+    try {
+      await deleteDoc(doc(db, "driverLeaves", id));
+      setLeaves(prev=>prev.filter(l=>l.id!==id));
+      setDone("Leave deleted!");
+    } catch(e) { setDone("❌ Error: "+e.message); }
+  }
+
+  function daysBetween(from, to) { return Math.round((new Date(to)-new Date(from))/(1000*60*60*24))+1; }
+
+  return (
+    <Card>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+        <CardTitle style={{ margin:0 }}>👤 {t.driverLeaves}</CardTitle>
+        <Btn small onClick={()=>setShowAdd(!showAdd)} color="#6366f1">➕ {t.addLeave}</Btn>
+      </div>
+      {showAdd&&(
+        <div style={{ background:"#f8fafc", borderRadius:8, padding:14, marginBottom:16, border:"1px solid #e2e8f0" }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 12px" }}>
+            <div style={{ gridColumn:"1/-1", marginBottom:12 }}>
+              <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>Driver *</label>
+              <select value={f.driverId} onChange={e=>setF({...f,driverId:e.target.value})}
+                style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", background:"white", boxSizing:"border-box" }}>
+                <option value="">Select Driver...</option>
+                {drivers.map(d=><option key={d.uid} value={d.uid}>{d.name} — {d.dc}</option>)}
+              </select>
+            </div>
+            <div style={{ marginBottom:12 }}>
+              <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{t.leaveType}</label>
+              <select value={f.type} onChange={e=>setF({...f,type:e.target.value})}
+                style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", background:"white", boxSizing:"border-box" }}>
+                <option>Annual Leave</option>
+                <option>Sick Leave</option>
+                <option>Emergency Leave</option>
+                <option>Unpaid Leave</option>
+              </select>
+            </div>
+            <div style={{ marginBottom:12 }}>
+              <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{t.reason}</label>
+              <input value={f.reason} onChange={e=>setF({...f,reason:e.target.value})}
+                style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", boxSizing:"border-box" }} />
+            </div>
+            <div style={{ marginBottom:12 }}>
+              <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{t.fromDate} *</label>
+              <input type="date" value={f.from} onChange={e=>setF({...f,from:e.target.value})}
+                style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", boxSizing:"border-box" }} />
+            </div>
+            <div style={{ marginBottom:12 }}>
+              <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{t.toDate} *</label>
+              <input type="date" value={f.to} onChange={e=>setF({...f,to:e.target.value})}
+                style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", boxSizing:"border-box" }} />
+            </div>
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <Btn onClick={addLeave} color="#10b981" style={{ flex:1 }} disabled={saving}>✅ {saving?"Saving...":"Add Leave"}</Btn>
+            <Btn onClick={()=>setShowAdd(false)} color="#64748b">Cancel</Btn>
+          </div>
+        </div>
+      )}
+      {myLeaves.length===0&&<div style={{ textAlign:"center", padding:24, color:"#94a3b8", fontSize:15 }}>No driver leaves recorded yet.</div>}
+      {myLeaves.map(l=>(
+        <div key={l.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontWeight:700, fontSize:14 }}>👤 {l.driverName}</div>
+            <div style={{ fontSize:13, color:"#64748b" }}>
+              {l.type} | 📅 {l.from} → {l.to}
+              <span style={{ color:"#6366f1", fontWeight:600, marginLeft:6 }}>({daysBetween(l.from,l.to)} days)</span>
+            </div>
+            {l.reason&&<div style={{ fontSize:12, color:"#94a3b8" }}>📝 {l.reason}</div>}
+            <div style={{ fontSize:11, color:"#94a3b8" }}>By: {l.approvedBy} | {l.dc}</div>
+          </div>
+          <span style={{ fontSize:12, fontWeight:600, padding:"3px 10px", borderRadius:99, background:"#fef3c7", color:"#92400e" }}>{l.type}</span>
+          <Btn small onClick={()=>deleteLeave(l.id)} color="#ef4444">🗑️</Btn>
+        </div>
+      ))}
+    </Card>
+  );
+}
+
+// ── VEHICLE OFF DAYS TAB ────────────────────────────────────
+function VehicleOffTab({ offDays, setOffDays, vehicles, setDone, t, isAdmin, isManager, user, reload }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [f, setF] = useState({ vehiclePlate:"", from:"", to:"", reason:"Scheduled Maintenance" });
+  const [saving, setSaving] = useState(false);
+
+  const myVehicles = vehicles.filter(v=>!user.dc||v.dc===user.dc||user.dc==="Head Office");
+  const myOffDays = isAdmin ? offDays : offDays.filter(o=>o.dc===user.dc);
+
+  async function addOffDay() {
+    if (!f.vehiclePlate||!f.from||!f.to) { setDone("❌ Please fill all required fields"); return; }
+    setSaving(true);
+    try {
+      const vehicle = myVehicles.find(v=>v.plate===f.vehiclePlate);
+      const data = { ...f, dc:vehicle?.dc||user.dc, addedBy:user.name, createdAt:new Date().toISOString() };
+      const docRef = await addDoc(collection(db, "vehicleOffDays"), data);
+      setOffDays(prev=>[...prev, { id:docRef.id, ...data }]);
+      setDone(f.vehiclePlate+" off day added!");
+      setF({ vehiclePlate:"", from:"", to:"", reason:"Scheduled Maintenance" });
+      setShowAdd(false);
+    } catch(e) { setDone("❌ Error: "+e.message); }
+    setSaving(false);
+  }
+
+  async function deleteOffDay(id) {
+    if (!window.confirm("Delete this off day record?")) return;
+    try {
+      await deleteDoc(doc(db, "vehicleOffDays", id));
+      setOffDays(prev=>prev.filter(o=>o.id!==id));
+      setDone("Off day deleted!");
+    } catch(e) { setDone("❌ Error: "+e.message); }
+  }
+
+  function daysBetween(from, to) { return Math.round((new Date(to)-new Date(from))/(1000*60*60*24))+1; }
+
+  return (
+    <Card>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+        <CardTitle style={{ margin:0 }}>🚗 {t.vehicleOff}</CardTitle>
+        <Btn small onClick={()=>setShowAdd(!showAdd)} color="#6366f1">➕ {t.addVehicleOff}</Btn>
+      </div>
+      {showAdd&&(
+        <div style={{ background:"#f8fafc", borderRadius:8, padding:14, marginBottom:16, border:"1px solid #e2e8f0" }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 12px" }}>
+            <div style={{ gridColumn:"1/-1", marginBottom:12 }}>
+              <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>Vehicle *</label>
+              <select value={f.vehiclePlate} onChange={e=>setF({...f,vehiclePlate:e.target.value})}
+                style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", background:"white", boxSizing:"border-box" }}>
+                <option value="">Select Vehicle...</option>
+                {myVehicles.map(v=><option key={v.plate} value={v.plate}>{v.plate} — {v.dc}</option>)}
+              </select>
+            </div>
+            <div style={{ marginBottom:12 }}>
+              <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>Reason</label>
+              <select value={f.reason} onChange={e=>setF({...f,reason:e.target.value})}
+                style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", background:"white", boxSizing:"border-box" }}>
+                <option>Scheduled Maintenance</option>
+                <option>Breakdown</option>
+                <option>Inspection</option>
+                <option>Off Season</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div style={{ marginBottom:12 }}>
+              <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{t.fromDate} *</label>
+              <input type="date" value={f.from} onChange={e=>setF({...f,from:e.target.value})}
+                style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", boxSizing:"border-box" }} />
+            </div>
+            <div style={{ marginBottom:12 }}>
+              <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{t.toDate} *</label>
+              <input type="date" value={f.to} onChange={e=>setF({...f,to:e.target.value})}
+                style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", boxSizing:"border-box" }} />
+            </div>
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <Btn onClick={addOffDay} color="#10b981" style={{ flex:1 }} disabled={saving}>✅ {saving?"Saving...":"Add Off Day"}</Btn>
+            <Btn onClick={()=>setShowAdd(false)} color="#64748b">Cancel</Btn>
+          </div>
+        </div>
+      )}
+      {myOffDays.length===0&&<div style={{ textAlign:"center", padding:24, color:"#94a3b8", fontSize:15 }}>No vehicle off days recorded yet.</div>}
+      {myOffDays.map(o=>(
+        <div key={o.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontWeight:700, fontSize:14 }}>🚗 {o.vehiclePlate}</div>
+            <div style={{ fontSize:13, color:"#64748b" }}>
+              {o.reason} | 📅 {o.from} → {o.to}
+              <span style={{ color:"#6366f1", fontWeight:600, marginLeft:6 }}>({daysBetween(o.from,o.to)} days)</span>
+            </div>
+            <div style={{ fontSize:11, color:"#94a3b8" }}>By: {o.addedBy} | {o.dc}</div>
+          </div>
+          <span style={{ fontSize:12, fontWeight:600, padding:"3px 10px", borderRadius:99, background:"#fee2e2", color:"#991b1b" }}>{o.reason}</span>
+          <Btn small onClick={()=>deleteOffDay(o.id)} color="#ef4444">🗑️</Btn>
+        </div>
+      ))}
     </Card>
   );
 }

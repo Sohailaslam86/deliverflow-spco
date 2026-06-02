@@ -33,6 +33,7 @@ export default function Download({ user, lang, invoices }) {
   const t = T[lang]||T.en;
   const isAdmin = user.role==="admin";
   const isPlanning = user.role==="planning";
+  const isDriver = user.role==="driver";
 
   // DC filter — always show all DCs for admin/planning, only own DC for others
   const userDC = (user.dc && user.dc !== "Head Office") ? user.dc : null;
@@ -45,8 +46,9 @@ export default function Download({ user, lang, invoices }) {
 
   const delivered = invoices.filter(inv => {
     if (inv.status !== "delivered") return false;
-    if (userDC) return inv.dc === userDC; // DC users only see their DC
-    return true;
+    if (isDriver) return inv.driverId === user.uid; // Driver sirf apni deliveries
+    if (userDC) return inv.dc === userDC; // DC Manager sirf apna DC
+    return true; // Admin/Planning sab
   });
 
   const filtered = delivered.filter(inv => {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Card, CardTitle, Btn, SuccessMsg, Badge } from "../components/Shared.jsx";
 import CameraCapture from "../components/CameraCapture.jsx";
-import { updateDoc, doc } from "firebase/firestore";
+import { updateDoc, doc, addDoc, collection } from "firebase/firestore";
 import { db } from "../firebase";
 
 const T = {
@@ -14,6 +14,7 @@ const T = {
     getGPS:"Get My Location", gettingGPS:"Getting location...",
     allDone:"All deliveries completed! Great work.",
     podRequired:"Please take POD photo first",
+    gpsRequired:"Please get GPS location first",
     vehicle:"Assigned Vehicle", vehicleAlerts:"Vehicle Alerts",
     maintenance:"Under Maintenance", lowFuel:"Low Fuel Warning",
     expirySoon:"Document Expiring Soon",
@@ -23,7 +24,12 @@ const T = {
     histDate:"Date", histVehicle:"Vehicle #", histInvoices:"Invoices",
     histStatus:"Status", histDistance:"Distance (km)", histSuccess:"Success Rate",
     histType:"Type", noHistory:"No delivery history yet",
-    tripStarted:"Trip started! Timer running.", tripEnded:"Trip ended."
+    tripStarted:"Trip started! Timer running.", tripEnded:"Trip ended.",
+    failReason:"Reason for Failed Delivery *", failReasonPlaceholder:"e.g. Customer not available, Wrong address...",
+    failReasonRequired:"Please enter reason for failed delivery",
+    halfDay:"Half Day recorded", fullDay:"Full Day recorded",
+    kmCovered:"KM Covered", fuelDeducted:"Fuel Deducted",
+    tripSaved:"Trip saved to records!"
   },
   ar: {
     pending:"تسليمات معلقة", completed:"مكتملة اليوم", remaining:"المتبقي",
@@ -34,6 +40,7 @@ const T = {
     getGPS:"تحديد موقعي", gettingGPS:"جاري تحديد الموقع...",
     allDone:"تم إكمال جميع التسليمات!",
     podRequired:"يرجى التقاط صورة أولاً",
+    gpsRequired:"يرجى تحديد الموقع أولاً",
     vehicle:"المركبة المخصصة", vehicleAlerts:"تنبيهات المركبة",
     maintenance:"تحت الصيانة", lowFuel:"وقود منخفض",
     expirySoon:"وثيقة ستنتهي قريباً",
@@ -43,9 +50,25 @@ const T = {
     histDate:"التاريخ", histVehicle:"رقم المركبة", histInvoices:"الفواتير",
     histStatus:"الحالة", histDistance:"المسافة (كم)", histSuccess:"معدل النجاح",
     histType:"النوع", noHistory:"لا يوجد سجل تسليم",
-    tripStarted:"بدأت الرحلة!", tripEnded:"انتهت الرحلة."
+    tripStarted:"بدأت الرحلة!", tripEnded:"انتهت الرحلة.",
+    failReason:"سبب فشل التسليم *", failReasonPlaceholder:"مثال: العميل غير متاح، عنوان خاطئ...",
+    failReasonRequired:"يرجى إدخال سبب فشل التسليم",
+    halfDay:"تم تسجيل نصف يوم", fullDay:"تم تسجيل يوم كامل",
+    kmCovered:"كم مقطوعة", fuelDeducted:"وقود مستهلك",
+    tripSaved:"تم حفظ الرحلة في السجلات!"
   }
 };
+
+// Calculate distance between 2 GPS points (Haversine formula)
+function calcDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371; // Earth radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng/2) * Math.sin(dLng/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
 
 export default function Driver({ user, invoices, setInvoices, vehicles, lang }) {
   const [active, setActive] = useState(null);
@@ -54,12 +77,19 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
   const [locating, setLocating] = useState(false);
   const [pod, setPod] = useState(null);
   const [done, setDone] = useState("");
+  const [failReason, setFailReason] = useState("");
+  const [showFailForm, setShowFailForm] = useState(false);
+
+  // Trip tracking
   const [tripStarted, setTripStarted] = useState(false);
   const [tripStartTime, setTripStartTime] = useState(null);
+  const [tripStartGPS, setTripStartGPS] = useState(null);
   const [elapsed, setElapsed] = useState(0);
-  const [tripDistance, setTripDistance] = useState(0);
+  const [totalKM, setTotalKM] = useState(0);
+  const [lastGPS, setLastGPS] = useState(null);
   const [view, setView] = useState("deliveries");
   const timerRef = useRef(null);
+  const gpsWatchRef = useRef(null);
 
   const [history, setHistory] = useState(() => {
     try { return JSON.parse(localStorage.getItem("driver_history_"+user.uid)||"[]"); } catch { return []; }
@@ -84,16 +114,39 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
     if (assignedVehicle.fahas&&Math.ceil((new Date(assignedVehicle.fahas)-new Date())/(1000*60*60*24))<=30) vAlerts.push({type:"warning",msg:"Fahas "+t.expirySoon});
   }
 
+  // Timer
   useEffect(() => {
     if (tripStarted) {
-      timerRef.current = setInterval(() => {
-        setElapsed(prev => {
-          setTripDistance(d => Math.round((d + 0.008) * 10) / 10);
-          return prev + 1;
-        });
-      }, 1000);
-    } else { clearInterval(timerRef.current); }
+      timerRef.current = setInterval(() => setElapsed(prev=>prev+1), 1000);
+    } else {
+      clearInterval(timerRef.current);
+    }
     return () => clearInterval(timerRef.current);
+  }, [tripStarted]);
+
+  // GPS watch during trip — real distance tracking
+  useEffect(() => {
+    if (tripStarted && navigator.geolocation) {
+      gpsWatchRef.current = navigator.geolocation.watchPosition(
+        pos => {
+          const newGPS = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setLastGPS(prev => {
+            if (prev) {
+              const km = calcDistance(prev.lat, prev.lng, newGPS.lat, newGPS.lng);
+              if (km > 0.01) { // ignore tiny movements
+                setTotalKM(d => Math.round((d + km) * 10) / 10);
+              }
+            }
+            return newGPS;
+          });
+        },
+        () => {},
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+      );
+    } else {
+      if (gpsWatchRef.current) navigator.geolocation.clearWatch(gpsWatchRef.current);
+    }
+    return () => { if (gpsWatchRef.current) navigator.geolocation.clearWatch(gpsWatchRef.current); };
   }, [tripStarted]);
 
   function formatTime(secs) {
@@ -104,32 +157,105 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
   }
 
   function startTrip() {
-    setTripStarted(true); setTripStartTime(new Date());
-    setElapsed(0); setTripDistance(0);
-    setDone(t.tripStarted); setTimeout(()=>setDone(""),3000);
+    // Get start GPS
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        p => {
+          const startGPS = { lat: p.coords.latitude, lng: p.coords.longitude };
+          setTripStartGPS(startGPS);
+          setLastGPS(startGPS);
+        },
+        () => {}
+      );
+    }
+    setTripStarted(true);
+    setTripStartTime(new Date());
+    setElapsed(0);
+    setTotalKM(0);
+    setDone(t.tripStarted);
+    setTimeout(()=>setDone(""),3000);
   }
 
-  function endTrip() {
+  async function endTrip() {
     if (!tripStarted) return;
     setTripStarted(false);
-    const today = new Date().toISOString().split("T")[0];
+    if (gpsWatchRef.current) navigator.geolocation.clearWatch(gpsWatchRef.current);
+
+    const endTime = new Date();
+    const startDate = tripStartTime ? tripStartTime.toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
+    const endDate = endTime.toISOString().split("T")[0];
+    const endHour = endTime.getHours();
+
+    // Half day detect: trip ends before 12:00 noon
+    const isHalfDay = endDate === startDate && endHour < 12;
+    const isMultiDay = endDate !== startDate;
+    const daysActive = isMultiDay
+      ? ((endTime - tripStartTime) / (1000*60*60*24))
+      : isHalfDay ? 0.5 : 1.0;
+
     const totalInv = doneList.length + pending.length;
     const successRate = totalInv>0?Math.round(doneList.length/totalInv*100):0;
+
+    // Fuel consumed = KM / mileage
+    const mileage = assignedVehicle?.mileage || 12;
+    const fuelUsed = totalKM > 0 ? Math.round((totalKM / mileage) * 10) / 10 : 0;
+
     const entry = {
-      date:today, vehicle:assignedVehiclePlate||"-",
-      invoices:totalInv, delivered:doneList.length,
-      distance:tripDistance, successRate,
-      inCity:myInv.filter(i=>i.dtype==="incity").length,
-      outCity:myInv.filter(i=>i.dtype==="outcity").length,
-      duration:formatTime(elapsed),
-      startTime:tripStartTime?.toLocaleTimeString()||"-",
-      endTime:new Date().toLocaleTimeString()
+      driverId: user.uid,
+      driverName: user.name,
+      dc: user.dc,
+      vehiclePlate: assignedVehiclePlate || "-",
+      startDate, endDate,
+      startTime: tripStartTime?.toLocaleTimeString() || "-",
+      endTime: endTime.toLocaleTimeString(),
+      totalKM, fuelUsed,
+      invoices: totalInv,
+      delivered: doneList.length,
+      failed: pending.length,
+      successRate,
+      inCity: myInv.filter(i=>i.dtype==="incity").length,
+      outCity: myInv.filter(i=>i.dtype==="outcity").length,
+      duration: formatTime(elapsed),
+      isHalfDay, isMultiDay, daysActive,
+      createdAt: new Date().toISOString()
     };
-    const newHistory = [entry,...history].slice(0,30);
+
+    // Save trip to Firestore
+    try {
+      await addDoc(collection(db, "tripLogs"), entry);
+    } catch(e) { console.error("TripLog save error:", e); }
+
+    // Update vehicle — totalKM + fuelLevel
+    if (assignedVehicle?.firestoreId && totalKM > 0) {
+      try {
+        const newKM = (assignedVehicle.totalKM||0) + totalKM;
+        const newFuel = Math.max(0, (assignedVehicle.fuelLevel||0) - fuelUsed);
+        await updateDoc(doc(db,"vehicles",assignedVehicle.firestoreId), {
+          totalKM: newKM,
+          fuelLevel: newFuel
+        });
+      } catch(e) { console.error("Vehicle update error:", e); }
+    }
+
+    // Save to local history
+    const histEntry = {
+      date: startDate, vehicle: assignedVehiclePlate||"-",
+      invoices: totalInv, delivered: doneList.length,
+      distance: totalKM, successRate,
+      inCity: myInv.filter(i=>i.dtype==="incity").length,
+      outCity: myInv.filter(i=>i.dtype==="outcity").length,
+      duration: formatTime(elapsed),
+      startTime: tripStartTime?.toLocaleTimeString()||"-",
+      endTime: endTime.toLocaleTimeString(),
+      fuelUsed, isHalfDay, daysActive
+    };
+    const newHistory = [histEntry,...history].slice(0,30);
     setHistory(newHistory);
     try { localStorage.setItem("driver_history_"+user.uid, JSON.stringify(newHistory)); } catch{}
-    setDone(t.tripEnded+" "+tripDistance+" km covered in "+formatTime(elapsed));
-    setTimeout(()=>setDone(""),5000);
+
+    const dayMsg = isHalfDay ? t.halfDay : t.fullDay;
+    setDone(`🏁 ${t.tripEnded} ${totalKM} ${t.kmCovered} | ⛽ ${fuelUsed}L ${t.fuelDeducted} | ${dayMsg}`);
+    setTimeout(()=>setDone(""),6000);
   }
 
   function getGPS() {
@@ -143,20 +269,27 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
   }
 
   async function submit(inv, status) {
-    if (status==="delivered"&&!pod) { alert(t.podRequired); return; }
+    if (status==="delivered" && !pod) { alert(t.podRequired); return; }
+    if (status==="delivered" && !gps) { alert(t.gpsRequired); return; }
+    if (status==="failed" && !failReason.trim()) { alert(t.failReasonRequired); return; }
+
     const updateData = {
-      status, podImage:pod, gps,
-      deliveredAt:new Date().toLocaleString(),
-      attempts:(inv.attempts||0)+1
+      status,
+      podImage: pod || null,
+      gps: gps || null,
+      deliveredAt: new Date().toLocaleString(),
+      attempts: (inv.attempts||0)+1,
+      failReason: status==="failed" ? failReason : null,
+      driverName: user.name
     };
-    // Firestore update
+
     if (inv.firestoreId) {
       try { await updateDoc(doc(db,"invoices",inv.firestoreId), updateData); } catch(e) { console.error(e); }
     }
     setInvoices(prev=>prev.map(i=>i.id===inv.id?{...i,...updateData}:i));
     setCompleted(p=>[...p,inv.id]);
-    setDone(status==="delivered"?"✅ "+inv.id+" delivered!":"❌ "+inv.id+" failed.");
-    setActive(null); setPod(null); setGps(null);
+    setDone(status==="delivered"?"✅ "+inv.id+" delivered!":"❌ "+inv.id+" failed — "+failReason);
+    setActive(null); setPod(null); setGps(null); setFailReason(""); setShowFailForm(false);
     setTimeout(()=>setDone(""),3000);
   }
 
@@ -185,36 +318,67 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
               </button>
             </div>
 
-            {/* Step 2 — POD Photo with CameraCapture */}
-            <div style={{ marginBottom:16 }}>
-              <div style={{ fontWeight:700,fontSize:15,marginBottom:8,color:"#1A3A5C" }}>{t.podStep}</div>
-              <CameraCapture
-                label=""
-                value={pod||""}
-                onChange={url=>setPod(url)}
-                folder="pod"
-                lang={lang}
-                required
-              />
-            </div>
+            {/* Step 2 — POD Photo */}
+            {!showFailForm&&(
+              <div style={{ marginBottom:16 }}>
+                <div style={{ fontWeight:700,fontSize:15,marginBottom:8,color:"#1A3A5C" }}>{t.podStep}</div>
+                <CameraCapture
+                  label=""
+                  value={pod||""}
+                  onChange={url=>setPod(url)}
+                  folder="pod"
+                  lang={lang}
+                  required
+                />
+              </div>
+            )}
+
+            {/* Failed Reason */}
+            {showFailForm&&(
+              <div style={{ marginBottom:16 }}>
+                <div style={{ fontWeight:700,fontSize:15,marginBottom:8,color:"#ef4444" }}>{t.failReason}</div>
+                <textarea
+                  value={failReason}
+                  onChange={e=>setFailReason(e.target.value)}
+                  placeholder={t.failReasonPlaceholder}
+                  rows={3}
+                  style={{ width:"100%",border:"1.5px solid #fca5a5",borderRadius:8,padding:"10px 12px",fontSize:14,outline:"none",boxSizing:"border-box",resize:"vertical" }}
+                />
+              </div>
+            )}
 
             <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
-              <button onClick={()=>submit(inv,"delivered")}
-                style={{ flex:1,background:"#10b981",color:"white",border:"none",padding:"12px 0",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:14 }}>
-                ✅ {t.markDelivered}
-              </button>
-              <button onClick={()=>submit(inv,"failed")}
-                style={{ flex:1,background:"#ef4444",color:"white",border:"none",padding:"12px 0",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:14 }}>
-                ❌ {t.markFailed}
-              </button>
-              <button onClick={()=>{setActive(null);setPod(null);setGps(null);}}
+              {!showFailForm?(
+                <>
+                  <button onClick={()=>submit(inv,"delivered")}
+                    style={{ flex:1,background:"#10b981",color:"white",border:"none",padding:"12px 0",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:14 }}>
+                    ✅ {t.markDelivered}
+                  </button>
+                  <button onClick={()=>setShowFailForm(true)}
+                    style={{ flex:1,background:"#ef4444",color:"white",border:"none",padding:"12px 0",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:14 }}>
+                    ❌ {t.markFailed}
+                  </button>
+                </>
+              ):(
+                <>
+                  <button onClick={()=>submit(inv,"failed")}
+                    style={{ flex:1,background:"#ef4444",color:"white",border:"none",padding:"12px 0",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:14 }}>
+                    ❌ {t.markFailed}
+                  </button>
+                  <button onClick={()=>setShowFailForm(false)}
+                    style={{ background:"#f1f5f9",border:"none",padding:"12px 16px",borderRadius:8,fontWeight:600,cursor:"pointer",fontSize:14,color:"#64748b" }}>
+                    ← Back
+                  </button>
+                </>
+              )}
+              <button onClick={()=>{setActive(null);setPod(null);setGps(null);setFailReason("");setShowFailForm(false);}}
                 style={{ background:"#f1f5f9",border:"none",padding:"12px 16px",borderRadius:8,fontWeight:600,cursor:"pointer",fontSize:14,color:"#64748b" }}>
                 {t.cancel}
               </button>
             </div>
           </div>
         ):(
-          <button onClick={()=>{setActive(inv);setGps(null);setPod(null);}}
+          <button onClick={()=>{setActive(inv);setGps(null);setPod(null);setFailReason("");setShowFailForm(false);}}
             style={{ background:"#1A3A5C",color:"white",border:"none",padding:"12px 20px",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:14,marginTop:8,width:"100%" }}>
             {t.startDelivery} →
           </button>
@@ -245,7 +409,11 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
               <div>
                 <div style={{ fontSize:14,color:"#64748b",marginBottom:2 }}>{t.tripActive}</div>
                 <div style={{ fontSize:28,fontWeight:900,color:"#6366f1",fontFamily:"monospace" }}>{formatTime(elapsed)}</div>
-                {tripStarted&&<div style={{ fontSize:14,color:"#64748b" }}>📍 {tripDistance} km</div>}
+                {tripStarted&&(
+                  <div style={{ fontSize:14,color:"#64748b",marginTop:2 }}>
+                    📍 {totalKM} km | ⛽ ~{Math.round(totalKM/(assignedVehicle?.mileage||12)*10)/10}L
+                  </div>
+                )}
               </div>
               <div style={{ display:"flex",gap:8 }}>
                 {!tripStarted
@@ -321,15 +489,15 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
             <div key={i} style={{ border:"1px solid #e2e8f0",borderRadius:8,padding:14,marginBottom:10 }}>
               <div style={{ display:"flex",justifyContent:"space-between",marginBottom:8,flexWrap:"wrap",gap:4 }}>
                 <span style={{ fontWeight:700,fontSize:15 }}>📅 {h.date}</span>
-                <span style={{ fontWeight:700,fontSize:15,color:"#10b981" }}>{h.successRate}% success</span>
+                <span style={{ fontWeight:700,fontSize:15,color:h.successRate>=80?"#10b981":h.successRate>=60?"#f59e0b":"#ef4444" }}>{h.successRate}% success</span>
               </div>
               <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:6,fontSize:13,color:"#64748b" }}>
                 <span>🚗 {h.vehicle}</span>
                 <span>📋 {h.delivered}/{h.invoices} delivered</span>
                 <span>📍 {h.distance} km</span>
                 <span>⏱️ {h.duration}</span>
-                <span>🏙️ {h.inCity} in-city</span>
-                <span>🛣️ {h.outCity} out-city</span>
+                <span>⛽ {h.fuelUsed||0}L used</span>
+                <span>{h.isHalfDay?"⏰ Half Day":"✅ Full Day"}</span>
               </div>
             </div>
           ))}
