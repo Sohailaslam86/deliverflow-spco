@@ -151,6 +151,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
   useEffect(() => {
     loadUsersFromFirestore();
     loadRequestsFromFirestore();
+    loadMatrixFromFirestore();
   }, []);
 
   async function loadUsersFromFirestore() {
@@ -167,6 +168,31 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
       const fsReqs = snap.docs.map(d => ({ ...d.data(), firestoreId: d.id }));
       if (fsReqs.length > 0) setRequests(fsReqs);
     } catch(e) { console.error("Requests load error:", e); }
+  }
+
+  async function loadMatrixFromFirestore() {
+    try {
+      const snap = await getDocs(collection(db, "authMatrix"));
+      if (!snap.empty) {
+        const data = snap.docs[0].data();
+        if (data.permissions) setPermissions(data.permissions);
+        if (data.roles) setRoles(data.roles);
+        if (data.roleLabels) setRoleLabels(data.roleLabels);
+      }
+    } catch(e) { console.error("Matrix load error:", e); }
+  }
+
+  async function saveMatrixToFirestore() {
+    try {
+      const snap = await getDocs(collection(db, "authMatrix"));
+      const matrixData = { permissions, roles, roleLabels, updatedBy: user.name, updatedAt: new Date().toISOString() };
+      if (!snap.empty) {
+        await updateDoc(doc(db, "authMatrix", snap.docs[0].id), matrixData);
+      } else {
+        await addDoc(collection(db, "authMatrix"), matrixData);
+      }
+      flash(t.matrixSaved);
+    } catch(e) { flash("❌ Error saving matrix: "+e.message); }
   }
   const [uploading, setUploading] = useState(false);
   const [editReqId, setEditReqId] = useState(null);
@@ -822,7 +848,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
               ):(
                 <Btn small onClick={()=>setShowAddRole(true)} color="#6366f1">{t.addRole}</Btn>
               )}
-              <Btn small onClick={()=>flash(t.matrixSaved)} color="#10b981">💾 {t.saveMatrix}</Btn>
+              <Btn small onClick={saveMatrixToFirestore} color="#10b981">💾 {t.saveMatrix}</Btn>
             </div>
           </div>
           <div style={{overflowX:"auto"}}>

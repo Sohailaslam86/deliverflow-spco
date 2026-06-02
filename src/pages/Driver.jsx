@@ -30,7 +30,13 @@ const T = {
     failReasonRequired:"Please enter reason for failed delivery",
     halfDay:"Half Day recorded", fullDay:"Full Day recorded",
     kmCovered:"KM Covered", fuelDeducted:"Fuel Deducted",
-    tripSaved:"Trip saved to records!"
+    tripSaved:"Trip saved to records!",
+    odometerRequired:"Odometer photo and reading are required to end trip",
+    odometerPhoto:"Odometer Photo *", odometerReading:"Current Odometer Reading (KM) *",
+    odometerPlaceholder:"e.g. 45230", confirmEndTrip:"Confirm End Trip",
+    odometerStep:"Step: Take Odometer Photo & Enter Reading",
+    cancelEndTrip:"Cancel — Continue Trip",
+    kmMismatch:"Warning: GPS distance and odometer difference is more than 20%. Please verify.",
   },
   ar: {
     pending:"تسليمات معلقة", completed:"مكتملة اليوم", remaining:"المتبقي",
@@ -56,7 +62,13 @@ const T = {
     failReasonRequired:"يرجى إدخال سبب فشل التسليم",
     halfDay:"تم تسجيل نصف يوم", fullDay:"تم تسجيل يوم كامل",
     kmCovered:"كم مقطوعة", fuelDeducted:"وقود مستهلك",
-    tripSaved:"تم حفظ الرحلة في السجلات!"
+    tripSaved:"تم حفظ الرحلة في السجلات!",
+    odometerRequired:"صورة العداد والقراءة مطلوبة لإنهاء الرحلة",
+    odometerPhoto:"صورة عداد المسافة *", odometerReading:"قراءة العداد الحالية (كم) *",
+    odometerPlaceholder:"مثال: 45230", confirmEndTrip:"تأكيد إنهاء الرحلة",
+    odometerStep:"الخطوة: التقط صورة العداد وأدخل القراءة",
+    cancelEndTrip:"إلغاء — متابعة الرحلة",
+    kmMismatch:"تحذير: الفرق بين المسافة عبر GPS وقراءة العداد أكثر من 20%. يرجى التحقق.",
   }
 };
 
@@ -80,6 +92,12 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
   const [done, setDone] = useState("");
   const [failReason, setFailReason] = useState("");
   const [showFailForm, setShowFailForm] = useState(false);
+
+  // Odometer state — shown before trip end
+  const [showOdometerForm, setShowOdometerForm] = useState(false);
+  const [odometerPhoto, setOdometerPhoto] = useState("");
+  const [odometerReading, setOdometerReading] = useState("");
+  const [odometerWarning, setOdometerWarning] = useState("");
 
   // Trip tracking
   const [tripStarted, setTripStarted] = useState(false);
@@ -180,8 +198,31 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
     setTimeout(()=>setDone(""),3000);
   }
 
-  async function endTrip() {
+  // Step 1: Show odometer form when End Trip clicked
+  function handleEndTripClick() {
     if (!tripStarted) return;
+    setShowOdometerForm(true);
+    setOdometerWarning("");
+  }
+
+  // Step 2: Validate odometer and end trip
+  async function endTrip() {
+    if (!odometerPhoto) { setOdometerWarning(t.odometerRequired); return; }
+    if (!odometerReading || isNaN(Number(odometerReading)) || Number(odometerReading) <= 0) {
+      setOdometerWarning(t.odometerRequired); return;
+    }
+
+    // KM mismatch warning (GPS vs Odometer)
+    const odomKM = Number(odometerReading);
+    const prevKM = assignedVehicle?.totalKM || 0;
+    const odomTripKM = odomKM - prevKM;
+    if (odomTripKM > 0 && totalKM > 0) {
+      const diff = Math.abs(odomTripKM - totalKM) / Math.max(odomTripKM, totalKM);
+      if (diff > 0.2) setOdometerWarning(t.kmMismatch);
+      else setOdometerWarning("");
+    }
+
+    setShowOdometerForm(false);
     setTripStarted(false);
     if (gpsWatchRef.current) navigator.geolocation.clearWatch(gpsWatchRef.current);
 
@@ -190,7 +231,6 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
     const endDate = endTime.toISOString().split("T")[0];
     const endHour = endTime.getHours();
 
-    // Half day detect: trip ends before 12:00 noon
     const isHalfDay = endDate === startDate && endHour < 12;
     const isMultiDay = endDate !== startDate;
     const daysActive = isMultiDay
@@ -199,8 +239,6 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
 
     const totalInv = doneList.length + pending.length;
     const successRate = totalInv>0?Math.round(doneList.length/totalInv*100):0;
-
-    // Fuel consumed = KM / mileage
     const mileage = assignedVehicle?.mileage || 12;
     const fuelUsed = totalKM > 0 ? Math.round((totalKM / mileage) * 10) / 10 : 0;
 
@@ -213,6 +251,8 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
       startTime: tripStartTime?.toLocaleTimeString() || "-",
       endTime: endTime.toLocaleTimeString(),
       totalKM, fuelUsed,
+      odometerReading: Number(odometerReading),
+      odometerPhotoUrl: odometerPhoto,
       invoices: totalInv,
       delivered: doneList.length,
       failed: pending.length,
@@ -224,19 +264,17 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
       createdAt: new Date().toISOString()
     };
 
-    // Save trip to Firestore
-    try {
-      await addDoc(collection(db, "tripLogs"), entry);
-    } catch(e) { console.error("TripLog save error:", e); }
+    try { await addDoc(collection(db, "tripLogs"), entry); }
+    catch(e) { console.error("TripLog save error:", e); }
 
-    // Update vehicle — totalKM + fuelLevel
-    if (assignedVehicle?.firestoreId && totalKM > 0) {
+    // Update vehicle — totalKM from odometer reading + fuelLevel
+    if (assignedVehicle?.firestoreId) {
       try {
-        const newKM = (assignedVehicle.totalKM||0) + totalKM;
         const newFuel = Math.max(0, (assignedVehicle.fuelLevel||0) - fuelUsed);
         await updateDoc(doc(db,"vehicles",assignedVehicle.firestoreId), {
-          totalKM: newKM,
-          fuelLevel: newFuel
+          totalKM: Number(odometerReading),
+          fuelLevel: newFuel,
+          lastOdometerPhoto: odometerPhoto
         });
       } catch(e) { console.error("Vehicle update error:", e); }
     }
@@ -245,7 +283,8 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
     const histEntry = {
       date: startDate, vehicle: assignedVehiclePlate||"-",
       invoices: totalInv, delivered: doneList.length,
-      distance: totalKM, successRate,
+      distance: totalKM, odometerReading: Number(odometerReading),
+      successRate,
       inCity: myInv.filter(i=>i.dtype==="incity").length,
       outCity: myInv.filter(i=>i.dtype==="outcity").length,
       duration: formatTime(elapsed),
@@ -256,6 +295,11 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
     const newHistory = [histEntry,...history].slice(0,30);
     setHistory(newHistory);
     try { localStorage.setItem("driver_history_"+user.uid, JSON.stringify(newHistory)); } catch{}
+
+    // Reset odometer state
+    setOdometerPhoto("");
+    setOdometerReading("");
+    setOdometerWarning("");
 
     const dayMsg = isHalfDay ? t.halfDay : t.fullDay;
     setDone(`🏁 ${t.tripEnded} ${totalKM} ${t.kmCovered} | ⛽ ${fuelUsed}L ${t.fuelDeducted} | ${dayMsg}`);
@@ -448,11 +492,68 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
               <div style={{ display:"flex",gap:8 }}>
                 {!tripStarted
                   ? <Btn onClick={startTrip} color="#10b981" style={{ padding:"12px 20px",fontSize:14 }}>🚀 {t.startTrip}</Btn>
-                  : <Btn onClick={endTrip} color="#ef4444" style={{ padding:"12px 20px",fontSize:14 }}>🏁 {t.endTrip}</Btn>
+                  : <Btn onClick={handleEndTripClick} color="#ef4444" style={{ padding:"12px 20px",fontSize:14 }}>🏁 {t.endTrip}</Btn>
                 }
               </div>
             </div>
           </Card>
+
+          {/* ODOMETER FORM MODAL — shown when End Trip clicked */}
+          {showOdometerForm&&(
+            <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+              <div style={{ background:"white", borderRadius:16, padding:24, width:"100%", maxWidth:420, boxShadow:"0 20px 60px rgba(0,0,0,0.3)" }}>
+                <div style={{ fontWeight:800, fontSize:17, color:"#1A3A5C", marginBottom:4 }}>🏁 {t.endTrip}</div>
+                <div style={{ fontSize:13, color:"#64748b", marginBottom:16 }}>{t.odometerStep}</div>
+
+                {/* Odometer Photo */}
+                <div style={{ marginBottom:16 }}>
+                  <div style={{ fontWeight:700, fontSize:14, color:"#1A3A5C", marginBottom:8 }}>{t.odometerPhoto}</div>
+                  <CameraCapture
+                    label=""
+                    value={odometerPhoto}
+                    onChange={url=>setOdometerPhoto(url)}
+                    folder="odometer"
+                    lang={lang}
+                    required
+                  />
+                </div>
+
+                {/* Manual KM Reading */}
+                <div style={{ marginBottom:16 }}>
+                  <label style={{ fontWeight:700, fontSize:14, color:"#1A3A5C", display:"block", marginBottom:6 }}>{t.odometerReading}</label>
+                  <input
+                    type="number"
+                    value={odometerReading}
+                    onChange={e=>setOdometerReading(e.target.value)}
+                    placeholder={t.odometerPlaceholder}
+                    style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"11px 14px", fontSize:16, outline:"none", boxSizing:"border-box" }}
+                  />
+                  {totalKM > 0 && (
+                    <div style={{ fontSize:12, color:"#64748b", marginTop:4 }}>
+                      GPS measured distance this trip: {totalKM} km
+                    </div>
+                  )}
+                </div>
+
+                {/* Warning */}
+                {odometerWarning&&(
+                  <div style={{ background:"#fef3c7", border:"1px solid #fbbf24", borderRadius:8, padding:"10px 14px", fontSize:13, color:"#92400e", marginBottom:12 }}>
+                    ⚠️ {odometerWarning}
+                  </div>
+                )}
+
+                {/* Buttons */}
+                <div style={{ display:"flex", gap:8 }}>
+                  <Btn onClick={endTrip} color="#ef4444" style={{ flex:1, padding:12 }}>
+                    🏁 {t.confirmEndTrip}
+                  </Btn>
+                  <Btn onClick={()=>{setShowOdometerForm(false);setTripStarted(true);setOdometerWarning("");}} color="#64748b">
+                    {t.cancelEndTrip}
+                  </Btn>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Vehicle Alerts */}
           {vAlerts.length>0&&(

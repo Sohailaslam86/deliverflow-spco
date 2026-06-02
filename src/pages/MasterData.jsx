@@ -11,10 +11,16 @@ const T = {
     storage:"Storage Conditions", cities:"Cities", allUsers:"User Directory",
     departments:"Departments",
     holidays:"Public Holidays", driverLeaves:"Driver Leaves", vehicleOff:"Vehicle Off Days",
-    addHoliday:"Add Holiday", addLeave:"Add Leave", addVehicleOff:"Add Vehicle Off",
+    addHoliday:"Add Holiday", addLeave:"Add Leave Request", addVehicleOff:"Add Vehicle Off",
     holidayName:"Holiday Name", fromDate:"From Date", toDate:"To Date",
     leaveType:"Leave Type", annualLeave:"Annual Leave", sickLeave:"Sick Leave", emergencyLeave:"Emergency Leave",
     selectDriver:"Select Driver", selectVehicle:"Select Vehicle", reason:"Reason",
+    myLeaveReq:"My Leave Requests", pendingApproval:"Pending Approval",
+    approvedLeaves:"Approved Leaves", rejectedLeaves:"Rejected Leaves",
+    approveLeave:"Approve", rejectLeave:"Reject",
+    managerApprove:"Manager Approved — Waiting Admin",
+    leaveApproved:"Leave approved!", leaveRejected:"Leave rejected.",
+    submitLeaveReq:"Submit Leave Request",
     addVehicle:"Add Vehicle", addDriver:"Add Driver", addDC:"Add DC",
     addStorage:"Add Storage Condition", addCity:"Add City",
     addDept:"Add Department", deptName:"Department Name",
@@ -49,10 +55,16 @@ const T = {
     storage:"ظروف التخزين", cities:"مدن التسليم", allUsers:"دليل المستخدمين",
     departments:"الأقسام",
     holidays:"الإجازات الرسمية", driverLeaves:"إجازات السائقين", vehicleOff:"أيام توقف المركبات",
-    addHoliday:"إضافة إجازة رسمية", addLeave:"إضافة إجازة", addVehicleOff:"إضافة يوم توقف",
+    addHoliday:"إضافة إجازة رسمية", addLeave:"طلب إجازة", addVehicleOff:"إضافة يوم توقف",
     holidayName:"اسم الإجازة", fromDate:"من تاريخ", toDate:"إلى تاريخ",
     leaveType:"نوع الإجازة", annualLeave:"إجازة سنوية", sickLeave:"إجازة مرضية", emergencyLeave:"إجازة طارئة",
     selectDriver:"اختر السائق", selectVehicle:"اختر المركبة", reason:"السبب",
+    myLeaveReq:"طلبات إجازاتي", pendingApproval:"بانتظار الموافقة",
+    approvedLeaves:"الإجازات الموافق عليها", rejectedLeaves:"الإجازات المرفوضة",
+    approveLeave:"موافقة", rejectLeave:"رفض",
+    managerApprove:"وافق المدير — بانتظار المسؤول",
+    leaveApproved:"تمت الموافقة على الإجازة!", leaveRejected:"تم رفض الإجازة.",
+    submitLeaveReq:"إرسال طلب الإجازة",
     addVehicle:"إضافة مركبة", addDriver:"إضافة سائق", addDC:"إضافة مركز",
     addStorage:"إضافة حالة تخزين", addCity:"إضافة مدينة",
     addDept:"إضافة قسم", deptName:"اسم القسم",
@@ -162,7 +174,8 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
     ["cities","🌆",t.cities],
     ["departments","🏢",t.departments],
     ["holidays","🏖️",t.holidays],
-    ...(isAdmin||isManager?[["driverleaves","👤",t.driverLeaves],["vehicleoff","🚗",t.vehicleOff]]:[]),
+    ...(isAdmin||isManager||user.role==="driver"?[["driverleaves","👤",t.driverLeaves]]:[]),
+    ...(isAdmin||isManager?[["vehicleoff","🚗",t.vehicleOff]]:[]),
     ...(isAdmin?[["allusers","👥",t.allUsers]]:[[]]),
   ];
 
@@ -692,8 +705,354 @@ function HolidaysTab({ holidays, setHolidays, setDone, t, isAdmin, reload }) {
   );
 }
 
-// ── DRIVER LEAVES TAB ────────────────────────────────────────
+// ── DRIVER LEAVES TAB ─────────────────────────────────────────
 function DriverLeavesTab({ leaves, setLeaves, users, setDone, t, isAdmin, isManager, user, reload }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [f, setF] = useState({ from:"", to:"", type:"Annual Leave", reason:"" });
+  const [saving, setSaving] = useState(false);
+
+  const isDriver = user.role === "driver";
+  const drivers = users.filter(u=>u.role==="driver"&&(!user.dc||u.dc===user.dc||user.dc==="Head Office"));
+
+  // Filter by role
+  const myLeaves = isDriver
+    ? leaves.filter(l=>l.driverId===user.uid)
+    : isAdmin
+      ? leaves
+      : leaves.filter(l=>l.dc===user.dc);
+
+  // Approved leaves only (for working days calc)
+  const approvedLeaves = myLeaves.filter(l=>l.status==="approved");
+  // Pending Manager approval
+  const pendingManagerLeaves = isManager ? myLeaves.filter(l=>l.status==="pending_manager") : [];
+  // Pending Admin approval
+  const pendingAdminLeaves = isAdmin ? leaves.filter(l=>l.status==="pending_admin") : [];
+
+  function daysBetween(from, to) { return Math.round((new Date(to)-new Date(from))/(1000*60*60*24))+1; }
+
+  // DRIVER submits leave request
+  async function submitDriverLeave() {
+    if (!f.from||!f.to||!f.reason.trim()) { setDone("❌ Fill all required fields"); return; }
+    setSaving(true);
+    try {
+      const data = {
+        driverId: user.uid,
+        driverName: user.name,
+        dc: user.dc,
+        from: f.from, to: f.to,
+        type: f.type, reason: f.reason,
+        status: "pending_manager",
+        submittedAt: new Date().toISOString(),
+        submittedBy: user.name,
+      };
+      const docRef = await addDoc(collection(db, "driverLeaves"), data);
+      setLeaves(prev=>[...prev, { id:docRef.id, ...data }]);
+      // Notify DC Manager
+      await sendNotification({
+        toRole:"manager", toDC:user.dc,
+        type:"leave",
+        title:"Driver Leave Request",
+        message:`${user.name} has submitted a ${f.type} request from ${f.from} to ${f.to}. Please review.`,
+      });
+      setDone("Leave request submitted!");
+      setF({ from:"", to:"", type:"Annual Leave", reason:"" });
+      setShowAdd(false);
+    } catch(e) { setDone("❌ Error: "+e.message); }
+    setSaving(false);
+  }
+
+  // MANAGER submits own leave OR adds leave directly for driver
+  async function submitManagerLeave() {
+    const selectedDriver = f.driverId ? drivers.find(d=>d.uid===f.driverId) : null;
+    if (!f.from||!f.to) { setDone("❌ From and To dates required"); return; }
+    setSaving(true);
+    try {
+      const data = {
+        driverId: selectedDriver?.uid || user.uid,
+        driverName: selectedDriver?.name || user.name,
+        dc: selectedDriver?.dc || user.dc,
+        from: f.from, to: f.to,
+        type: f.type, reason: f.reason||"",
+        status: "pending_admin",
+        submittedAt: new Date().toISOString(),
+        submittedBy: user.name,
+        managerApprovedBy: user.name,
+        managerApprovedAt: new Date().toISOString(),
+      };
+      const docRef = await addDoc(collection(db, "driverLeaves"), data);
+      setLeaves(prev=>[...prev, { id:docRef.id, ...data }]);
+      // Notify Admin
+      await sendNotification({
+        toRole:"admin",
+        type:"leave",
+        title:"Leave Request — Manager Approved",
+        message:`${user.name} has submitted/approved a ${f.type} for ${data.driverName} (${data.dc} DC) from ${f.from} to ${f.to}. Awaiting your approval.`,
+      });
+      setDone("Leave submitted for Admin approval!");
+      setF({ driverId:"", from:"", to:"", type:"Annual Leave", reason:"" });
+      setShowAdd(false);
+    } catch(e) { setDone("❌ Error: "+e.message); }
+    setSaving(false);
+  }
+
+  // MANAGER approves driver's leave request
+  async function managerApprove(leave) {
+    try {
+      await updateDoc(doc(db,"driverLeaves",leave.id), {
+        status:"pending_admin",
+        managerApprovedBy: user.name,
+        managerApprovedAt: new Date().toISOString(),
+      });
+      setLeaves(prev=>prev.map(l=>l.id===leave.id?{...l,status:"pending_admin",managerApprovedBy:user.name}:l));
+      // Notify Admin
+      await sendNotification({
+        toRole:"admin",
+        type:"leave",
+        title:"Leave Request — Manager Approved",
+        message:`${user.name} approved ${leave.driverName}'s ${leave.type} (${leave.from} to ${leave.to}). Awaiting your approval.`,
+      });
+      // Notify driver
+      await sendNotification({
+        toUserId:leave.driverId,
+        type:"request_action",
+        title:"Leave Request — Manager Approved ✅",
+        message:`Your ${leave.type} request (${leave.from} to ${leave.to}) has been approved by ${user.name}. Waiting for Admin approval.`,
+      });
+      setDone("Leave forwarded to Admin!");
+    } catch(e) { setDone("❌ Error: "+e.message); }
+  }
+
+  // MANAGER rejects driver's leave request
+  async function managerReject(leave) {
+    try {
+      await updateDoc(doc(db,"driverLeaves",leave.id), {
+        status:"rejected",
+        rejectedBy: user.name,
+        rejectedAt: new Date().toISOString(),
+      });
+      setLeaves(prev=>prev.map(l=>l.id===leave.id?{...l,status:"rejected",rejectedBy:user.name}:l));
+      await sendNotification({
+        toUserId:leave.driverId,
+        type:"request_action",
+        title:"Leave Request Rejected ❌",
+        message:`Your ${leave.type} request (${leave.from} to ${leave.to}) has been rejected by ${user.name}.`,
+      });
+      setDone(t.leaveRejected);
+    } catch(e) { setDone("❌ Error: "+e.message); }
+  }
+
+  // ADMIN approves leave
+  async function adminApprove(leave) {
+    try {
+      await updateDoc(doc(db,"driverLeaves",leave.id), {
+        status:"approved",
+        approvedBy: user.name,
+        approvedAt: new Date().toISOString(),
+      });
+      setLeaves(prev=>prev.map(l=>l.id===leave.id?{...l,status:"approved",approvedBy:user.name}:l));
+      await sendNotification({
+        toUserId:leave.driverId,
+        type:"request_action",
+        title:"Leave Request Approved ✅",
+        message:`Your ${leave.type} (${leave.from} to ${leave.to}) has been fully approved. It is now excluded from your working days.`,
+      });
+      setDone(t.leaveApproved);
+    } catch(e) { setDone("❌ Error: "+e.message); }
+  }
+
+  // ADMIN rejects leave
+  async function adminReject(leave) {
+    try {
+      await updateDoc(doc(db,"driverLeaves",leave.id), {
+        status:"rejected",
+        rejectedBy: user.name,
+        rejectedAt: new Date().toISOString(),
+      });
+      setLeaves(prev=>prev.map(l=>l.id===leave.id?{...l,status:"rejected",rejectedBy:user.name}:l));
+      await sendNotification({
+        toUserId:leave.driverId,
+        type:"request_action",
+        title:"Leave Request Rejected ❌",
+        message:`Your ${leave.type} (${leave.from} to ${leave.to}) has been rejected by Admin.`,
+      });
+      setDone(t.leaveRejected);
+    } catch(e) { setDone("❌ Error: "+e.message); }
+  }
+
+  async function deleteLeave(id) {
+    if (!window.confirm("Delete this leave record?")) return;
+    try {
+      await deleteDoc(doc(db,"driverLeaves",id));
+      setLeaves(prev=>prev.filter(l=>l.id!==id));
+      setDone("Leave deleted!");
+    } catch(e) { setDone("❌ Error: "+e.message); }
+  }
+
+  function statusBadge(status) {
+    const map = {
+      pending_manager:["#fef3c7","#92400e","⏳ Pending Manager"],
+      pending_admin:  ["#dbeafe","#1e40af","⏳ Pending Admin"],
+      approved:       ["#d1fae5","#065f46","✅ Approved"],
+      rejected:       ["#fee2e2","#991b1b","❌ Rejected"],
+    };
+    const [bg,color,label] = map[status]||["#f1f5f9","#64748b",status];
+    return <span style={{ fontSize:12,fontWeight:600,padding:"3px 10px",borderRadius:99,background:bg,color }}>{label}</span>;
+  }
+
+  function LeaveCard({ l, showManagerActions, showAdminActions }) {
+    return (
+      <div style={{ border:"1px solid #e2e8f0",borderRadius:8,padding:14,marginBottom:10,background:"white" }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8,marginBottom:8 }}>
+          <div>
+            <div style={{ fontWeight:700,fontSize:14 }}>👤 {l.driverName} <span style={{ fontSize:13,color:"#64748b" }}>— {l.dc} DC</span></div>
+            <div style={{ fontSize:13,color:"#64748b" }}>{l.type} | 📅 {l.from} → {l.to}
+              <span style={{ color:"#6366f1",fontWeight:600,marginLeft:6 }}>({daysBetween(l.from,l.to)} days)</span>
+            </div>
+            {l.reason&&<div style={{ fontSize:12,color:"#94a3b8" }}>📝 {l.reason}</div>}
+            {l.managerApprovedBy&&<div style={{ fontSize:11,color:"#10b981" }}>✅ Manager: {l.managerApprovedBy}</div>}
+            {l.approvedBy&&<div style={{ fontSize:11,color:"#10b981" }}>✅ Admin: {l.approvedBy}</div>}
+            {l.rejectedBy&&<div style={{ fontSize:11,color:"#ef4444" }}>❌ Rejected by: {l.rejectedBy}</div>}
+          </div>
+          {statusBadge(l.status)}
+        </div>
+        {showManagerActions&&l.status==="pending_manager"&&(
+          <div style={{ display:"flex",gap:8,marginTop:8 }}>
+            <Btn small onClick={()=>managerApprove(l)} color="#10b981">✅ {t.approveLeave}</Btn>
+            <Btn small onClick={()=>managerReject(l)} color="#ef4444">❌ {t.rejectLeave}</Btn>
+          </div>
+        )}
+        {showAdminActions&&l.status==="pending_admin"&&(
+          <div style={{ display:"flex",gap:8,marginTop:8 }}>
+            <Btn small onClick={()=>adminApprove(l)} color="#10b981">✅ {t.approveLeave}</Btn>
+            <Btn small onClick={()=>adminReject(l)} color="#ef4444">❌ {t.rejectLeave}</Btn>
+          </div>
+        )}
+        {isAdmin&&<Btn small onClick={()=>deleteLeave(l.id)} color="#ef4444" style={{marginTop:6}}>🗑️</Btn>}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Submit button */}
+      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
+        <div style={{ fontWeight:700,fontSize:15,color:"#1A3A5C" }}>👤 {t.driverLeaves}</div>
+        {(isDriver||isManager)&&(
+          <Btn small onClick={()=>setShowAdd(!showAdd)} color="#6366f1">➕ {t.addLeave}</Btn>
+        )}
+      </div>
+
+      {/* DRIVER — Leave Request Form */}
+      {showAdd&&isDriver&&(
+        <Card style={{ borderLeft:"4px solid #6366f1",marginBottom:16 }}>
+          <CardTitle>📝 {t.submitLeaveReq}</CardTitle>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px" }}>
+            <div style={{ gridColumn:"1/-1",marginBottom:10 }}>
+              <label style={{ fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5 }}>{t.leaveType}</label>
+              <select value={f.type} onChange={e=>setF({...f,type:e.target.value})}
+                style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box" }}>
+                <option>Annual Leave</option>
+                <option>Sick Leave</option>
+                <option>Emergency Leave</option>
+                <option>Unpaid Leave</option>
+              </select>
+            </div>
+            <div style={{ marginBottom:10 }}>
+              <label style={{ fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5 }}>{t.fromDate} *</label>
+              <input type="date" value={f.from} onChange={e=>setF({...f,from:e.target.value})}
+                style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box" }} />
+            </div>
+            <div style={{ marginBottom:10 }}>
+              <label style={{ fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5 }}>{t.toDate} *</label>
+              <input type="date" value={f.to} onChange={e=>setF({...f,to:e.target.value})}
+                style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box" }} />
+            </div>
+            <div style={{ gridColumn:"1/-1",marginBottom:10 }}>
+              <label style={{ fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5 }}>{t.reason} *</label>
+              <input value={f.reason} onChange={e=>setF({...f,reason:e.target.value})}
+                style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box" }} />
+            </div>
+          </div>
+          <div style={{ display:"flex",gap:8 }}>
+            <Btn onClick={submitDriverLeave} color="#10b981" style={{ flex:1 }} disabled={saving}>{saving?"Submitting...":"📤 Submit Request"}</Btn>
+            <Btn onClick={()=>setShowAdd(false)} color="#64748b">Cancel</Btn>
+          </div>
+        </Card>
+      )}
+
+      {/* MANAGER — Leave Form */}
+      {showAdd&&isManager&&!isAdmin&&(
+        <Card style={{ borderLeft:"4px solid #6366f1",marginBottom:16 }}>
+          <CardTitle>📝 {t.addLeave}</CardTitle>
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px" }}>
+            <div style={{ gridColumn:"1/-1",marginBottom:10 }}>
+              <label style={{ fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5 }}>Driver (leave blank for self)</label>
+              <select value={f.driverId||""} onChange={e=>setF({...f,driverId:e.target.value})}
+                style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box" }}>
+                <option value="">My Own Leave</option>
+                {drivers.map(d=><option key={d.uid} value={d.uid}>{d.name} — {d.dc}</option>)}
+              </select>
+            </div>
+            <div style={{ gridColumn:"1/-1",marginBottom:10 }}>
+              <label style={{ fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5 }}>{t.leaveType}</label>
+              <select value={f.type} onChange={e=>setF({...f,type:e.target.value})}
+                style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box" }}>
+                <option>Annual Leave</option>
+                <option>Sick Leave</option>
+                <option>Emergency Leave</option>
+                <option>Unpaid Leave</option>
+              </select>
+            </div>
+            <div style={{ marginBottom:10 }}>
+              <label style={{ fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5 }}>{t.fromDate} *</label>
+              <input type="date" value={f.from} onChange={e=>setF({...f,from:e.target.value})}
+                style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box" }} />
+            </div>
+            <div style={{ marginBottom:10 }}>
+              <label style={{ fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5 }}>{t.toDate} *</label>
+              <input type="date" value={f.to} onChange={e=>setF({...f,to:e.target.value})}
+                style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box" }} />
+            </div>
+            <div style={{ gridColumn:"1/-1",marginBottom:10 }}>
+              <label style={{ fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5 }}>{t.reason}</label>
+              <input value={f.reason} onChange={e=>setF({...f,reason:e.target.value})}
+                style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box" }} />
+            </div>
+          </div>
+          <div style={{ display:"flex",gap:8 }}>
+            <Btn onClick={submitManagerLeave} color="#10b981" style={{ flex:1 }} disabled={saving}>{saving?"Submitting...":"📤 Submit for Admin Approval"}</Btn>
+            <Btn onClick={()=>setShowAdd(false)} color="#64748b">Cancel</Btn>
+          </div>
+        </Card>
+      )}
+
+      {/* MANAGER — Pending Driver Requests */}
+      {isManager&&!isAdmin&&pendingManagerLeaves.length>0&&(
+        <Card style={{ borderLeft:"4px solid #f59e0b",marginBottom:12 }}>
+          <CardTitle>⏳ Pending Driver Requests ({pendingManagerLeaves.length})</CardTitle>
+          {pendingManagerLeaves.map(l=><LeaveCard key={l.id} l={l} showManagerActions={true} showAdminActions={false} />)}
+        </Card>
+      )}
+
+      {/* ADMIN — Pending Admin Approval */}
+      {isAdmin&&pendingAdminLeaves.length>0&&(
+        <Card style={{ borderLeft:"4px solid #6366f1",marginBottom:12 }}>
+          <CardTitle>⏳ Pending Admin Approval ({pendingAdminLeaves.length})</CardTitle>
+          {pendingAdminLeaves.map(l=><LeaveCard key={l.id} l={l} showManagerActions={false} showAdminActions={true} />)}
+        </Card>
+      )}
+
+      {/* All Leaves */}
+      <Card>
+        <CardTitle>📋 All Leave Records ({myLeaves.length})</CardTitle>
+        {myLeaves.length===0&&<div style={{ textAlign:"center",padding:24,color:"#94a3b8",fontSize:15 }}>No leave records yet.</div>}
+        {myLeaves.map(l=><LeaveCard key={l.id} l={l} showManagerActions={false} showAdminActions={false} />)}
+      </Card>
+    </div>
+  );
+}
+
+
   const [showAdd, setShowAdd] = useState(false);
   const [f, setF] = useState({ driverId:"", driverName:"", from:"", to:"", type:"Annual Leave", reason:"" });
   const [saving, setSaving] = useState(false);
