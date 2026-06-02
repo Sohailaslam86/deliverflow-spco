@@ -124,9 +124,6 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
     loadDriverLeaves();
     loadVehicleOffDays();
   }, []);
-    loadVehicleReqs();
-    loadDriverReqs();
-  }, []);
 
   // Issue #4 — Departments Firestore load
   async function loadDepartments() {
