@@ -85,24 +85,24 @@ export default function Login({ onLogin, lang, setLang }) {
       <div style={{ display:"flex", width:"100%", maxWidth:1000, margin:"0 auto", minHeight:"100vh", position:"relative", zIndex:10 }}>
 
         {/* ── LEFT PANEL — Branding ── */}
-        <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center", alignItems:"center", padding:"40px 32px", color:"white", direction:"ltr" }}>
+        <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center", alignItems:"flex-start", padding:"40px 40px", color:"white", direction:"ltr" }}>
 
-          {/* SVG Triangle Logo — same as before */}
+          {/* SVG Triangle Logo — left aligned */}
           <svg viewBox="0 0 100 90" width="120" height="108" style={{ marginBottom:16 }}>
             <polygon points="50,4 96,86 4,86" fill="#c0392b"/>
           </svg>
 
-          {/* Arabic name */}
-          <div style={{ fontSize:20, fontWeight:900, color:"white", marginBottom:4, fontFamily:"Arial", direction:"rtl" }}>
+          {/* Arabic name — font 20 */}
+          <div style={{ fontSize:20, fontWeight:900, color:"white", marginBottom:2, fontFamily:"Arial", direction:"rtl" }}>
             الشركة السعودية للأدوية
           </div>
 
-          {/* English name */}
-          <div style={{ fontSize:15, fontWeight:700, color:"rgba(255,255,255,0.75)", marginBottom:28, letterSpacing:"0.5px" }}>
+          {/* English name — 2 levels smaller than Arabic (20 → 13) */}
+          <div style={{ fontSize:13, fontWeight:600, color:"rgba(255,255,255,0.75)", marginBottom:28, letterSpacing:"0.5px" }}>
             Saudi Pharmaceutical Co.
           </div>
 
-          {/* Red divider */}
+          {/* Red divider — left aligned */}
           <div style={{ width:50, height:3, background:"#e74c3c", borderRadius:2, marginBottom:16 }} />
 
           {/* DeliverFlow Title */}
@@ -110,7 +110,7 @@ export default function Login({ onLogin, lang, setLang }) {
           <div style={{ fontSize:15, color:"rgba(255,255,255,0.5)", marginBottom:36 }}>Logistics and Delivery Management</div>
 
           {/* Distribution Centers — LEFT ALIGNED */}
-          <div style={{ width:"100%", maxWidth:280 }}>
+          <div style={{ width:"100%" }}>
             {DCS.map(dc => (
               <div key={dc} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10, fontSize:15, color:"rgba(255,255,255,0.75)" }}>
                 <span style={{ width:9, height:9, borderRadius:"50%", background:"#e74c3c", flexShrink:0 }} />
