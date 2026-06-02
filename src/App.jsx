@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, getDocs } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import Login from "./components/Login.jsx";
 import Shell from "./components/Shell.jsx";
@@ -45,41 +45,29 @@ export default function App() {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          // Firestore se profile load karo
           const docRef = doc(db, "users", firebaseUser.uid);
           const docSnap = await getDoc(docRef);
 
           if (docSnap.exists()) {
-            // ✅ Firestore profile mili
-            setUser({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              ...docSnap.data()
-            });
+            setUser({ uid: firebaseUser.uid, email: firebaseUser.email, ...docSnap.data() });
           } else {
-            // ❌ Firestore document nahi mila — email se role decide karo
             console.warn("No Firestore doc for:", firebaseUser.uid, firebaseUser.email);
             setUser({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
+              uid: firebaseUser.uid, email: firebaseUser.email,
               name: firebaseUser.email === ADMIN_EMAIL ? "Sohail Aslam" : firebaseUser.email,
               role: firebaseUser.email === ADMIN_EMAIL ? "admin" : "viewonly",
               dc: firebaseUser.email === ADMIN_EMAIL ? "Head Office" : "All",
-              department: "Management",
-              status: "active"
+              department: "Management", status: "active"
             });
           }
         } catch (e) {
           console.error("Firestore error:", e.message);
-          // Error pe bhi login karo — admin fallback
           setUser({
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
+            uid: firebaseUser.uid, email: firebaseUser.email,
             name: firebaseUser.email === ADMIN_EMAIL ? "Sohail Aslam" : firebaseUser.email,
             role: firebaseUser.email === ADMIN_EMAIL ? "admin" : "viewonly",
             dc: firebaseUser.email === ADMIN_EMAIL ? "Head Office" : "All",
-            department: "Management",
-            status: "active"
+            department: "Management", status: "active"
           });
         }
       } else {
@@ -88,6 +76,18 @@ export default function App() {
       setLoading(false);
     });
     return () => unsub();
+  }, []);
+
+  // Firestore se sare users load karo
+  useEffect(() => {
+    async function loadUsers() {
+      try {
+        const snap = await getDocs(collection(db, "users"));
+        const fsUsers = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+        if (fsUsers.length > 0) setUsers(fsUsers);
+      } catch(e) { console.error("Users load error:", e); }
+    }
+    loadUsers();
   }, []);
 
   if (loading) return (
