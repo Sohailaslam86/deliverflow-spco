@@ -17,7 +17,9 @@ const T = {
     onLeave:"Driver is on leave — cannot assign",
     inMaint:"Vehicle is under maintenance — cannot assign",
     done:"invoice(s) assigned to", lowFuel:"Low Fuel Warning",
-    driverLoad:"assigned", driverFree:"free"
+    driverLoad:"assigned", driverFree:"free",
+    loading:"Loading data...", noDrivers:"No drivers found for this DC",
+    noVehicles:"No vehicles found for this DC"
   },
   ar: {
     selectInv:"اختر الفواتير", selected:"محددة",
@@ -31,7 +33,9 @@ const T = {
     onLeave:"السائق في إجازة — لا يمكن التخصيص",
     inMaint:"المركبة تحت الصيانة — لا يمكن التخصيص",
     done:"تم تخصيص الفواتير", lowFuel:"تحذير: وقود منخفض",
-    driverLoad:"مخصص", driverFree:"متاح"
+    driverLoad:"مخصص", driverFree:"متاح",
+    loading:"جاري التحميل...", noDrivers:"لا يوجد سائقون",
+    noVehicles:"لا توجد مركبات"
   }
 };
 
@@ -45,7 +49,7 @@ function FuelBar({ level, capacity }) {
   );
 }
 
-export default function Assign({ user, invoices, setInvoices, vehicles, lang }) {
+export default function Assign({ user, invoices, setInvoices, lang }) {
   const [selected, setSelected] = useState([]);
   const [driver, setDriver] = useState("");
   const [vehicle, setVehicle] = useState("");
@@ -54,44 +58,48 @@ export default function Assign({ user, invoices, setInvoices, vehicles, lang }) 
   const [storage, setStorage] = useState("");
   const [done, setDone] = useState("");
   const [error, setError] = useState("");
-  const [dcDrivers, setDcDrivers] = useState([]);
+  const [fsDrivers, setFsDrivers] = useState([]);
+  const [fsVehicles, setFsVehicles] = useState([]);
+  const [loading, setLoading] = useState(true);
+
   const rtl = lang==="ar";
   const t = T[lang]||T.en;
-  const dc = user.dc==="Head Office" ? "Riyadh" : (user.dc||"Riyadh");
 
-  // Firestore se drivers load karo
-  useEffect(() => {
-    loadDrivers();
-    loadInvoices();
-  }, []);
+  // DC filter
+  const userDC = (user.dc && user.dc !== "Head Office") ? user.dc : "Riyadh";
 
-  async function loadDrivers() {
+  useEffect(() => { loadData(); }, []);
+
+  async function loadData() {
+    setLoading(true);
     try {
-      const snap = await getDocs(collection(db, "users"));
-      const all = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
-      setDcDrivers(all.filter(u => u.role === "driver" && u.dc === dc));
-    } catch(e) { console.error("Drivers load error:", e); }
+      // Firestore se drivers load karo
+      const uSnap = await getDocs(collection(db, "users"));
+      const allUsers = uSnap.docs.map(d => ({ uid: d.id, ...d.data() }));
+      setFsDrivers(allUsers.filter(u => u.role === "driver" && u.dc === userDC && (u.status === "active" || u.status === "Active")));
+
+      // Firestore se vehicles load karo
+      const vSnap = await getDocs(collection(db, "vehicles"));
+      const allVehicles = vSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setFsVehicles(allVehicles.filter(v => v.dc === userDC));
+    } catch(e) { console.error("Assign load error:", e); }
+    setLoading(false);
   }
 
-  async function loadInvoices() {
-    try {
-      const snap = await getDocs(collection(db, "invoices"));
-      const data = snap.docs.map(d => ({ firestoreId: d.id, ...d.data() }));
-      setInvoices(data);
-    } catch(e) { console.error("Invoices load error:", e); }
-  }
-
-  const myInvoices = invoices.filter(i=>i.dc===dc&&["pending","outstanding"].includes(i.status));
-  const allVehicles = vehicles.filter(v=>v.dc===dc);
+  // Only pending/outstanding invoices for this DC (NOT hold_ship)
+  const myInvoices = invoices.filter(i =>
+    i.dc === userDC &&
+    ["pending","outstanding"].includes(i.status)
+  );
 
   const driverLoad = {};
-  invoices.filter(i=>i.dc===dc&&i.status==="assigned").forEach(i=>{
-    if(i.driverId) driverLoad[i.driverId]=(driverLoad[i.driverId]||0)+1;
+  invoices.filter(i => i.dc === userDC && i.status === "assigned").forEach(i => {
+    if (i.driverId) driverLoad[i.driverId] = (driverLoad[i.driverId]||0) + 1;
   });
 
-  const selVehicle = vehicles.find(v=>v.plate===vehicle);
-  const selDriverUser = dcDrivers.find(d=>d.name===driver);
-  const storageOptions = STORAGE_CONDITIONS.map(s=>s.name+" ("+s.range+")");
+  const selVehicle = fsVehicles.find(v => v.plate === vehicle);
+  const selDriverUser = fsDrivers.find(d => d.name === driver);
+  const storageOptions = STORAGE_CONDITIONS.map(s => s.name+" ("+s.range+")");
 
   const fuelLevel = selVehicle ? (selVehicle.fuelLevel||0) : 0;
   const fuelCap = selVehicle ? (selVehicle.fuelCapacity||80) : 80;
@@ -110,6 +118,7 @@ export default function Assign({ user, invoices, setInvoices, vehicles, lang }) 
   const drvAlerts = selDriverUser ? [
     selDriverUser.status==="On Leave" && t.onLeave,
     selDriverUser.licExp && Math.ceil((new Date(selDriverUser.licExp)-new Date())/(1000*60*60*24))<=30 && "License expiring: "+selDriverUser.licExp,
+    selDriverUser.driverCardExp && Math.ceil((new Date(selDriverUser.driverCardExp)-new Date())/(1000*60*60*24))<=30 && "Driver card expiring: "+selDriverUser.driverCardExp,
   ].filter(Boolean) : [];
 
   async function assign() {
@@ -119,151 +128,193 @@ export default function Assign({ user, invoices, setInvoices, vehicles, lang }) 
     if (!driver||!vehicle||!city||!dtype||!storage||!selected.length) return;
 
     const updateData = {
-      status:"assigned", driverId: selDriverUser?.uid||user.uid,
-      driverName: driver, vehicle, city, dtype, storage,
-      assignedAt: new Date().toLocaleString(), attempts: 0
+      status:"assigned",
+      driverId: selDriverUser?.uid || driver,
+      driverName: driver,
+      vehicle, city, dtype, storage,
+      assignedAt: new Date().toLocaleString(),
     };
 
-    // Firestore update — har selected invoice
+    // Firestore update
     for (const invId of selected) {
-      const inv = invoices.find(i=>i.id===invId);
+      const inv = invoices.find(i => i.id === invId || i.firestoreId === invId);
       if (inv?.firestoreId) {
         try { await updateDoc(doc(db, "invoices", inv.firestoreId), updateData); } catch(e) { console.error(e); }
       }
     }
 
-    setInvoices(prev=>prev.map(i=>selected.includes(i.id)?{...i,...updateData}:i));
+    setInvoices(prev => prev.map(i =>
+      selected.includes(i.id) || selected.includes(i.firestoreId)
+        ? {...i, ...updateData}
+        : i
+    ));
+
     setDone(selected.length+" "+t.done+" "+driver+"!");
     setSelected([]); setDriver(""); setVehicle(""); setCity(""); setDtype(""); setStorage("");
-    setTimeout(()=>setDone(""),3000);
+    setTimeout(() => setDone(""), 3000);
   }
 
-  const canAssign = driver&&vehicle&&city&&dtype&&storage&&selected.length>0;
+  const canAssign = driver && vehicle && city && dtype && storage && selected.length > 0;
   const days = inv => Math.floor((new Date()-new Date(inv.date))/(1000*60*60*24));
+
+  if (loading) return (
+    <div style={{ textAlign:"center", padding:40, fontSize:16, color:"#64748b" }}>
+      ⏳ {t.loading}
+    </div>
+  );
 
   return (
     <div style={{ direction:rtl?"rtl":"ltr" }}>
       {done&&<SuccessMsg msg={done} />}
-      {error&&<div style={{ background:"#fee2e2",color:"#991b1b",borderRadius:8,padding:"10px 14px",fontSize:13,marginBottom:12,fontWeight:600 }}>⛔ {error}</div>}
+      {error&&<div style={{ background:"#fee2e2",color:"#991b1b",borderRadius:8,padding:"12px 16px",fontSize:14,marginBottom:12,fontWeight:600 }}>⛔ {error}</div>}
 
+      {/* Invoice Selection */}
       <Card>
         <CardTitle>
-          📋 {t.selectInv}
-          {selected.length>0&&<span style={{ background:"#6366f1",color:"white",fontSize:12,borderRadius:99,padding:"2px 10px",marginLeft:8 }}>{selected.length} {t.selected}</span>}
+          📋 {t.selectInv} — {userDC} Distribution Center
+          {selected.length>0&&<span style={{ background:"#6366f1",color:"white",fontSize:13,borderRadius:99,padding:"3px 12px",marginLeft:8 }}>{selected.length} {t.selected}</span>}
         </CardTitle>
-        {myInvoices.length===0&&<div style={{ textAlign:"center",padding:20,color:"#94a3b8" }}>{t.noInvoices} — {dc} DC</div>}
+        {myInvoices.length===0&&(
+          <div style={{ textAlign:"center",padding:24,color:"#94a3b8",fontSize:15 }}>
+            📋 {t.noInvoices} — {userDC} Distribution Center
+          </div>
+        )}
         {myInvoices.map(inv=>{
-          const d=days(inv);
+          const d = days(inv);
+          const isSelected = selected.includes(inv.id) || selected.includes(inv.firestoreId);
+          const invId = inv.id || inv.firestoreId;
           return (
-            <div key={inv.id||inv.firestoreId} onClick={()=>setSelected(p=>p.includes(inv.id)?p.filter(x=>x!==inv.id):[...p,inv.id])}
-              style={{ display:"flex",alignItems:"center",gap:10,padding:12,border:`1px solid ${selected.includes(inv.id)?"#a5b4fc":"#f1f5f9"}`,background:selected.includes(inv.id)?"#eef2ff":"white",borderRadius:8,marginBottom:6,cursor:"pointer" }}>
-              <span style={{ fontSize:20,color:"#6366f1" }}>{selected.includes(inv.id)?"☑":"☐"}</span>
+            <div key={invId} onClick={()=>setSelected(p=>p.includes(invId)?p.filter(x=>x!==invId):[...p,invId])}
+              style={{ display:"flex",alignItems:"center",gap:10,padding:14,border:`1.5px solid ${isSelected?"#a5b4fc":"#f1f5f9"}`,background:isSelected?"#eef2ff":"white",borderRadius:8,marginBottom:6,cursor:"pointer" }}>
+              <span style={{ fontSize:20,color:"#6366f1" }}>{isSelected?"☑":"☐"}</span>
               <div style={{ flex:1 }}>
-                <div style={{ fontWeight:700,fontSize:13,color:"#6366f1" }}>{inv.id}</div>
-                <div style={{ fontSize:13,color:"#0f172a" }}>{inv.customer}</div>
-                <div style={{ fontSize:11,color:"#94a3b8" }}>{inv.date} | {inv.inst}</div>
+                <div style={{ fontWeight:700,fontSize:14,color:"#6366f1" }}>{inv.id}</div>
+                <div style={{ fontSize:15,color:"#0f172a",fontWeight:500 }}>{inv.customer}</div>
+                <div style={{ fontSize:13,color:"#94a3b8" }}>{inv.date} | {inv.inst}</div>
               </div>
               <div style={{ textAlign:"right" }}>
-                <span style={{ fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:99,background:d<=1?"#d1fae5":d<=3?"#fef3c7":"#fee2e2",color:d<=1?"#065f46":d<=3?"#92400e":"#991b1b" }}>{d}d</span>
+                <span style={{ fontSize:12,fontWeight:600,padding:"3px 10px",borderRadius:99,background:d<=1?"#d1fae5":d<=3?"#fef3c7":"#fee2e2",color:d<=1?"#065f46":d<=3?"#92400e":"#991b1b" }}>{d}d</span>
+                {inv.status==="outstanding"&&<div style={{ fontSize:12,color:"#f97316",fontWeight:600,marginTop:4 }}>⚠️ {inv.attempts} attempt(s)</div>}
               </div>
             </div>
           );
         })}
       </Card>
 
+      {/* Assignment Details */}
       <Card>
         <CardTitle>⚙️ {t.assignDetails}</CardTitle>
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:"0 12px" }}>
-          <div style={{ marginBottom:12 }}>
-            <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#374151",marginBottom:5 }}>👤 {t.driver}</label>
-            <select value={driver} onChange={e=>setDriver(e.target.value)}
-              style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box" }}>
-              <option value="">Select driver...</option>
-              {dcDrivers.map(d=>(
-                <option key={d.uid} value={d.name} disabled={d.status==="On Leave"}>
-                  {d.name} — {d.status==="On Leave"?"(On Leave)":driverLoad[d.uid]?driverLoad[d.uid]+" "+t.driverLoad:t.driverFree}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div style={{ marginBottom:12 }}>
-            <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#374151",marginBottom:5 }}>🚗 {t.vehicle}</label>
-            <select value={vehicle} onChange={e=>setVehicle(e.target.value)}
-              style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box" }}>
-              <option value="">Select vehicle...</option>
-              {allVehicles.map(v=>{
-                const pct=Math.round((v.fuelLevel||0)/(v.fuelCapacity||80)*100);
-                return (
-                  <option key={v.plate} value={v.plate} disabled={v.status==="Maintenance"}>
-                    {v.plate} — {v.fuelLevel||0}L ({pct}%) {v.status==="Maintenance"?"[MAINTENANCE]":""}
+
+          {/* Driver */}
+          <div style={{ marginBottom:14 }}>
+            <label style={{ display:"block",fontSize:14,fontWeight:600,color:"#374151",marginBottom:6 }}>👤 {t.driver}</label>
+            {fsDrivers.length===0?(
+              <div style={{ padding:"11px 14px",fontSize:14,color:"#ef4444",background:"#fee2e2",borderRadius:8 }}>
+                ⚠️ {t.noDrivers} — {userDC} DC
+              </div>
+            ):(
+              <select value={driver} onChange={e=>setDriver(e.target.value)}
+                style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"11px 14px",fontSize:15,outline:"none",background:"white",boxSizing:"border-box" }}>
+                <option value="">Select driver...</option>
+                {fsDrivers.map(d=>(
+                  <option key={d.uid} value={d.name} disabled={d.status==="On Leave"}>
+                    {d.name} — {d.status==="On Leave"?"(On Leave)":driverLoad[d.uid]?driverLoad[d.uid]+" "+t.driverLoad:t.driverFree}
                   </option>
-                );
-              })}
-            </select>
+                ))}
+              </select>
+            )}
           </div>
+
+          {/* Vehicle */}
+          <div style={{ marginBottom:14 }}>
+            <label style={{ display:"block",fontSize:14,fontWeight:600,color:"#374151",marginBottom:6 }}>🚗 {t.vehicle}</label>
+            {fsVehicles.length===0?(
+              <div style={{ padding:"11px 14px",fontSize:14,color:"#ef4444",background:"#fee2e2",borderRadius:8 }}>
+                ⚠️ {t.noVehicles} — {userDC} DC
+              </div>
+            ):(
+              <select value={vehicle} onChange={e=>setVehicle(e.target.value)}
+                style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"11px 14px",fontSize:15,outline:"none",background:"white",boxSizing:"border-box" }}>
+                <option value="">Select vehicle...</option>
+                {fsVehicles.map(v=>{
+                  const pct = Math.round((v.fuelLevel||0)/(v.fuelCapacity||80)*100);
+                  return (
+                    <option key={v.plate||v.id} value={v.plate} disabled={v.status==="Maintenance"}>
+                      {v.plate} — {v.fuelLevel||0}L ({pct}%) {v.status==="Maintenance"?"[MAINTENANCE]":""}
+                    </option>
+                  );
+                })}
+              </select>
+            )}
+          </div>
+
           <Select label={"📍 "+t.city} value={city} onChange={setCity} options={CITIES} />
           <Select label={"🌡️ "+t.storage} value={storage} onChange={setStorage} options={storageOptions} />
         </div>
 
+        {/* Vehicle Detail Panel */}
         {selVehicle&&(
-          <div style={{ background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:10,padding:"14px 16px",marginBottom:12 }}>
-            <div style={{ fontWeight:700,fontSize:13,color:"#0369a1",marginBottom:12 }}>🚗 {selVehicle.plate} — {selVehicle.type} {selVehicle.brand}</div>
-            <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:12 }}>
+          <div style={{ background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:10,padding:"14px 16px",marginBottom:14 }}>
+            <div style={{ fontWeight:700,fontSize:15,color:"#0369a1",marginBottom:12 }}>🚗 {selVehicle.plate} — {selVehicle.type} {selVehicle.brand}</div>
+            <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:12 }}>
               <div style={{ background:"white",borderRadius:8,padding:"10px 12px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
-                <div style={{ fontSize:11,color:"#64748b",fontWeight:600,marginBottom:4 }}>⛽ {t.fuelAvailable}</div>
-                <div style={{ fontWeight:800,fontSize:18,color:fuelPct<25?"#ef4444":fuelPct<50?"#f59e0b":"#10b981" }}>{fuelLevel}L</div>
+                <div style={{ fontSize:12,color:"#64748b",fontWeight:600,marginBottom:4 }}>⛽ {t.fuelAvailable}</div>
+                <div style={{ fontWeight:800,fontSize:20,color:fuelPct<25?"#ef4444":fuelPct<50?"#f59e0b":"#10b981" }}>{fuelLevel}L</div>
                 <div style={{ fontSize:12,color:"#64748b",marginBottom:6 }}>{fuelLevel}/{fuelCap}L ({fuelPct}%)</div>
                 <FuelBar level={fuelLevel} capacity={fuelCap} />
               </div>
               <div style={{ background:"white",borderRadius:8,padding:"10px 12px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
-                <div style={{ fontSize:11,color:"#64748b",fontWeight:600,marginBottom:4 }}>🛣️ {t.odometer}</div>
-                <div style={{ fontWeight:800,fontSize:18,color:"#6366f1" }}>{odometer.toLocaleString()}</div>
+                <div style={{ fontSize:12,color:"#64748b",fontWeight:600,marginBottom:4 }}>🛣️ {t.odometer}</div>
+                <div style={{ fontWeight:800,fontSize:20,color:"#6366f1" }}>{odometer.toLocaleString()}</div>
                 <div style={{ fontSize:12,color:"#64748b" }}>km total</div>
               </div>
               <div style={{ background:"white",borderRadius:8,padding:"10px 12px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
-                <div style={{ fontSize:11,color:"#64748b",fontWeight:600,marginBottom:4 }}>📍 {t.estDistance}</div>
-                <div style={{ fontWeight:800,fontSize:18,color:"#0891b2" }}>~{estDist}</div>
+                <div style={{ fontSize:12,color:"#64748b",fontWeight:600,marginBottom:4 }}>📍 {t.estDistance}</div>
+                <div style={{ fontWeight:800,fontSize:20,color:"#0891b2" }}>~{estDist}</div>
                 <div style={{ fontSize:12,color:"#64748b" }}>km on current fuel</div>
               </div>
               <div style={{ background:"white",borderRadius:8,padding:"10px 12px",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
-                <div style={{ fontSize:11,color:"#64748b",fontWeight:600,marginBottom:4 }}>📊 {t.efficiency}</div>
-                <div style={{ fontWeight:800,fontSize:18,color:"#7c3aed" }}>{efficiency}</div>
+                <div style={{ fontSize:12,color:"#64748b",fontWeight:600,marginBottom:4 }}>📊 {t.efficiency}</div>
+                <div style={{ fontWeight:800,fontSize:20,color:"#7c3aed" }}>{efficiency}</div>
                 <div style={{ fontSize:12,color:"#64748b" }}>km / L</div>
               </div>
             </div>
             {vehAlerts.length>0&&(
               <div>
-                <div style={{ fontWeight:600,fontSize:12,color:"#991b1b",marginBottom:4 }}>⚠️ {t.vehAlert}:</div>
+                <div style={{ fontWeight:600,fontSize:13,color:"#991b1b",marginBottom:6 }}>⚠️ {t.vehAlert}:</div>
                 {vehAlerts.map((a,i)=>(
-                  <div key={i} style={{ fontSize:12,color:"#991b1b",background:"#fee2e2",borderRadius:6,padding:"5px 10px",marginBottom:3,fontWeight:600 }}>🔴 {a}</div>
+                  <div key={i} style={{ fontSize:13,color:"#991b1b",background:"#fee2e2",borderRadius:6,padding:"6px 12px",marginBottom:4,fontWeight:600 }}>🔴 {a}</div>
                 ))}
               </div>
             )}
           </div>
         )}
 
+        {/* Driver Alert */}
         {selDriverUser&&drvAlerts.length>0&&(
-          <div style={{ background:"#fef3c7",border:"1px solid #fbbf24",borderRadius:8,padding:"12px 14px",marginBottom:12 }}>
-            <div style={{ fontWeight:600,fontSize:13,color:"#92400e",marginBottom:6 }}>⚠️ {t.drvAlert}: {selDriverUser.name}</div>
+          <div style={{ background:"#fef3c7",border:"1px solid #fbbf24",borderRadius:8,padding:"12px 16px",marginBottom:14 }}>
+            <div style={{ fontWeight:600,fontSize:14,color:"#92400e",marginBottom:6 }}>⚠️ {t.drvAlert}: {selDriverUser.name}</div>
             {drvAlerts.map((a,i)=>(
-              <div key={i} style={{ fontSize:12,color:"#92400e",fontWeight:600,marginBottom:3 }}>🟡 {a}</div>
+              <div key={i} style={{ fontSize:13,color:"#92400e",fontWeight:600,marginBottom:4 }}>🟡 {a}</div>
             ))}
           </div>
         )}
 
-        <div style={{ marginBottom:14 }}>
-          <label style={{ display:"block",fontSize:13,fontWeight:600,color:"#374151",marginBottom:6 }}>{t.deliveryType}</label>
+        {/* Delivery Type */}
+        <div style={{ marginBottom:16 }}>
+          <label style={{ display:"block",fontSize:14,fontWeight:600,color:"#374151",marginBottom:8 }}>{t.deliveryType}</label>
           <div style={{ display:"flex",gap:8 }}>
             {[["incity","🏙️ "+t.inCity],["outcity","🛣️ "+t.outCity]].map(([v,l])=>(
               <button key={v} onClick={()=>setDtype(v)}
-                style={{ flex:1,border:`2px solid ${dtype===v?"#6366f1":"#e2e8f0"}`,background:dtype===v?"#eef2ff":"white",borderRadius:8,padding:10,cursor:"pointer",fontSize:13,fontWeight:600,color:dtype===v?"#4338ca":"#64748b" }}>
+                style={{ flex:1,border:`2px solid ${dtype===v?"#6366f1":"#e2e8f0"}`,background:dtype===v?"#eef2ff":"white",borderRadius:8,padding:12,cursor:"pointer",fontSize:14,fontWeight:600,color:dtype===v?"#4338ca":"#64748b" }}>
                 {l}
               </button>
             ))}
           </div>
         </div>
 
-        <Btn onClick={assign} disabled={!canAssign} style={{ width:"100%",padding:12,fontSize:14 }}>
+        <Btn onClick={assign} disabled={!canAssign} style={{ width:"100%",padding:14,fontSize:15 }}>
           🚚 {t.assignBtn} {driver||"Driver"} ({selected.length})
         </Btn>
       </Card>
