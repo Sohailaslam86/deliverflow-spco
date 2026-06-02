@@ -172,7 +172,7 @@ export default function Dashboard({ user, lang, invoices, setInvoices, vehicles,
 
   const myInv = dc ? invoices.filter(i=>i.dc===dc) : invoices;
   // Sirf posted invoices count karo (status field se nahi, uploadBatch se — jo POST hue hain)
-  const postedInv = postedInv.filter(i=>i.uploadBatch); // sirf uploaded & posted invoices
+  const postedInv = myInv.filter(i=>i.uploadBatch); // sirf uploaded & posted invoices
   const myVeh = dc ? allVehicles.filter(v=>v.dc===dc) : allVehicles;
   const myAlerts = dc ? (alerts||[]).filter(a=>a.dc===dc&&a.status==="active") : (alerts||[]).filter(a=>a.status==="active");
 
