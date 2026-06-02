@@ -1,11 +1,13 @@
 import React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createUserWithEmailAndPassword, getAuth } from "firebase/auth";
 import { initializeApp, getApps } from "firebase/app";
-import { doc, setDoc, collection, addDoc, updateDoc } from "firebase/firestore";
+import { doc, setDoc, collection, addDoc, updateDoc, deleteDoc, getDocs } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import CameraCapture from "../components/CameraCapture.jsx";
 import { Card, CardTitle, Btn, Input, Select, Textarea, SuccessMsg, TabBar } from "../components/Shared.jsx";
+import { uploadImage } from "../cloudinaryService.js";
+import { DEPARTMENTS, RC, RI, genId } from "../data/masterData.js";
 
 // Secondary Firebase app — Admin ka session safe rahe
 const FIREBASE_CONFIG = { apiKey:"AIzaSyBg1IKFOcpRKJBOwIqiUh2oevdT6oqpYpU", authDomain:"deliverflow-spco.firebaseapp.com", projectId:"deliverflow-spco" };
@@ -141,6 +143,28 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
   const [form, setForm] = useState(EMPTY_FORM);
   const [done, setDone] = useState("");
   const [approving, setApproving] = useState(false);
+
+  // Firestore se users aur requests load karo
+  useEffect(() => {
+    loadUsersFromFirestore();
+    loadRequestsFromFirestore();
+  }, []);
+
+  async function loadUsersFromFirestore() {
+    try {
+      const snap = await getDocs(collection(db, "users"));
+      const fsUsers = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+      if (fsUsers.length > 0) setUsers(fsUsers);
+    } catch(e) { console.error("Users load error:", e); }
+  }
+
+  async function loadRequestsFromFirestore() {
+    try {
+      const snap = await getDocs(collection(db, "requests"));
+      const fsReqs = snap.docs.map(d => ({ ...d.data(), firestoreId: d.id }));
+      if (fsReqs.length > 0) setRequests(fsReqs);
+    } catch(e) { console.error("Requests load error:", e); }
+  }
   const [uploading, setUploading] = useState(false);
   const [editReqId, setEditReqId] = useState(null);
   const [editReqForm, setEditReqForm] = useState(null);
@@ -233,18 +257,34 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
         driverCard:req.driverCard||null, driverCardExp:req.driverCardExp||null,
         driverCardPicUrl:req.driverCardPicUrl||null,
       };
+      // Firestore mein user save karo
       await setDoc(doc(db,"users",newUID), profileData);
+      // Request ka status Firestore mein update karo
+      if (req.firestoreId) {
+        await updateDoc(doc(db,"requests",req.firestoreId), {
+          status:"approved", uniqueRef, firebaseUID:newUID, approvedBy:user.name, approvedAt:new Date().toISOString()
+        });
+      }
+      // Local state update karo
       setRequests(prev=>prev.map(r=>r.reqId===reqId?{...r,status:"approved",uniqueRef,firebaseUID:newUID,approvedBy:user.name}:r));
       setUsers(prev=>[...prev,{uid:newUID,...profileData}]);
       setIssuedCredentials({name:req.name,email:req.email,password:defaultPassword,role:getRoleLabel(req.role),dc:req.dc,ref:uniqueRef});
       flash(t.approvedMsg);
+      // Firestore se fresh reload
+      await loadUsersFromFirestore();
     } catch(e) {
       flash(e.code==="auth/email-already-in-use"?"❌ Email already exists!":"❌ Error: "+e.message);
     }
     setApproving(false);
   }
 
-  function rejectReq(reqId) {
+  async function rejectReq(reqId) {
+    const req = requests.find(r=>r.reqId===reqId);
+    if (req?.firestoreId) {
+      try {
+        await updateDoc(doc(db,"requests",req.firestoreId), { status:"rejected", rejectedBy:user.name });
+      } catch(e) { console.error(e); }
+    }
     setRequests(prev=>prev.map(r=>r.reqId===reqId?{...r,status:"rejected",rejectedBy:user.name}:r));
     flash(t.rejectedMsg);
   }
@@ -281,6 +321,15 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
       await updateDoc(doc(db,"users",u.uid),{status:newStatus});
       setUsers(prev=>prev.map(usr=>usr.uid===u.uid?{...usr,status:newStatus}:usr));
       flash(t.updated);
+    } catch(e) { flash("❌ Error: "+e.message); }
+  }
+
+  async function deleteUser(u) {
+    if (!window.confirm("Delete "+u.name+"? This cannot be undone!")) return;
+    try {
+      await deleteDoc(doc(db,"users",u.uid));
+      setUsers(prev=>prev.filter(usr=>usr.uid!==u.uid));
+      flash("🗑️ "+u.name+" deleted!");
     } catch(e) { flash("❌ Error: "+e.message); }
   }
 
@@ -437,6 +486,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                           <Btn small onClick={()=>toggleUserStatus(u)} color={u.status==="active"?"#ef4444":"#10b981"}>
                             {u.status==="active"?t.deactivate:t.activate}
                           </Btn>
+                          <Btn small onClick={()=>deleteUser(u)} color="#dc2626">🗑️</Btn>
                         </div>
                       </div>
                     )}
