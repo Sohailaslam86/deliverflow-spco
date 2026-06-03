@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardTitle, StatCard, TabBar } from "../components/Shared.jsx";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
@@ -13,15 +13,23 @@ const T = {
     failed:"Failed", outstanding:"Outstanding", inTransit:"In Transit", scheduled:"Scheduled",
     deliveryRate:"Delivery Rate", instBreak:"Institution Breakdown",
     govt:"Government", priv:"Private", noData:"No data for this period",
-    csvDownload:"Download CSV", totalDel:"Delivered", totalFail:"Failed", rate:"Rate",
+    csvDownload:"Download CSV", pdfDownload:"Download PDF", totalDel:"Delivered", totalFail:"Failed", rate:"Rate",
     inCity:"In-City", outCity:"Out-City", vehUtil:"Vehicle Utilization",
     active:"Active", maintenance:"Maintenance", totalKM:"Total KM",
-    totalLiters:"Total Liters", totalCost:"Total Cost", avgEff:"Avg Efficiency",
+    totalLiters:"Total Liters", totalCost:"Total Cost (SAR)", avgEff:"Avg Efficiency",
     fresh:"Fresh", aging2:"Aging", critical:"Critical", days:"days",
     riyadhDC:"Riyadh Distribution Center",
     jeddahDC:"Jeddah Distribution Center",
     dammamDC:"Dammam Distribution Center",
-    howCalc:"How calculated", driverPerf:"Driver Performance", fuelRep:"Fuel Report"
+    howCalc:"How calculated", driverPerf:"Driver Performance", fuelRep:"Fuel Report",
+    allDrivers:"All Drivers", allVehicles:"All Vehicles", allDCs:"All DCs",
+    fromDate:"From", toDate:"To", quickPeriod:"Quick:",
+    nextService:"Next Service", avgKMday:"Avg KM/Day", docExpiry:"Document Expiry",
+    failReasons:"Fail Reason Breakdown", avgDelivery:"Avg Deliveries/Day",
+    summaryCard:"Summary Overview", bestDriver:"Top Driver", mostActive:"Most Active Vehicle",
+    criticalAging:"Critical Aging",
+    productivity:"Productivity", workingDays:"Working Days", activeDays:"Active Days",
+    unassignedDays:"Unassigned Days",
   },
   ar: {
     daily:"الحالة اليومية", driver:"أداء السائقين", vehicle:"استخدام المركبات",
@@ -32,7 +40,7 @@ const T = {
     failed:"فاشلة", outstanding:"متأخرة", inTransit:"في الطريق", scheduled:"مجدولة",
     deliveryRate:"معدل التسليم", instBreak:"توزيع المؤسسات",
     govt:"حكومي", priv:"خاص", noData:"لا توجد بيانات",
-    csvDownload:"تحميل CSV", totalDel:"مسلمة", totalFail:"فاشلة", rate:"النسبة",
+    csvDownload:"تحميل CSV", pdfDownload:"تحميل PDF", totalDel:"مسلمة", totalFail:"فاشلة", rate:"النسبة",
     inCity:"داخل المدينة", outCity:"خارج المدينة", vehUtil:"استخدام المركبات",
     active:"نشطة", maintenance:"صيانة", totalKM:"إجمالي الكيلومترات",
     totalLiters:"إجمالي اللترات", totalCost:"إجمالي التكلفة", avgEff:"متوسط الكفاءة",
@@ -40,7 +48,15 @@ const T = {
     riyadhDC:"مركز توزيع الرياض",
     jeddahDC:"مركز توزيع جدة",
     dammamDC:"مركز توزيع الدمام",
-    howCalc:"طريقة الحساب", driverPerf:"أداء السائق", fuelRep:"تقرير الوقود"
+    howCalc:"طريقة الحساب", driverPerf:"أداء السائق", fuelRep:"تقرير الوقود",
+    allDrivers:"جميع السائقين", allVehicles:"جميع المركبات", allDCs:"جميع المراكز",
+    fromDate:"من", toDate:"إلى", quickPeriod:"سريع:",
+    nextService:"الصيانة القادمة", avgKMday:"متوسط كم/يوم", docExpiry:"انتهاء الوثائق",
+    failReasons:"أسباب الفشل", avgDelivery:"متوسط التسليم/يوم",
+    summaryCard:"ملخص سريع", bestDriver:"أفضل سائق", mostActive:"أكثر مركبة نشاطاً",
+    criticalAging:"فواتير حرجة",
+    productivity:"الإنتاجية", workingDays:"أيام العمل", activeDays:"الأيام النشطة",
+    unassignedDays:"الأيام غير المخصصة",
   }
 };
 
@@ -52,7 +68,6 @@ function dcLabel(dc, t) {
   return t.dammamDC;
 }
 
-// Working days calculator — exclude Fri/Sat/public holidays/leaves
 function getWorkingDays(from, to, holidays=[], leaveDates=[]) {
   let count = 0;
   let date = new Date(from);
@@ -60,7 +75,7 @@ function getWorkingDays(from, to, holidays=[], leaveDates=[]) {
   while (date <= end) {
     const day = date.getDay();
     const dateStr = date.toISOString().split("T")[0];
-    const isFriSat = day === 5 || day === 6; // 5=Fri, 6=Sat
+    const isFriSat = day === 5 || day === 6;
     const isHoliday = holidays.some(h=>dateStr>=h.from&&dateStr<=h.to);
     const isLeave = leaveDates.includes(dateStr);
     if (!isFriSat && !isHoliday && !isLeave) count++;
@@ -69,10 +84,9 @@ function getWorkingDays(from, to, holidays=[], leaveDates=[]) {
   return count;
 }
 
-// Get all dates in a leave period
 function getLeaveDates(leaves, driverId) {
   const dates = [];
-  leaves.filter(l=>l.driverId===driverId).forEach(l=>{
+  leaves.filter(l=>l.driverId===driverId&&l.status==="approved").forEach(l=>{
     let d = new Date(l.from);
     const end = new Date(l.to);
     while (d <= end) { dates.push(d.toISOString().split("T")[0]); d.setDate(d.getDate()+1); }
@@ -80,7 +94,6 @@ function getLeaveDates(leaves, driverId) {
   return dates;
 }
 
-// Get all dates in vehicle off period
 function getVehicleOffDates(offDays, plate) {
   const dates = [];
   offDays.filter(o=>o.vehiclePlate===plate).forEach(o=>{
@@ -91,21 +104,15 @@ function getVehicleOffDates(offDays, plate) {
   return dates;
 }
 
-// Period date range
-function getPeriodRange(period) {
+function getToday() { return new Date().toISOString().split("T")[0]; }
+
+function getQuickRange(q) {
   const now = new Date();
-  const today = now.toISOString().split("T")[0];
-  if (period==="today") return { from:today, to:today };
-  if (period==="week") {
-    const d = new Date(now); d.setDate(d.getDate()-6);
-    return { from:d.toISOString().split("T")[0], to:today };
-  }
-  if (period==="month") {
-    const d = new Date(now); d.setDate(1);
-    return { from:d.toISOString().split("T")[0], to:today };
-  }
-  // all time — use last year
-  const d = new Date(now); d.setFullYear(d.getFullYear()-1);
+  const today = getToday();
+  if (q==="today") return { from:today, to:today };
+  if (q==="week") { const d=new Date(now); d.setDate(d.getDate()-6); return { from:d.toISOString().split("T")[0], to:today }; }
+  if (q==="month") { const d=new Date(now); d.setDate(1); return { from:d.toISOString().split("T")[0], to:today }; }
+  const d=new Date(now); d.setFullYear(d.getFullYear()-1);
   return { from:d.toISOString().split("T")[0], to:today };
 }
 
@@ -117,33 +124,80 @@ function getUserDC(user) {
 function downloadCSV(data, filename) {
   if (!data.length) return;
   const keys = Object.keys(data[0]);
-  const csv = [keys.join(","), ...data.map(r=>keys.map(k=>r[k]).join(","))].join("\n");
+  const csv = [keys.join(","), ...data.map(r=>keys.map(k=>JSON.stringify(r[k]??(""))).join(","))].join("\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
   a.download = filename; a.click();
 }
 
-function filterByPeriod(invoices, period) {
-  const now = new Date();
-  return invoices.filter(i=>{
-    const d = new Date(i.date);
-    if (period==="today") return i.date===now.toISOString().split("T")[0];
-    if (period==="week") { const w=new Date(now); w.setDate(now.getDate()-7); return d>=w; }
-    if (period==="month") return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
-    return true;
-  });
+function downloadPDF(elementId, filename) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  const w = window.open("","_blank");
+  w.document.write(`<html><head><title>${filename}</title>
+    <style>body{font-family:Arial,sans-serif;font-size:13px;padding:20px}
+    table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px;text-align:left}
+    th{background:#1A3A5C;color:white}tr:nth-child(even){background:#f8fafc}
+    h2{color:#1A3A5C}.stat{display:inline-block;margin:8px;padding:10px 18px;background:#f1f5f9;border-radius:8px}
+    @media print{button{display:none}}</style></head>
+    <body>${el.innerHTML}<br/><button onclick="window.print()">🖨️ Print / Save PDF</button></body></html>`);
+  w.document.close();
+}
+
+// Simple bar chart using SVG
+function BarChart({ data, title, color="#1A3A5C", unit="" }) {
+  if (!data || !data.length) return null;
+  const max = Math.max(...data.map(d=>d.value), 1);
+  const W = 600, H = 200, PAD = 40, BAR_W = Math.min(50, (W - PAD*2) / data.length - 8);
+
+  return (
+    <div style={{ overflowX:"auto", marginTop:12 }}>
+      <div style={{ fontWeight:700, fontSize:14, color:"#374151", marginBottom:8 }}>{title}</div>
+      <svg viewBox={`0 0 ${W} ${H+60}`} style={{ width:"100%", maxWidth:W }}>
+        {data.map((d,i)=>{
+          const barH = Math.round((d.value/max)*(H-20));
+          const x = PAD + i*((W-PAD*2)/data.length) + ((W-PAD*2)/data.length - BAR_W)/2;
+          const y = H - barH;
+          return (
+            <g key={i}>
+              <rect x={x} y={y} width={BAR_W} height={barH} fill={d.color||color} rx={4} opacity={0.85} />
+              <text x={x+BAR_W/2} y={y-5} textAnchor="middle" fontSize={11} fill="#374151" fontWeight="600">
+                {d.value}{unit}
+              </text>
+              <text x={x+BAR_W/2} y={H+18} textAnchor="middle" fontSize={10} fill="#64748b">
+                {d.label.length>8?d.label.slice(0,8)+"…":d.label}
+              </text>
+            </g>
+          );
+        })}
+        <line x1={PAD-5} y1={H} x2={W-PAD+5} y2={H} stroke="#e2e8f0" strokeWidth={1.5} />
+      </svg>
+    </div>
+  );
 }
 
 export default function Reports({ user, invoices, fuelLogs, vehicles, users, lang }) {
   const [tab, setTab] = useState("daily");
-  const [period, setPeriod] = useState("month");
   const [tripLogs, setTripLogs] = useState([]);
   const [holidays, setHolidays] = useState([]);
   const [driverLeaves, setDriverLeaves] = useState([]);
   const [vehicleOffDays, setVehicleOffDays] = useState([]);
+
+  // Date range state
+  const today = getToday();
+  const monthStart = new Date(); monthStart.setDate(1);
+  const [fromDate, setFromDate] = useState(monthStart.toISOString().split("T")[0]);
+  const [toDate, setToDate] = useState(today);
+
+  // Dropdown filters
+  const [selDriver, setSelDriver] = useState("all");
+  const [selVehicle, setSelVehicle] = useState("all");
+  const [selDC, setSelDC] = useState("all");
+
   const rtl = lang==="ar";
   const t = T[lang]||T.en;
   const isAdmin = user.role==="admin";
+  const userDC = getUserDC(user);
 
   useEffect(() => {
     async function loadData() {
@@ -163,11 +217,26 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
     loadData();
   }, []);
 
-  // DC filter — ALWAYS apply
-  const userDC = getUserDC(user);
+  function applyQuick(q) {
+    const r = getQuickRange(q);
+    setFromDate(r.from);
+    setToDate(r.to);
+  }
 
+  const periodRange = { from: fromDate, to: toDate };
+
+  // DC filter
   const allInv = userDC ? invoices.filter(i=>i.dc===userDC&&i.uploadBatch) : invoices.filter(i=>i.uploadBatch);
-  const myInv = filterByPeriod(allInv, period);
+
+  // Filter by date range
+  function filterByRange(invList) {
+    return invList.filter(i=>{
+      if (!i.date) return true;
+      return i.date >= fromDate && i.date <= toDate;
+    });
+  }
+
+  const myInv = filterByRange(allInv);
   const myLogs = userDC ? fuelLogs.filter(l=>l.dc===userDC) : fuelLogs;
   const myVeh = userDC ? vehicles.filter(v=>v.dc===userDC) : vehicles;
   const myUsers = userDC ? (users||[]).filter(u=>u.dc===userDC) : (users||[]);
@@ -177,45 +246,61 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
     ["vehicle","🚗",t.vehicle],["fuel","⛽",t.fuel],
     ["aging","⏱️",t.aging],["unassigned","⚪",t.unassignedReport]
   ];
-  const periods = [["today",t.today],["week",t.week],["month",t.month],["all",t.all]];
 
-  const periodRange = getPeriodRange(period);
-
-  const driverMap = {};
-  myInv.filter(i=>i.driverId).forEach(i=>{
-    if(!driverMap[i.driverId]) driverMap[i.driverId]={name:i.driverName||i.driverId,driverId:i.driverId,delivered:0,failed:0,total:0,incity:0,outcity:0,totalKM:0,fuelUsed:0,activeDays:0};
-    driverMap[i.driverId].total++;
-    if(i.status==="delivered") driverMap[i.driverId].delivered++;
-    if(i.status==="failed") driverMap[i.driverId].failed++;
-    if(i.dtype==="incity") driverMap[i.driverId].incity++;
-    if(i.dtype==="outcity") driverMap[i.driverId].outcity++;
-  });
-
-  // Add KM + active days from tripLogs
+  // Trip logs filtered by period + DC
   const myTripLogs = tripLogs.filter(tl=>{
     const inPeriod = tl.startDate>=periodRange.from && tl.startDate<=periodRange.to;
     const inDC = !userDC || tl.dc===userDC;
     return inPeriod && inDC;
   });
-  myTripLogs.forEach(tl=>{
-    if(!driverMap[tl.driverId]) driverMap[tl.driverId]={name:tl.driverName,driverId:tl.driverId,delivered:0,failed:0,total:0,incity:0,outcity:0,totalKM:0,fuelUsed:0,activeDays:0};
-    driverMap[tl.driverId].totalKM = Math.round(((driverMap[tl.driverId].totalKM||0)+(tl.totalKM||0))*10)/10;
-    driverMap[tl.driverId].fuelUsed = Math.round(((driverMap[tl.driverId].fuelUsed||0)+(tl.fuelUsed||0))*10)/10;
-    driverMap[tl.driverId].activeDays = Math.round(((driverMap[tl.driverId].activeDays||0)+(tl.daysActive||1))*2)/2;
+
+  // Build driver stats
+  const driverMap = {};
+  myInv.filter(i=>i.driverId).forEach(i=>{
+    if(!driverMap[i.driverId]) driverMap[i.driverId]={name:i.driverName||i.driverId,driverId:i.driverId,dc:i.dc||"",delivered:0,failed:0,total:0,incity:0,outcity:0,totalKM:0,fuelUsed:0,activeDays:0,failReasons:{}};
+    driverMap[i.driverId].total++;
+    if(i.status==="delivered") driverMap[i.driverId].delivered++;
+    if(i.status==="failed"){
+      driverMap[i.driverId].failed++;
+      const reason = i.failReason||"Unknown";
+      driverMap[i.driverId].failReasons[reason]=(driverMap[i.driverId].failReasons[reason]||0)+1;
+    }
+    if(i.dtype==="incity") driverMap[i.driverId].incity++;
+    if(i.dtype==="outcity") driverMap[i.driverId].outcity++;
   });
 
-  // Add working days + productivity to each driver
+  myTripLogs.forEach(tl=>{
+    if(!driverMap[tl.driverId]) driverMap[tl.driverId]={name:tl.driverName||tl.driverId,driverId:tl.driverId,dc:tl.dc||"",delivered:0,failed:0,total:0,incity:0,outcity:0,totalKM:0,fuelUsed:0,activeDays:0,failReasons:{}};
+    driverMap[tl.driverId].totalKM=Math.round(((driverMap[tl.driverId].totalKM||0)+(tl.totalKM||0))*10)/10;
+    driverMap[tl.driverId].fuelUsed=Math.round(((driverMap[tl.driverId].fuelUsed||0)+(tl.fuelUsed||0))*10)/10;
+    driverMap[tl.driverId].activeDays=Math.round(((driverMap[tl.driverId].activeDays||0)+(tl.daysActive||1))*2)/2;
+  });
+
+  const workingDaysInPeriod = getWorkingDays(periodRange.from, periodRange.to, holidays, []);
+  const periodDays = Math.max(1, workingDaysInPeriod);
+
   const driverStats = Object.values(driverMap).map(d=>{
     const leaveDates = getLeaveDates(driverLeaves, d.driverId);
     const workingDays = getWorkingDays(periodRange.from, periodRange.to, holidays, leaveDates);
     const unassignedDays = Math.max(0, workingDays - d.activeDays);
     const productivity = workingDays>0?Math.round(d.activeDays/workingDays*100):0;
-    return {
-      ...d,
-      rate: d.total>0?Math.round(d.delivered/d.total*100):0,
-      workingDays, unassignedDays, productivity
-    };
-  }).sort((a,b)=>b.rate-a.rate);
+    const avgPerDay = d.activeDays>0?Math.round((d.delivered/d.activeDays)*10)/10:0;
+    return { ...d, rate:d.total>0?Math.round(d.delivered/d.total*100):0, workingDays, unassignedDays, productivity, avgPerDay };
+  }).sort((a,b)=>b.productivity-a.productivity);
+
+  // Driver dropdown list
+  const driverList = myUsers.filter(u=>u.role==="driver");
+  const vehicleList = myVeh;
+  const dcList = ["Riyadh","Jeddah","Dammam"];
+
+  // Filtered driver stats by dropdown
+  const filteredDriverStats = selDriver==="all" ? driverStats : driverStats.filter(d=>d.driverId===selDriver);
+
+  // Filtered vehicles by dropdown
+  const filteredVehicles = selVehicle==="all" ? myVeh : myVeh.filter(v=>v.plate===selVehicle);
+
+  // Filtered fuel logs by DC dropdown (admin only)
+  const filteredFuelLogs = (!userDC && selDC!=="all") ? myLogs.filter(l=>l.dc===selDC) : myLogs;
 
   const agingInv = allInv.filter(i=>["pending","assigned","outstanding"].includes(i.status))
     .map(i=>({...i,days:Math.floor((new Date()-new Date(i.date))/(1000*60*60*24))}))
@@ -225,27 +310,79 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
   const del = myInv.filter(i=>i.status==="delivered").length;
   const rate = countable.length>0?Math.round(del/countable.length*100):0;
 
-  return (
-    <div style={{ direction:rtl?"rtl":"ltr" }}>
-      <TabBar tabs={tabs} active={tab} onChange={setTab} />
+  // Summary card data
+  const topDriver = driverStats[0];
+  const topVehicle = myTripLogs.reduce((acc,tl)=>{
+    acc[tl.vehiclePlate]=(acc[tl.vehiclePlate]||0)+(tl.totalKM||0);
+    return acc;
+  },{});
+  const topVehiclePlate = Object.entries(topVehicle).sort((a,b)=>b[1]-a[1])[0];
+  const criticalCount = agingInv.filter(i=>i.days>3).length;
 
-      {/* Period Filter */}
-      <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap", alignItems:"center" }}>
-        <span style={{ fontSize:14, fontWeight:600, color:"#374151" }}>{t.period}:</span>
-        {periods.map(([v,l])=>(
-          <button key={v} onClick={()=>setPeriod(v)}
-            style={{ padding:"8px 16px", borderRadius:8, border:"none", background:period===v?"#1A3A5C":"#f1f5f9", color:period===v?"white":"#374151", cursor:"pointer", fontSize:14, fontWeight:600 }}>
-            {l}
-          </button>
-        ))}
+  return (
+    <div style={{ direction:rtl?"rtl":"ltr" }} id="reports-root">
+
+      <TabBar tabs={tabs} active={tab} onChange={t2=>{setTab(t2);setSelDriver("all");setSelVehicle("all");setSelDC("all");}} />
+
+      {/* ── DATE RANGE + QUICK BUTTONS ── */}
+      <div style={{ background:"white", borderRadius:10, padding:"12px 16px", marginBottom:16, display:"flex", flexWrap:"wrap", gap:12, alignItems:"center", boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+          <span style={{ fontSize:13, fontWeight:600, color:"#374151" }}>{t.fromDate}:</span>
+          <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)}
+            style={{ border:"1.5px solid #e2e8f0", borderRadius:8, padding:"7px 10px", fontSize:13, outline:"none", cursor:"pointer" }} />
+          <span style={{ fontSize:13, fontWeight:600, color:"#374151" }}>{t.toDate}:</span>
+          <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)}
+            style={{ border:"1.5px solid #e2e8f0", borderRadius:8, padding:"7px 10px", fontSize:13, outline:"none", cursor:"pointer" }} />
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+          <span style={{ fontSize:12, color:"#94a3b8", fontWeight:600 }}>{t.quickPeriod}</span>
+          {[["today",t.today],["week",t.week],["month",t.month],["all",t.all]].map(([v,l])=>(
+            <button key={v} onClick={()=>applyQuick(v)}
+              style={{ padding:"6px 12px", borderRadius:7, border:"1.5px solid #e2e8f0", background:"#f8fafc", color:"#374151", cursor:"pointer", fontSize:12, fontWeight:600 }}>
+              {l}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* DAILY STATUS */}
+      {/* ── SUMMARY CARD — always visible ── */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:10, marginBottom:16 }}>
+        <div style={{ background:"white", borderRadius:10, padding:"12px 16px", borderLeft:"4px solid #1A3A5C", boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
+          <div style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>📊 {t.deliveryRate}</div>
+          <div style={{ fontSize:28, fontWeight:900, color:rate>=80?"#10b981":rate>=50?"#f59e0b":"#ef4444" }}>{rate}%</div>
+        </div>
+        <div style={{ background:"white", borderRadius:10, padding:"12px 16px", borderLeft:"4px solid #10b981", boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
+          <div style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>🏆 {t.bestDriver}</div>
+          <div style={{ fontSize:15, fontWeight:700, color:"#0f172a" }}>{topDriver?topDriver.name:"—"}</div>
+          {topDriver&&<div style={{ fontSize:12, color:"#10b981" }}>{topDriver.productivity}% productivity</div>}
+        </div>
+        <div style={{ background:"white", borderRadius:10, padding:"12px 16px", borderLeft:"4px solid #0891b2", boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
+          <div style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>🚗 {t.mostActive}</div>
+          <div style={{ fontSize:15, fontWeight:700, color:"#0f172a" }}>{topVehiclePlate?topVehiclePlate[0]:"—"}</div>
+          {topVehiclePlate&&<div style={{ fontSize:12, color:"#0891b2" }}>{Math.round(topVehiclePlate[1])} km</div>}
+        </div>
+        <div style={{ background:"white", borderRadius:10, padding:"12px 16px", borderLeft:"4px solid #ef4444", boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
+          <div style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>⏱️ {t.criticalAging}</div>
+          <div style={{ fontSize:28, fontWeight:900, color:criticalCount>0?"#ef4444":"#10b981" }}>{criticalCount}</div>
+        </div>
+        <div style={{ background:"white", borderRadius:10, padding:"12px 16px", borderLeft:"4px solid #6366f1", boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
+          <div style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>📋 {t.total} Invoices</div>
+          <div style={{ fontSize:28, fontWeight:900, color:"#6366f1" }}>{myInv.length}</div>
+        </div>
+      </div>
+
+      {/* ══════════════════════════════════════
+          TAB: DAILY STATUS
+      ══════════════════════════════════════ */}
       {tab==="daily"&&(
-        <div>
+        <div id="report-daily">
           <Card style={{ borderTop:"4px solid #1A3A5C" }}>
             <CardTitle>
               📊 {t.overall} — {userDC ? dcLabel(userDC,t) : "All Distribution Centers"}
+              <button onClick={()=>downloadPDF("report-daily","daily_status.pdf")}
+                style={{ marginLeft:"auto", background:"#6366f1", color:"white", border:"none", padding:"6px 14px", borderRadius:6, cursor:"pointer", fontSize:13, fontWeight:600 }}>
+                🖨️ {t.pdfDownload}
+              </button>
             </CardTitle>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(100px,1fr))", gap:10, marginBottom:12 }}>
               <StatCard icon="📋" label={t.total} value={myInv.length} color="#6366f1" />
@@ -301,8 +438,8 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
           <Card>
             <CardTitle>🏥 {t.instBreak}</CardTitle>
             {["Government","Private"].map(inst=>{
-              const n=myInv.filter(i=>i.inst===inst).length;
-              const d=myInv.filter(i=>i.inst===inst&&i.status==="delivered").length;
+              const n=myInv.filter(i=>i.inst===inst||i.inst===(inst==="Government"?"Govt":inst)).length;
+              const d=myInv.filter(i=>(i.inst===inst||i.inst===(inst==="Government"?"Govt":inst))&&i.status==="delivered").length;
               return (
                 <div key={inst} style={{ marginBottom:14 }}>
                   <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6, fontSize:14 }}>
@@ -319,47 +456,149 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
         </div>
       )}
 
-      {/* DRIVER PERFORMANCE */}
+      {/* ══════════════════════════════════════
+          TAB: DRIVER PERFORMANCE
+      ══════════════════════════════════════ */}
       {tab==="driver"&&(
-        <Card>
-          <CardTitle>👤 {t.driverPerf}
-            <button onClick={()=>downloadCSV(driverStats.map(d=>({Driver:d.name,Total:d.total,Delivered:d.delivered,Failed:d.failed,Rate:d.rate+"%",InCity:d.incity,OutCity:d.outcity})),"driver_report.csv")}
-              style={{ marginLeft:"auto", background:"#10b981", color:"white", border:"none", padding:"6px 14px", borderRadius:6, cursor:"pointer", fontSize:13, fontWeight:600 }}>
-              ⬇ {t.csvDownload}
-            </button>
-          </CardTitle>
-          {driverStats.length===0&&<div style={{ textAlign:"center", padding:24, color:"#94a3b8", fontSize:15 }}>{t.noData}</div>}
-          {driverStats.map((d,i)=>(
-            <div key={d.name} style={{ padding:"14px 0", borderBottom:"1px solid #f1f5f9" }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:6, marginBottom:6 }}>
-                <span style={{ fontWeight:700, fontSize:15 }}>#{i+1} {d.name}</span>
-                <span style={{ fontWeight:800, fontSize:20, color:d.rate>=80?"#10b981":d.rate>=60?"#f59e0b":"#ef4444" }}>{d.rate}%</span>
-              </div>
-              <div style={{ display:"flex", gap:16, fontSize:14, color:"#64748b", flexWrap:"wrap", marginBottom:6 }}>
-                <span>📋 {d.total} invoices</span>
-                <span style={{ color:"#10b981" }}>✅ {d.delivered} delivered</span>
-                <span style={{ color:"#ef4444" }}>❌ {d.failed} failed</span>
-                <span>🏙️ {t.inCity}: {d.incity}</span>
-                <span>🛣️ {t.outCity}: {d.outcity}</span>
-              </div>
-              <div style={{ display:"flex", gap:16, fontSize:13, color:"#64748b", flexWrap:"wrap", marginBottom:8 }}>
-                <span>📍 {d.totalKM} km covered</span>
-                <span>⛽ {d.fuelUsed}L fuel used</span>
-                <span style={{ color:"#6366f1", fontWeight:600 }}>✅ {d.activeDays} active days / {d.workingDays} working days</span>
-                <span style={{ color:d.unassignedDays>0?"#ef4444":"#10b981", fontWeight:600 }}>⚪ {d.unassignedDays} unassigned days</span>
-                <span style={{ fontWeight:700, color:d.productivity>=80?"#10b981":d.productivity>=60?"#f59e0b":"#ef4444" }}>🎯 {d.productivity}% productivity</span>
-              </div>
-              <div style={{ background:"#f1f5f9", borderRadius:99, height:8, overflow:"hidden" }}>
-                <div style={{ width:`${d.rate}%`, height:"100%", background:d.rate>=80?"#10b981":d.rate>=60?"#f59e0b":"#ef4444", borderRadius:99 }} />
-              </div>
+        <div id="report-driver">
+          {/* Driver filter dropdown */}
+          <div style={{ display:"flex", gap:10, marginBottom:14, flexWrap:"wrap", alignItems:"center" }}>
+            <label style={{ fontSize:13, fontWeight:600, color:"#374151" }}>👤 Filter Driver:</label>
+            <select value={selDriver} onChange={e=>setSelDriver(e.target.value)}
+              style={{ border:"1.5px solid #e2e8f0", borderRadius:8, padding:"8px 14px", fontSize:13, outline:"none", background:"white", cursor:"pointer", minWidth:200 }}>
+              <option value="all">{t.allDrivers} ({driverStats.length})</option>
+              {driverList.map(d=><option key={d.uid} value={d.uid}>{d.name} — {d.dc}</option>)}
+            </select>
+            <div style={{ display:"flex", gap:8, marginLeft:"auto" }}>
+              <button onClick={()=>downloadCSV(filteredDriverStats.map(d=>({Driver:d.name,DC:d.dc,Total:d.total,Delivered:d.delivered,Failed:d.failed,Rate:d.rate+"%",KM:d.totalKM,Fuel:d.fuelUsed+"L",ActiveDays:d.activeDays,WorkingDays:d.workingDays,UnassignedDays:d.unassignedDays,Productivity:d.productivity+"%"})),"driver_report.csv")}
+                style={{ background:"#10b981", color:"white", border:"none", padding:"8px 14px", borderRadius:7, cursor:"pointer", fontSize:13, fontWeight:600 }}>
+                ⬇ {t.csvDownload}
+              </button>
+              <button onClick={()=>downloadPDF("report-driver","driver_report.pdf")}
+                style={{ background:"#6366f1", color:"white", border:"none", padding:"8px 14px", borderRadius:7, cursor:"pointer", fontSize:13, fontWeight:600 }}>
+                🖨️ {t.pdfDownload}
+              </button>
             </div>
-          ))}
-        </Card>
+          </div>
+
+          <Card>
+            <CardTitle>👤 {t.driverPerf}</CardTitle>
+            {filteredDriverStats.length===0&&<div style={{ textAlign:"center", padding:24, color:"#94a3b8", fontSize:15 }}>{t.noData}</div>}
+            {filteredDriverStats.map((d,i)=>(
+              <div key={d.driverId} style={{ padding:"16px 0", borderBottom:"1px solid #f1f5f9" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:6, marginBottom:8 }}>
+                  <div>
+                    <span style={{ fontWeight:800, fontSize:16 }}>#{i+1} {d.name}</span>
+                    <span style={{ fontSize:13, color:"#64748b", marginLeft:10 }}>📍 {d.dc}</span>
+                  </div>
+                  <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+                    <span style={{ fontWeight:800, fontSize:20, color:d.rate>=80?"#10b981":d.rate>=60?"#f59e0b":"#ef4444" }}>{d.rate}% Rate</span>
+                    <span style={{ fontWeight:800, fontSize:20, color:d.productivity>=80?"#10b981":d.productivity>=60?"#f59e0b":"#ef4444" }}>{d.productivity}% Productivity</span>
+                  </div>
+                </div>
+
+                {/* Stats grid */}
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:8, marginBottom:10 }}>
+                  <div style={{ background:"#f8fafc", borderRadius:8, padding:"8px 10px", fontSize:13 }}>
+                    <div style={{ color:"#64748b", fontSize:11 }}>Total Invoices</div>
+                    <div style={{ fontWeight:700, fontSize:16 }}>{d.total}</div>
+                  </div>
+                  <div style={{ background:"#f0fdf4", borderRadius:8, padding:"8px 10px", fontSize:13 }}>
+                    <div style={{ color:"#64748b", fontSize:11 }}>✅ Delivered</div>
+                    <div style={{ fontWeight:700, fontSize:16, color:"#10b981" }}>{d.delivered}</div>
+                  </div>
+                  <div style={{ background:"#fef2f2", borderRadius:8, padding:"8px 10px", fontSize:13 }}>
+                    <div style={{ color:"#64748b", fontSize:11 }}>❌ Failed</div>
+                    <div style={{ fontWeight:700, fontSize:16, color:"#ef4444" }}>{d.failed}</div>
+                  </div>
+                  <div style={{ background:"#f0f9ff", borderRadius:8, padding:"8px 10px", fontSize:13 }}>
+                    <div style={{ color:"#64748b", fontSize:11 }}>🛣️ KM Covered</div>
+                    <div style={{ fontWeight:700, fontSize:16, color:"#0891b2" }}>{d.totalKM}</div>
+                  </div>
+                  <div style={{ background:"#fefce8", borderRadius:8, padding:"8px 10px", fontSize:13 }}>
+                    <div style={{ color:"#64748b", fontSize:11 }}>⛽ Fuel Used</div>
+                    <div style={{ fontWeight:700, fontSize:16, color:"#f59e0b" }}>{d.fuelUsed}L</div>
+                  </div>
+                  <div style={{ background:"#f5f3ff", borderRadius:8, padding:"8px 10px", fontSize:13 }}>
+                    <div style={{ color:"#64748b", fontSize:11 }}>📦 Avg/Day</div>
+                    <div style={{ fontWeight:700, fontSize:16, color:"#6366f1" }}>{d.avgPerDay}</div>
+                  </div>
+                </div>
+
+                {/* Working days breakdown */}
+                <div style={{ display:"flex", gap:16, fontSize:13, flexWrap:"wrap", marginBottom:10 }}>
+                  <span style={{ color:"#6366f1", fontWeight:600 }}>📅 {d.activeDays} {t.activeDays} / {d.workingDays} {t.workingDays}</span>
+                  <span style={{ color:d.unassignedDays>0?"#ef4444":"#10b981", fontWeight:600 }}>⚪ {d.unassignedDays} {t.unassignedDays}</span>
+                  <span style={{ color:"#64748b" }}>🏙️ In-City: {d.incity} | 🛣️ Out-City: {d.outcity}</span>
+                </div>
+
+                {/* Delivery rate bar */}
+                <div style={{ marginBottom:6 }}>
+                  <div style={{ fontSize:12, color:"#64748b", marginBottom:3 }}>Delivery Rate</div>
+                  <div style={{ background:"#f1f5f9", borderRadius:99, height:8, overflow:"hidden" }}>
+                    <div style={{ width:`${d.rate}%`, height:"100%", background:d.rate>=80?"#10b981":d.rate>=60?"#f59e0b":"#ef4444", borderRadius:99 }} />
+                  </div>
+                </div>
+
+                {/* Productivity bar */}
+                <div style={{ marginBottom:8 }}>
+                  <div style={{ fontSize:12, color:"#64748b", marginBottom:3 }}>Productivity</div>
+                  <div style={{ background:"#f1f5f9", borderRadius:99, height:8, overflow:"hidden" }}>
+                    <div style={{ width:`${d.productivity}%`, height:"100%", background:d.productivity>=80?"#10b981":d.productivity>=60?"#f59e0b":"#ef4444", borderRadius:99 }} />
+                  </div>
+                </div>
+
+                {/* Fail reasons breakdown */}
+                {d.failed>0&&Object.keys(d.failReasons).length>0&&(
+                  <div style={{ background:"#fef2f2", borderRadius:8, padding:"8px 12px", marginTop:6 }}>
+                    <div style={{ fontWeight:600, fontSize:12, color:"#991b1b", marginBottom:6 }}>❌ {t.failReasons}:</div>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                      {Object.entries(d.failReasons).map(([reason,count])=>(
+                        <span key={reason} style={{ fontSize:12, background:"#fee2e2", color:"#991b1b", padding:"3px 10px", borderRadius:99, fontWeight:600 }}>
+                          {reason}: {count}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </Card>
+        </div>
       )}
 
-      {/* VEHICLE UTILIZATION */}
+      {/* ══════════════════════════════════════
+          TAB: VEHICLE UTILIZATION
+      ══════════════════════════════════════ */}
       {tab==="vehicle"&&(
-        <div>
+        <div id="report-vehicle">
+          {/* Vehicle filter dropdown */}
+          <div style={{ display:"flex", gap:10, marginBottom:14, flexWrap:"wrap", alignItems:"center" }}>
+            <label style={{ fontSize:13, fontWeight:600, color:"#374151" }}>🚗 Filter Vehicle:</label>
+            <select value={selVehicle} onChange={e=>setSelVehicle(e.target.value)}
+              style={{ border:"1.5px solid #e2e8f0", borderRadius:8, padding:"8px 14px", fontSize:13, outline:"none", background:"white", cursor:"pointer", minWidth:200 }}>
+              <option value="all">{t.allVehicles} ({myVeh.length})</option>
+              {vehicleList.map(v=><option key={v.plate||v.id} value={v.plate}>{v.plate} — {v.dc}</option>)}
+            </select>
+            <div style={{ display:"flex", gap:8, marginLeft:"auto" }}>
+              <button onClick={()=>{
+                const data=filteredVehicles.map(v=>{
+                  const vTrips=myTripLogs.filter(tl=>tl.vehiclePlate===v.plate);
+                  const periodKM=vTrips.reduce((s,tl)=>s+(tl.totalKM||0),0);
+                  const activeDays=vTrips.reduce((s,tl)=>s+(tl.daysActive||1),0);
+                  return {Plate:v.plate,Type:v.type,DC:v.dc,Status:v.status,TotalKM:v.totalKM||0,PeriodKM:Math.round(periodKM),ActiveDays:Math.round(activeDays*2)/2,FuelUsed:Math.round(vTrips.reduce((s,tl)=>s+(tl.fuelUsed||0),0)*10)/10};
+                });
+                downloadCSV(data,"vehicle_report.csv");
+              }} style={{ background:"#10b981", color:"white", border:"none", padding:"8px 14px", borderRadius:7, cursor:"pointer", fontSize:13, fontWeight:600 }}>
+                ⬇ {t.csvDownload}
+              </button>
+              <button onClick={()=>downloadPDF("report-vehicle","vehicle_report.pdf")}
+                style={{ background:"#6366f1", color:"white", border:"none", padding:"8px 14px", borderRadius:7, cursor:"pointer", fontSize:13, fontWeight:600 }}>
+                🖨️ {t.pdfDownload}
+              </button>
+            </div>
+          </div>
+
           <Card style={{ borderTop:"4px solid #1A3A5C" }}>
             <CardTitle>🚗 {t.vehUtil} — {userDC?dcLabel(userDC,t):"All Distribution Centers"}</CardTitle>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:10 }}>
@@ -369,28 +608,8 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
               <StatCard icon="🛣️" label={t.totalKM} value={myVeh.reduce((s,v)=>s+(v.totalKM||0),0).toLocaleString()} color="#0891b2" />
             </div>
           </Card>
-          {!userDC&&["Riyadh","Jeddah","Dammam"].map((dc,idx)=>{
-            const dv=vehicles.filter(v=>v.dc===dc);
-            const colors=["#1A3A5C","#0f766e","#7c3aed"];
-            return (
-              <Card key={dc} style={{ borderTop:`4px solid ${colors[idx]}` }}>
-                <CardTitle style={{ color:colors[idx] }}>📍 {dcLabel(dc,t)}</CardTitle>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:10 }}>
-                  <StatCard icon="🚗" label={t.total} value={dv.length} color={colors[idx]} />
-                  <StatCard icon="✅" label={t.active} value={dv.filter(v=>v.status==="Active").length} color="#10b981" />
-                  <StatCard icon="🔧" label={t.maintenance} value={dv.filter(v=>v.status==="Maintenance").length} color="#f59e0b" />
-                </div>
-                {dv.map(v=>(
-                  <div key={v.plate||v.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
-                    <span style={{ fontWeight:700, fontSize:14, minWidth:100 }}>{v.plate}</span>
-                    <span style={{ fontSize:13, color:"#64748b", flex:1 }}>{v.type} | {(v.totalKM||0).toLocaleString()} km</span>
-                    <span style={{ fontSize:13, fontWeight:600, padding:"3px 10px", borderRadius:99, background:v.status==="Maintenance"?"#fef3c7":"#d1fae5", color:v.status==="Maintenance"?"#92400e":"#065f46" }}>{v.status}</span>
-                  </div>
-                ))}
-              </Card>
-            );
-          })}
-          {userDC&&myVeh.map(v=>{
+
+          {filteredVehicles.map(v=>{
             const vOffDates = getVehicleOffDates(vehicleOffDays, v.plate);
             const workingDays = getWorkingDays(periodRange.from, periodRange.to, holidays, vOffDates);
             const vTrips = myTripLogs.filter(tl=>tl.vehiclePlate===v.plate);
@@ -399,53 +618,155 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
             const periodFuel = vTrips.reduce((s,tl)=>s+(tl.fuelUsed||0),0);
             const unassignedDays = Math.max(0, workingDays - activeDays);
             const productivity = workingDays>0?Math.round(activeDays/workingDays*100):0;
+            const avgKMDay = activeDays>0?Math.round(periodKM/activeDays):0;
+
+            // Doc expiry warnings
+            const now = new Date();
+            const checkExpiry = (dateStr)=>{
+              if (!dateStr) return null;
+              const d = new Date(dateStr);
+              const diffDays = Math.ceil((d-now)/(1000*60*60*24));
+              return diffDays;
+            };
+            const fahasLeft = checkExpiry(v.fahas);
+            const istimaraLeft = checkExpiry(v.istimara);
+            const insuranceLeft = checkExpiry(v.insurance);
+
             return (
-              <div key={v.plate||v.id} style={{ border:"1px solid #e2e8f0", borderRadius:10, padding:14, marginBottom:10 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:8 }}>
-                  <span style={{ fontWeight:700, fontSize:15, minWidth:100 }}>{v.plate}</span>
-                  <span style={{ fontSize:14, color:"#64748b", flex:1 }}>{v.type} {v.brand}</span>
+              <Card key={v.plate||v.id} style={{ marginBottom:10 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:12 }}>
+                  <span style={{ fontWeight:800, fontSize:16 }}>🚗 {v.plate}</span>
+                  <span style={{ fontSize:14, color:"#64748b" }}>{v.type} {v.brand} {v.model}</span>
                   <span style={{ fontSize:13, fontWeight:600, padding:"4px 12px", borderRadius:99, background:v.status==="Maintenance"?"#fef3c7":"#d1fae5", color:v.status==="Maintenance"?"#92400e":"#065f46" }}>{v.status}</span>
+                  <span style={{ fontSize:13, color:"#94a3b8" }}>📍 {v.dc}</span>
                 </div>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:8, fontSize:13 }}>
-                  <span style={{ color:"#0891b2", fontWeight:600 }}>🛣️ Total KM: {(v.totalKM||0).toLocaleString()}</span>
-                  <span style={{ color:"#6366f1", fontWeight:600 }}>📅 Period KM: {Math.round(periodKM*10)/10}</span>
-                  <span style={{ color:"#f59e0b" }}>⛽ Fuel Used: {Math.round(periodFuel*10)/10}L</span>
-                  <span style={{ color:"#10b981", fontWeight:600 }}>✅ Active: {Math.round(activeDays*2)/2} days</span>
-                  <span style={{ color:unassignedDays>0?"#ef4444":"#10b981", fontWeight:600 }}>⚪ Unassigned: {Math.round(unassignedDays*2)/2} days</span>
-                  <span style={{ color:productivity>=80?"#10b981":productivity>=60?"#f59e0b":"#ef4444", fontWeight:700 }}>🎯 {productivity}% productivity</span>
+
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:8, marginBottom:12 }}>
+                  <div style={{ background:"#f0f9ff", borderRadius:8, padding:"8px 10px" }}>
+                    <div style={{ fontSize:11, color:"#64748b" }}>🛣️ Total KM (All Time)</div>
+                    <div style={{ fontWeight:700, fontSize:15, color:"#0891b2" }}>{(v.totalKM||0).toLocaleString()}</div>
+                  </div>
+                  <div style={{ background:"#f5f3ff", borderRadius:8, padding:"8px 10px" }}>
+                    <div style={{ fontSize:11, color:"#64748b" }}>📅 Period KM</div>
+                    <div style={{ fontWeight:700, fontSize:15, color:"#6366f1" }}>{Math.round(periodKM*10)/10}</div>
+                  </div>
+                  <div style={{ background:"#fefce8", borderRadius:8, padding:"8px 10px" }}>
+                    <div style={{ fontSize:11, color:"#64748b" }}>⛽ Fuel Used</div>
+                    <div style={{ fontWeight:700, fontSize:15, color:"#f59e0b" }}>{Math.round(periodFuel*10)/10}L</div>
+                  </div>
+                  <div style={{ background:"#f0fdf4", borderRadius:8, padding:"8px 10px" }}>
+                    <div style={{ fontSize:11, color:"#64748b" }}>✅ Active Days</div>
+                    <div style={{ fontWeight:700, fontSize:15, color:"#10b981" }}>{Math.round(activeDays*2)/2}</div>
+                  </div>
+                  <div style={{ background:"#f8fafc", borderRadius:8, padding:"8px 10px" }}>
+                    <div style={{ fontSize:11, color:"#64748b" }}>📊 {t.avgKMday}</div>
+                    <div style={{ fontWeight:700, fontSize:15, color:"#374151" }}>{avgKMDay} km</div>
+                  </div>
+                  <div style={{ background:unassignedDays>0?"#fef2f2":"#f0fdf4", borderRadius:8, padding:"8px 10px" }}>
+                    <div style={{ fontSize:11, color:"#64748b" }}>⚪ Unassigned</div>
+                    <div style={{ fontWeight:700, fontSize:15, color:unassignedDays>0?"#ef4444":"#10b981" }}>{Math.round(unassignedDays*2)/2} days</div>
+                  </div>
                 </div>
-              </div>
+
+                {/* Productivity bar */}
+                <div style={{ marginBottom:10 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:4 }}>
+                    <span style={{ fontWeight:600 }}>🎯 Productivity</span>
+                    <span style={{ fontWeight:800, color:productivity>=80?"#10b981":productivity>=60?"#f59e0b":"#ef4444" }}>{productivity}%</span>
+                  </div>
+                  <div style={{ background:"#f1f5f9", borderRadius:99, height:8, overflow:"hidden" }}>
+                    <div style={{ width:`${productivity}%`, height:"100%", background:productivity>=80?"#10b981":productivity>=60?"#f59e0b":"#ef4444", borderRadius:99 }} />
+                  </div>
+                </div>
+
+                {/* Document expiry warnings */}
+                <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                  {[["Fahas",fahasLeft,v.fahas],["Istimara",istimaraLeft,v.istimara],["Insurance",insuranceLeft,v.insurance]].map(([label,left,date])=>{
+                    if (!date) return null;
+                    const color = left<0?"#ef4444":left<=30?"#f59e0b":"#10b981";
+                    const bg = left<0?"#fee2e2":left<=30?"#fef3c7":"#f0fdf4";
+                    return (
+                      <span key={label} style={{ fontSize:12, padding:"4px 10px", borderRadius:8, background:bg, color, fontWeight:600 }}>
+                        📄 {label}: {date} {left<0?"(EXPIRED ❌)":left<=30?`(${left}d left ⚠️)`:`(${left}d)`}
+                      </span>
+                    );
+                  })}
+                  {v.nextOilKM&&(
+                    <span style={{ fontSize:12, padding:"4px 10px", borderRadius:8, background:"#f0f9ff", color:"#0891b2", fontWeight:600 }}>
+                      🔧 Next Oil: {v.nextOilKM} km
+                    </span>
+                  )}
+                </div>
+              </Card>
             );
           })}
         </div>
       )}
 
-      {/* FUEL REPORT */}
+      {/* ══════════════════════════════════════
+          TAB: FUEL REPORT
+      ══════════════════════════════════════ */}
       {tab==="fuel"&&(
-        <div>
-          <Card style={{ borderTop:"4px solid #f59e0b" }}>
-            <CardTitle>⛽ {t.fuelRep} — {userDC?dcLabel(userDC,t):"All Distribution Centers"}
-              <button onClick={()=>downloadCSV(myLogs.map(l=>({ID:l.id,Date:l.date,Vehicle:l.vehicle,Driver:l.driver,Liters:l.liters,SAR:l.sar,KM:l.tripKM,Efficiency:l.liters>0?(l.tripKM/l.liters).toFixed(1)+" km/L":"-",DC:l.dc})),"fuel_report.csv")}
-                style={{ marginLeft:"auto", background:"#10b981", color:"white", border:"none", padding:"6px 14px", borderRadius:6, cursor:"pointer", fontSize:13, fontWeight:600 }}>
-                ⬇ {t.csvDownload}
-              </button>
-            </CardTitle>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:10 }}>
-              <StatCard icon="⛽" label={t.totalLiters} value={myLogs.reduce((s,l)=>s+(l.liters||0),0)+"L"} color="#f59e0b" />
-              <StatCard icon="💰" label={t.totalCost} value={"SAR "+myLogs.reduce((s,l)=>s+(l.sar||0),0)} color="#ef4444" />
-              <StatCard icon="🛣️" label={t.totalKM} value={myLogs.reduce((s,l)=>s+(l.tripKM||0),0)+" km"} color="#6366f1" />
-              <StatCard icon="📊" label={t.avgEff} value={myLogs.reduce((s,l)=>s+(l.liters||0),0)>0?(myLogs.reduce((s,l)=>s+(l.tripKM||0),0)/myLogs.reduce((s,l)=>s+(l.liters||0),0)).toFixed(1)+" km/L":"-"} color="#10b981" />
+        <div id="report-fuel">
+          {/* DC filter for Admin */}
+          {!userDC&&(
+            <div style={{ display:"flex", gap:10, marginBottom:14, flexWrap:"wrap", alignItems:"center" }}>
+              <label style={{ fontSize:13, fontWeight:600, color:"#374151" }}>📍 Filter DC:</label>
+              <select value={selDC} onChange={e=>setSelDC(e.target.value)}
+                style={{ border:"1.5px solid #e2e8f0", borderRadius:8, padding:"8px 14px", fontSize:13, outline:"none", background:"white", cursor:"pointer" }}>
+                <option value="all">{t.allDCs}</option>
+                {dcList.map(dc=><option key={dc} value={dc}>{dc}</option>)}
+              </select>
             </div>
+          )}
+
+          <Card style={{ borderTop:"4px solid #f59e0b" }}>
+            <CardTitle>⛽ {t.fuelRep} — {userDC?dcLabel(userDC,t):selDC==="all"?"All Distribution Centers":selDC}
+              <div style={{ marginLeft:"auto", display:"flex", gap:8 }}>
+                <button onClick={()=>downloadCSV(filteredFuelLogs.map(l=>({ID:l.id,Date:l.date,Vehicle:l.vehicle,Driver:l.driver,Liters:l.liters,SAR:l.sar,KM:l.tripKM,Efficiency:l.liters>0?(l.tripKM/l.liters).toFixed(1)+" km/L":"-",DC:l.dc})),"fuel_report.csv")}
+                  style={{ background:"#10b981", color:"white", border:"none", padding:"6px 14px", borderRadius:6, cursor:"pointer", fontSize:13, fontWeight:600 }}>
+                  ⬇ {t.csvDownload}
+                </button>
+                <button onClick={()=>downloadPDF("report-fuel","fuel_report.pdf")}
+                  style={{ background:"#6366f1", color:"white", border:"none", padding:"6px 14px", borderRadius:6, cursor:"pointer", fontSize:13, fontWeight:600 }}>
+                  🖨️ {t.pdfDownload}
+                </button>
+              </div>
+            </CardTitle>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:10, marginBottom:16 }}>
+              <StatCard icon="⛽" label={t.totalLiters} value={filteredFuelLogs.reduce((s,l)=>s+(l.liters||0),0)+"L"} color="#f59e0b" />
+              <StatCard icon="💰" label={t.totalCost} value={"SAR "+filteredFuelLogs.reduce((s,l)=>s+(l.sar||0),0).toLocaleString()} color="#ef4444" />
+              <StatCard icon="🛣️" label={t.totalKM} value={filteredFuelLogs.reduce((s,l)=>s+(l.tripKM||0),0)+" km"} color="#6366f1" />
+              <StatCard icon="📊" label={t.avgEff} value={filteredFuelLogs.reduce((s,l)=>s+(l.liters||0),0)>0?(filteredFuelLogs.reduce((s,l)=>s+(l.tripKM||0),0)/filteredFuelLogs.reduce((s,l)=>s+(l.liters||0),0)).toFixed(1)+" km/L":"-"} color="#10b981" />
+            </div>
+
+            {/* Bar chart — fuel per vehicle */}
+            {(()=>{
+              const vFuel = {};
+              filteredFuelLogs.forEach(l=>{ vFuel[l.vehicle]=(vFuel[l.vehicle]||0)+(l.liters||0); });
+              const chartData = Object.entries(vFuel).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([label,value])=>({label,value:Math.round(value)}));
+              return chartData.length>1?<BarChart data={chartData} title="⛽ Fuel Consumption by Vehicle (Liters)" color="#f59e0b" unit="L" />:null;
+            })()}
+
+            {/* Bar chart — fuel cost per DC */}
+            {!userDC&&selDC==="all"&&(()=>{
+              const dcFuel = {};
+              filteredFuelLogs.forEach(l=>{ dcFuel[l.dc]=(dcFuel[l.dc]||0)+(l.sar||0); });
+              const chartData = Object.entries(dcFuel).map(([label,value])=>({label,value:Math.round(value),color:DC_COLORS[label]||"#6366f1"}));
+              return chartData.length>0?<BarChart data={chartData} title="💰 Fuel Cost by DC (SAR)" unit=" SAR" />:null;
+            })()}
           </Card>
-          {!userDC&&["Riyadh","Jeddah","Dammam"].map((dc,idx)=>{
-            const dl=fuelLogs.filter(l=>l.dc===dc);
+
+          {/* DC breakdown — Admin all DCs */}
+          {!userDC&&selDC==="all"&&["Riyadh","Jeddah","Dammam"].map((dc,idx)=>{
+            const dl=filteredFuelLogs.filter(l=>l.dc===dc);
             const colors=["#1A3A5C","#0f766e","#7c3aed"];
             return (
               <Card key={dc} style={{ borderTop:`4px solid ${colors[idx]}` }}>
                 <CardTitle style={{ color:colors[idx] }}>📍 {dcLabel(dc,t)}</CardTitle>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
                   <StatCard icon="⛽" label={t.totalLiters} value={dl.reduce((s,l)=>s+(l.liters||0),0)+"L"} color="#f59e0b" />
-                  <StatCard icon="💰" label={t.totalCost} value={"SAR "+dl.reduce((s,l)=>s+(l.sar||0),0)} color="#ef4444" />
+                  <StatCard icon="💰" label="SAR" value={"SAR "+dl.reduce((s,l)=>s+(l.sar||0),0)} color="#ef4444" />
                   <StatCard icon="🛣️" label={t.totalKM} value={dl.reduce((s,l)=>s+(l.tripKM||0),0)+" km"} color="#6366f1" />
                 </div>
               </Card>
@@ -454,82 +775,115 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
         </div>
       )}
 
-      {/* UNASSIGNED REPORT */}
+      {/* ══════════════════════════════════════
+          TAB: UNASSIGNED REPORT
+      ══════════════════════════════════════ */}
       {tab==="unassigned"&&(
-        <Card>
-          <CardTitle>⚪ {t.unassignedReport}</CardTitle>
-          <div style={{ marginBottom:14, fontSize:14, color:"#64748b" }}>
-            Drivers with no deliveries assigned in selected period.
+        <div id="report-unassigned">
+          {/* Driver filter */}
+          <div style={{ display:"flex", gap:10, marginBottom:14, flexWrap:"wrap", alignItems:"center" }}>
+            <label style={{ fontSize:13, fontWeight:600, color:"#374151" }}>👤 Filter Driver:</label>
+            <select value={selDriver} onChange={e=>setSelDriver(e.target.value)}
+              style={{ border:"1.5px solid #e2e8f0", borderRadius:8, padding:"8px 14px", fontSize:13, outline:"none", background:"white", cursor:"pointer", minWidth:200 }}>
+              <option value="all">{t.allDrivers}</option>
+              {driverList.map(d=><option key={d.uid} value={d.uid}>{d.name} — {d.dc}</option>)}
+            </select>
+            <button onClick={()=>downloadPDF("report-unassigned","unassigned_report.pdf")}
+              style={{ marginLeft:"auto", background:"#6366f1", color:"white", border:"none", padding:"8px 14px", borderRadius:7, cursor:"pointer", fontSize:13, fontWeight:600 }}>
+              🖨️ {t.pdfDownload}
+            </button>
           </div>
-          {myUsers.filter(u=>u.role==="driver").length===0&&<div style={{ textAlign:"center", padding:24, color:"#94a3b8", fontSize:15 }}>{t.noData}</div>}
-          <div style={{ overflowX:"auto" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
-              <thead>
-                <tr style={{ background:"#1A3A5C" }}>
-                  {["#","Driver","Distribution Center","Total","Delivered","Rate","Status"].map(h=>(
-                    <th key={h} style={{ padding:"12px 14px", textAlign:"left", fontWeight:700, color:"white", whiteSpace:"nowrap" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {myUsers.filter(u=>u.role==="driver").map((driver,i)=>{
-                  const dStats = driverStats.find(d=>d.name===driver.name)||{delivered:0,failed:0,total:0,rate:0};
-                  const isUnassigned = dStats.total===0;
-                  return (
-                    <tr key={driver.uid} style={{ background:isUnassigned?"#fff7ed":i%2===0?"white":"#f8fafc" }}>
-                      <td style={{ padding:"12px 14px", color:"#94a3b8" }}>{i+1}</td>
-                      <td style={{ padding:"12px 14px", fontWeight:600 }}>{driver.name}</td>
-                      <td style={{ padding:"12px 14px", color:"#64748b" }}>{dcLabel(driver.dc,t)||driver.dc}</td>
-                      <td style={{ padding:"12px 14px", textAlign:"center" }}>{dStats.total}</td>
-                      <td style={{ padding:"12px 14px", textAlign:"center", color:"#10b981", fontWeight:700 }}>{dStats.delivered}</td>
-                      <td style={{ padding:"12px 14px", textAlign:"center" }}>
-                        <span style={{ fontWeight:700, color:dStats.rate>=80?"#10b981":dStats.rate>=50?"#f59e0b":"#ef4444" }}>{dStats.rate}%</span>
-                      </td>
-                      <td style={{ padding:"12px 14px" }}>
-                        <span style={{ fontSize:13, fontWeight:600, padding:"3px 10px", borderRadius:99,
-                          background:isUnassigned?"#fef3c7":driver.status==="active"||driver.status==="Active"?"#d1fae5":"#fee2e2",
-                          color:isUnassigned?"#92400e":driver.status==="active"||driver.status==="Active"?"#065f46":"#991b1b"
-                        }}>
-                          {isUnassigned?"⚪ Unassigned":driver.status||"Active"}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+
+          <Card>
+            <CardTitle>⚪ {t.unassignedReport}</CardTitle>
+            <div style={{ marginBottom:14, fontSize:14, color:"#64748b" }}>
+              Drivers with no deliveries assigned in selected period.
+            </div>
+            {myUsers.filter(u=>u.role==="driver").length===0&&<div style={{ textAlign:"center", padding:24, color:"#94a3b8", fontSize:15 }}>{t.noData}</div>}
+            <div style={{ overflowX:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+                <thead>
+                  <tr style={{ background:"#1A3A5C" }}>
+                    {["#","Driver","DC","Total","Delivered","Rate","Productivity","Status"].map(h=>(
+                      <th key={h} style={{ padding:"12px 14px", textAlign:"left", fontWeight:700, color:"white", whiteSpace:"nowrap" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {myUsers.filter(u=>u.role==="driver"&&(selDriver==="all"||u.uid===selDriver)).map((driver,i)=>{
+                    const dStats = driverStats.find(d=>d.driverId===driver.uid)||{delivered:0,failed:0,total:0,rate:0,productivity:0};
+                    const isUnassigned = dStats.total===0;
+                    return (
+                      <tr key={driver.uid} style={{ background:isUnassigned?"#fff7ed":i%2===0?"white":"#f8fafc" }}>
+                        <td style={{ padding:"12px 14px", color:"#94a3b8" }}>{i+1}</td>
+                        <td style={{ padding:"12px 14px", fontWeight:600 }}>{driver.name}</td>
+                        <td style={{ padding:"12px 14px", color:"#64748b" }}>{driver.dc}</td>
+                        <td style={{ padding:"12px 14px", textAlign:"center" }}>{dStats.total}</td>
+                        <td style={{ padding:"12px 14px", textAlign:"center", color:"#10b981", fontWeight:700 }}>{dStats.delivered}</td>
+                        <td style={{ padding:"12px 14px", textAlign:"center" }}>
+                          <span style={{ fontWeight:700, color:dStats.rate>=80?"#10b981":dStats.rate>=50?"#f59e0b":"#ef4444" }}>{dStats.rate}%</span>
+                        </td>
+                        <td style={{ padding:"12px 14px", textAlign:"center" }}>
+                          <span style={{ fontWeight:700, color:dStats.productivity>=80?"#10b981":dStats.productivity>=50?"#f59e0b":"#ef4444" }}>{dStats.productivity}%</span>
+                        </td>
+                        <td style={{ padding:"12px 14px" }}>
+                          <span style={{ fontSize:13, fontWeight:600, padding:"3px 10px", borderRadius:99,
+                            background:isUnassigned?"#fef3c7":driver.status==="active"||driver.status==="Active"?"#d1fae5":"#fee2e2",
+                            color:isUnassigned?"#92400e":driver.status==="active"||driver.status==="Active"?"#065f46":"#991b1b"
+                          }}>
+                            {isUnassigned?"⚪ Unassigned":driver.status||"Active"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
       )}
 
-      {/* AGING REPORT */}
+      {/* ══════════════════════════════════════
+          TAB: AGING REPORT
+      ══════════════════════════════════════ */}
       {tab==="aging"&&(
-        <Card>
-          <CardTitle>⏱️ {t.aging}</CardTitle>
-          <div style={{ display:"flex", gap:16, marginBottom:14, flexWrap:"wrap" }}>
-            {[
-              { label:"🟢 "+t.fresh+" (≤1 "+t.days+")", count:agingInv.filter(i=>i.days<=1).length, color:"#10b981" },
-              { label:"🟡 "+t.aging2+" (2-3 "+t.days+")", count:agingInv.filter(i=>i.days>1&&i.days<=3).length, color:"#f59e0b" },
-              { label:"🔴 "+t.critical+" (4+ "+t.days+")", count:agingInv.filter(i=>i.days>3).length, color:"#ef4444" },
-            ].map(s=>(
-              <div key={s.label} style={{ fontSize:14, fontWeight:600, color:s.color }}>{s.label}: <b>{s.count}</b></div>
-            ))}
+        <div id="report-aging">
+          <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:14 }}>
+            <button onClick={()=>downloadPDF("report-aging","aging_report.pdf")}
+              style={{ background:"#6366f1", color:"white", border:"none", padding:"8px 14px", borderRadius:7, cursor:"pointer", fontSize:13, fontWeight:600 }}>
+              🖨️ {t.pdfDownload}
+            </button>
           </div>
-          {agingInv.length===0&&<div style={{ textAlign:"center", padding:24, color:"#94a3b8", fontSize:15 }}>{t.noData}</div>}
-          {agingInv.map(inv=>(
-            <div key={inv.id||inv.firestoreId} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
-              <span style={{ fontWeight:700, fontSize:14, color:"#6366f1", minWidth:130 }}>{inv.id}</span>
-              <span style={{ flex:1, fontSize:14 }}>{inv.customer}</span>
-              <span style={{ fontSize:13, color:"#64748b" }}>{dcLabel(inv.dc,t)||inv.dc}</span>
-              <span style={{ fontSize:13, fontWeight:600, padding:"3px 10px", borderRadius:99,
-                background:inv.days<=1?"#d1fae5":inv.days<=3?"#fef3c7":"#fee2e2",
-                color:inv.days<=1?"#065f46":inv.days<=3?"#92400e":"#991b1b"
-              }}>
-                {inv.days} {t.days} — {inv.days<=1?t.fresh:inv.days<=3?t.aging2:t.critical}
-              </span>
+
+          <Card>
+            <CardTitle>⏱️ {t.aging}</CardTitle>
+            <div style={{ display:"flex", gap:16, marginBottom:14, flexWrap:"wrap" }}>
+              {[
+                { label:"🟢 "+t.fresh+" (≤1 "+t.days+")", count:agingInv.filter(i=>i.days<=1).length, color:"#10b981" },
+                { label:"🟡 "+t.aging2+" (2-3 "+t.days+")", count:agingInv.filter(i=>i.days>1&&i.days<=3).length, color:"#f59e0b" },
+                { label:"🔴 "+t.critical+" (4+ "+t.days+")", count:agingInv.filter(i=>i.days>3).length, color:"#ef4444" },
+              ].map(s=>(
+                <div key={s.label} style={{ fontSize:14, fontWeight:600, color:s.color }}>{s.label}: <b>{s.count}</b></div>
+              ))}
             </div>
-          ))}
-        </Card>
+            {agingInv.length===0&&<div style={{ textAlign:"center", padding:24, color:"#94a3b8", fontSize:15 }}>{t.noData}</div>}
+            {agingInv.map(inv=>(
+              <div key={inv.id||inv.firestoreId} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
+                <span style={{ fontWeight:700, fontSize:14, color:"#6366f1", minWidth:130 }}>{inv.id}</span>
+                <span style={{ flex:1, fontSize:14 }}>{inv.customer}</span>
+                <span style={{ fontSize:13, color:"#64748b" }}>{inv.dc}</span>
+                <span style={{ fontSize:13, color:"#64748b" }}>{inv.status}</span>
+                <span style={{ fontSize:13, fontWeight:600, padding:"3px 10px", borderRadius:99,
+                  background:inv.days<=1?"#d1fae5":inv.days<=3?"#fef3c7":"#fee2e2",
+                  color:inv.days<=1?"#065f46":inv.days<=3?"#92400e":"#991b1b"
+                }}>
+                  {inv.days} {t.days} — {inv.days<=1?t.fresh:inv.days<=3?t.aging2:t.critical}
+                </span>
+              </div>
+            ))}
+          </Card>
+        </div>
       )}
     </div>
   );

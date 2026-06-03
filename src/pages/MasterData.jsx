@@ -176,7 +176,7 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
     ["holidays","🏖️",t.holidays],
     ...(isAdmin||isManager||user.role==="driver"?[["driverleaves","👤",t.driverLeaves]]:[]),
     ...(isAdmin||isManager?[["vehicleoff","🚗",t.vehicleOff]]:[]),
-    ...(isAdmin?[["allusers","👥",t.allUsers]]:[[]]),
+    ...(isAdmin?[["allusers","👥",t.allUsers]]:[]),
   ];
 
   function flash(msg) { setDone(msg); setTimeout(()=>setDone(""),3000); }
