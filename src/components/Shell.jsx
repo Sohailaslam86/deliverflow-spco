@@ -57,11 +57,9 @@ export default function Shell({ user, lang, setLang, page, setPage, onLogout, ch
   const activeAlerts = (alerts||[]).filter(a => a.status === "active" && (!user.dc || a.dc === user.dc || user.role === "admin"));
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  // Load notifications on mount + every 15 seconds + on page focus
   useEffect(() => {
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 15000);
-    // Refresh when user comes back to tab
     const onFocus = () => fetchNotifications();
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", () => {
@@ -95,6 +93,9 @@ export default function Shell({ user, lang, setLang, page, setPage, onLogout, ch
     if (diff < 86400) return Math.floor(diff/3600) + "h ago";
     return Math.floor(diff/86400) + "d ago";
   }
+
+  // DC label — short name only, no "Distribution Center" duplication
+  const dcLabel = user.dc && user.dc !== "Head Office" ? `— ${user.dc} DC` : "";
 
   return (
     <div style={{ display:"flex", minHeight:"100vh", background:"#f1f5f9", direction:rtl?"rtl":"ltr", fontFamily:"'Segoe UI',sans-serif" }}>
@@ -164,8 +165,9 @@ export default function Shell({ user, lang, setLang, page, setPage, onLogout, ch
               <div style={{ fontSize:14, fontWeight:700, color:"white", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                 {user.displayName||user.name}
               </div>
+              {/* FIX: removed double "Distribution Center" bug */}
               <div style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>
-                {t[user.role]||user.role} {user.dc&&user.dc!=="Head Office"?"— "+user.dc+" Distribution Center"+" Distribution Center":""}
+                {t[user.role]||user.role}{dcLabel}
               </div>
             </div>
           </div>
@@ -290,13 +292,12 @@ export default function Shell({ user, lang, setLang, page, setPage, onLogout, ch
             display:"flex", alignItems:"center", gap:6
           }}>
             {RI[user.role]} {t[user.role]||user.role}
-            {user.dc&&user.dc!=="Head Office"&&(
+            {user.dc && user.dc !== "Head Office" && (
               <span style={{ fontSize:14, fontWeight:700 }}>— {user.dc}</span>
             )}
           </div>
         </header>
 
-        {/* Click outside to close notification panel */}
         {showNotif && <div onClick={() => setShowNotif(false)} style={{ position:"fixed", inset:0, zIndex:499 }} />}
 
         <main style={{ flex:1, padding:"20px", overflowY:"auto", maxWidth:1400, width:"100%", margin:"0 auto", boxSizing:"border-box" }}>
