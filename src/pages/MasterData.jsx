@@ -128,8 +128,6 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
 
   useEffect(() => {
     loadDepartments();
-    loadVehicleReqs();
-    loadDriverReqs();
     loadHolidays();
     loadDriverLeaves();
     loadVehicleOffDays();
