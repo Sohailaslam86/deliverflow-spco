@@ -1,61 +1,114 @@
 import { useState, useEffect } from "react";
-import { RC, RA, RI } from "../data/masterData.js";
+import { RC, RA, RI, ROLE_LABELS } from "../data/masterData.js";
+import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
+import { auth } from "../firebase";
 import { loadNotifications, markRead, markAllRead } from "../notificationService.js";
 
 const T = {
   en: {
-    dashboard:"Dashboard", invoices:"All Invoices", dcinvoices:"Invoice Management",
-    upload:"Invoice Upload & Post", trips:"Trips", users:"User Management",
-    masterdata:"System Configuration", fleet:"Fleet Management", fuel:"Fuel Tracking",
-    reports:"Reports", download:"POD Management", assign:"Dispatch Management",
-    mydeliveries:"My Deliveries", odometer:"Daily Mileage Log", search:"Search Invoices",
+    dashboard:"Dashboard",
+    invoices:"All Invoices", dcinvoices:"Deliverables",
+    upload:"Invoice Upload & Post",
+    trips:"Trip Management",
+    users:"User Management",
+    masterdata:"System Configuration",
+    fleet:"Fleet Management",
+    fuel:"Fuel Tracking",
+    reports:"Reports",
+    download:"POD Management",
+    assign:"Dispatch Management",
+    mydeliveries:"My Deliveries",
+    odometer:"Daily Mileage Log",
+    search:"Search Invoices",
     alerts:"Alerts", logout:"Logout",
-    admin:"System Administrator", planning:"Planning",
-    manager:"Distribution Center Manager", driver:"Delivery Driver", viewonly:"View Only",
-    notifications:"Notifications", markAllRead:"Mark All Read", noNotifications:"No new notifications",
+    admin:"System Administrator",
+    planning:"Planning",
+    manager:"Distribution Center Manager",
+    logistic:"Logistics Manager",
+    driver:"Delivery Partner",
+    viewonly:"View Only",
+    management:"Management",
+    notifications:"Notifications",
+    markAllRead:"Mark All Read",
+    noNotifications:"No new notifications",
   },
   ar: {
-    dashboard:"لوحة القيادة", invoices:"جميع الفواتير", dcinvoices:"إدارة الفواتير",
-    upload:"رفع وترحيل الفواتير", trips:"الرحلات", users:"إدارة المستخدمين",
-    masterdata:"إعدادات النظام", fleet:"إدارة الأسطول", fuel:"تتبع الوقود",
-    reports:"التقارير", download:"إدارة وثائق التسليم", assign:"إدارة الإرسال",
-    mydeliveries:"تسليماتي", odometer:"سجل المسافات اليومي", search:"البحث عن الفواتير",
+    dashboard:"لوحة القيادة",
+    invoices:"جميع الفواتير", dcinvoices:"المستحقات",
+    upload:"رفع وترحيل الفواتير",
+    trips:"إدارة الرحلات",
+    users:"إدارة المستخدمين",
+    masterdata:"إعدادات النظام",
+    fleet:"إدارة الأسطول",
+    fuel:"تتبع الوقود",
+    reports:"التقارير",
+    download:"إدارة وثائق التسليم",
+    assign:"إدارة الإرسال",
+    mydeliveries:"تسليماتي",
+    odometer:"سجل المسافات اليومي",
+    search:"البحث عن الفواتير",
     alerts:"تنبيهات", logout:"تسجيل الخروج",
-    admin:"مدير النظام", planning:"التخطيط",
-    manager:"مدير مركز التوزيع", driver:"سائق التسليم", viewonly:"عرض فقط",
-    notifications:"الإشعارات", markAllRead:"تعليم الكل كمقروء", noNotifications:"لا توجد إشعارات جديدة",
+    admin:"مدير النظام",
+    planning:"التخطيط",
+    manager:"مدير مركز التوزيع",
+    logistic:"مدير اللوجستيات",
+    driver:"شريك التوصيل",
+    viewonly:"عرض فقط",
+    management:"الإدارة",
+    notifications:"الإشعارات",
+    markAllRead:"تعليم الكل كمقروء",
+    noNotifications:"لا توجد إشعارات جديدة",
   }
 };
 
+// Navigation per role
 const NAV = {
-  admin:   [["dashboard","📊"],["invoices","📋"],["upload","📤"],["assign","🚚"],["trips","🔄"],["fleet","🚗"],["fuel","⛽"],["users","👥"],["masterdata","⚙️"],["reports","📈"],["download","📥"]],
-  planning:[["dashboard","📊"],["upload","📤"],["invoices","📋"],["download","📥"],["users","👥"]],
-  manager: [["dashboard","📊"],["invoices","📋"],["assign","🚚"],["trips","🔄"],["fleet","🚗"],["fuel","⛽"],["reports","📈"],["users","👥"],["masterdata","⚙️"]],
-  driver:  [["mydeliveries","📦"],["odometer","🔢"],["masterdata","⚙️"]],
-  viewonly:[["search","🔍"]],
+  admin:      [["dashboard","📊"],["assign","🚚"],["upload","📤"],["trips","🔄"],["fleet","🚗"],["fuel","⛽"],["users","👥"],["masterdata","⚙️"],["reports","📈"],["download","📥"]],
+  planning:   [["dashboard","📊"],["upload","📤"],["download","📥"],["users","👥"]],
+  manager:    [["dashboard","📊"],["assign","🚚"],["trips","🔄"],["fleet","🚗"],["fuel","⛽"],["reports","📈"],["users","👥"],["masterdata","⚙️"],["download","📥"]],
+  logistic:   [["dashboard","📊"],["fleet","🚗"],["fuel","⛽"],["reports","📈"],["users","👥"],["download","📥"]],
+  driver:     [["mydeliveries","📦"],["odometer","🔢"],["masterdata","⚙️"]],
+  viewonly:   [["search","🔍"]],
+  management: [["dashboard","📊"],["fleet","🚗"],["fuel","⛽"],["reports","📈"],["download","📥"]],
 };
 
 const NOTIF_ICONS = {
   invoice_assigned: "📦",
-  delivered: "✅",
-  failed: "❌",
-  upload: "📤",
-  request: "📝",
-  request_action: "🔔",
-  leave: "🏖️",
-  vehicle: "🚗",
+  staged:           "📦",
+  delivered:        "✅",
+  failed:           "❌",
+  upload:           "📤",
+  request:          "📝",
+  request_action:   "🔔",
+  leave:            "🏖️",
+  vehicle:          "🚗",
 };
 
 export default function Shell({ user, lang, setLang, page, setPage, onLogout, children, alerts }) {
   const [open, setOpen] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  // Change password state
+  const [showChangePw, setShowChangePw] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [pwErr, setPwErr] = useState("");
+  const [pwDone, setPwDone] = useState("");
+  const [pwLoading, setPwLoading] = useState(false);
   const rtl = lang === "ar";
   const t = T[lang] || T.en;
   const nav = NAV[user.role] || NAV.viewonly;
   const cur = nav.find(n => n[0] === page)?.[0] || nav[0][0];
-  const activeAlerts = (alerts||[]).filter(a => a.status === "active" && (!user.dc || a.dc === user.dc || user.role === "admin"));
+  const activeAlerts = (alerts||[]).filter(a =>
+    a.status === "active" &&
+    (!user.dc || a.dc === user.dc || user.role === "admin" || user.role === "management")
+  );
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  // DC label — clean, no duplication
+  const dcLabel = user.dc && user.dc !== "Head Office" ? ` — ${user.dc}` : "";
 
   useEffect(() => {
     fetchNotifications();
@@ -94,8 +147,34 @@ export default function Shell({ user, lang, setLang, page, setPage, onLogout, ch
     return Math.floor(diff/86400) + "d ago";
   }
 
-  // DC label — short name only, no "Distribution Center" duplication
-  const dcLabel = user.dc && user.dc !== "Head Office" ? `— ${user.dc} DC` : "";
+  async function changePassword() {
+    if (!currentPw) { setPwErr("Please enter current password"); return; }
+    if (newPw.length < 6) { setPwErr("New password must be at least 6 characters"); return; }
+    if (newPw !== confirmPw) { setPwErr("Passwords do not match"); return; }
+    setPwLoading(true); setPwErr("");
+    try {
+      const firebaseUser = auth.currentUser;
+      const credential = EmailAuthProvider.credential(firebaseUser.email, currentPw);
+      await reauthenticateWithCredential(firebaseUser, credential);
+      await updatePassword(firebaseUser, newPw);
+      setPwDone("✅ Password changed successfully!");
+      setCurrentPw(""); setNewPw(""); setConfirmPw("");
+      setTimeout(()=>{ setShowChangePw(false); setPwDone(""); }, 3000);
+    } catch(e) {
+      if (e.code==="auth/wrong-password"||e.code==="auth/invalid-credential") {
+        setPwErr("Current password is incorrect");
+      } else {
+        setPwErr("Error: " + e.message);
+      }
+    }
+    setPwLoading(false);
+  }
+
+  function getPageLabel(id) {
+    if (id === "invoices" && (user.role === "manager" || user.role === "logistic")) return t.dcinvoices;
+    if (id === "assign") return t.assign;
+    return t[id] || id;
+  }
 
   return (
     <div style={{ display:"flex", minHeight:"100vh", background:"#f1f5f9", direction:rtl?"rtl":"ltr", fontFamily:"'Segoe UI',sans-serif" }}>
@@ -111,6 +190,7 @@ export default function Shell({ user, lang, setLang, page, setPage, onLogout, ch
         overflowY:"auto",
         boxShadow:"4px 0 20px rgba(0,0,0,0.3)"
       }}>
+        {/* Logo */}
         <div style={{ display:"flex", alignItems:"center", gap:10, padding:"20px 18px", borderBottom:"1px solid rgba(255,255,255,0.08)" }}>
           <span style={{ fontSize:26 }}>🚚</span>
           <div>
@@ -119,6 +199,7 @@ export default function Shell({ user, lang, setLang, page, setPage, onLogout, ch
           </div>
         </div>
 
+        {/* Nav */}
         <nav style={{ flex:1, padding:"12px 8px" }}>
           {nav.map(([id, icon]) => (
             <button key={id} onClick={() => { setPage(id); setOpen(false); }}
@@ -133,11 +214,12 @@ export default function Shell({ user, lang, setLang, page, setPage, onLogout, ch
                 marginBottom:3, fontWeight:cur===id?700:400
               }}>
               <span style={{ fontSize:17, width:22, textAlign:"center" }}>{icon}</span>
-              <span>{id==="invoices"&&user.role==="manager"?t.dcinvoices:t[id]||id}</span>
+              <span>{getPageLabel(id)}</span>
             </button>
           ))}
         </nav>
 
+        {/* Language toggle */}
         <div style={{ display:"flex", gap:6, padding:"10px 16px" }}>
           {[["en","EN"],["ar","عربي"]].map(([l,lbl]) => (
             <button key={l} onClick={() => setLang(l)}
@@ -153,6 +235,7 @@ export default function Shell({ user, lang, setLang, page, setPage, onLogout, ch
           ))}
         </div>
 
+        {/* User info */}
         <div style={{ padding:"14px 18px", borderTop:"1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
             <div style={{
@@ -165,20 +248,21 @@ export default function Shell({ user, lang, setLang, page, setPage, onLogout, ch
               <div style={{ fontSize:14, fontWeight:700, color:"white", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                 {user.displayName||user.name}
               </div>
-              {/* FIX: removed double "Distribution Center" bug */}
               <div style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>
-                {t[user.role]||user.role}{dcLabel}
+                {ROLE_LABELS[user.role]||user.role}{dcLabel}
               </div>
             </div>
           </div>
-          <button onClick={onLogout} style={{
-            width:"100%", background:"rgba(255,255,255,0.08)",
-            border:"none", color:"rgba(255,255,255,0.6)",
-            cursor:"pointer", fontSize:13, padding:"9px",
-            borderRadius:6, fontWeight:600
-          }}>
-            {t.logout} →
-          </button>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={()=>{setShowChangePw(true);setShowUserMenu(false);setPwErr("");setPwDone("");}}
+              style={{flex:1,background:"rgba(255,255,255,0.08)",border:"none",color:"rgba(255,255,255,0.7)",cursor:"pointer",fontSize:12,padding:"9px 6px",borderRadius:6,fontWeight:600}}>
+              🔑 Change PW
+            </button>
+            <button onClick={onLogout}
+              style={{flex:1,background:"rgba(255,255,255,0.08)",border:"none",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:12,padding:"9px 6px",borderRadius:6,fontWeight:600}}>
+              {t.logout} →
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -200,7 +284,7 @@ export default function Shell({ user, lang, setLang, page, setPage, onLogout, ch
           }}>☰</button>
 
           <div style={{ flex:1, fontWeight:800, fontSize:18, color:"#0f172a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-            {cur==="invoices"&&user.role==="manager"?t.dcinvoices:t[cur]||cur}
+            {getPageLabel(cur)}
           </div>
 
           {activeAlerts.length > 0 && (
@@ -213,7 +297,7 @@ export default function Shell({ user, lang, setLang, page, setPage, onLogout, ch
             </button>
           )}
 
-          {/* NOTIFICATION BELL */}
+          {/* Notification Bell */}
           <div style={{ position:"relative" }}>
             <button onClick={() => setShowNotif(!showNotif)} style={{
               background:"none", border:"none", cursor:"pointer",
@@ -233,7 +317,6 @@ export default function Shell({ user, lang, setLang, page, setPage, onLogout, ch
               )}
             </button>
 
-            {/* NOTIFICATION PANEL */}
             {showNotif && (
               <div style={{
                 position:"absolute", top:44, right:0,
@@ -251,7 +334,6 @@ export default function Shell({ user, lang, setLang, page, setPage, onLogout, ch
                     }}>{t.markAllRead}</button>
                   )}
                 </div>
-
                 {notifications.length === 0 ? (
                   <div style={{ textAlign:"center", padding:32, color:"#94a3b8", fontSize:14 }}>
                     🔕 {t.noNotifications}
@@ -268,9 +350,7 @@ export default function Shell({ user, lang, setLang, page, setPage, onLogout, ch
                       <div style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
                         <span style={{ fontSize:18, flexShrink:0 }}>{NOTIF_ICONS[n.type]||"🔔"}</span>
                         <div style={{ flex:1 }}>
-                          <div style={{ fontWeight:n.read?400:700, fontSize:13, color:"#0f172a", marginBottom:2 }}>
-                            {n.title}
-                          </div>
+                          <div style={{ fontWeight:n.read?400:700, fontSize:13, color:"#0f172a", marginBottom:2 }}>{n.title}</div>
                           <div style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>{n.message}</div>
                           <div style={{ fontSize:11, color:"#94a3b8" }}>{timeAgo(n.createdAt)}</div>
                         </div>
@@ -285,13 +365,14 @@ export default function Shell({ user, lang, setLang, page, setPage, onLogout, ch
             )}
           </div>
 
+          {/* Role badge */}
           <div style={{
             fontSize:13, fontWeight:700, color:"white",
             padding:"6px 14px", borderRadius:20,
             background:RA[user.role]||"#2471A3", whiteSpace:"nowrap",
             display:"flex", alignItems:"center", gap:6
           }}>
-            {RI[user.role]} {t[user.role]||user.role}
+            {RI[user.role]} {ROLE_LABELS[user.role]||user.role}
             {user.dc && user.dc !== "Head Office" && (
               <span style={{ fontSize:14, fontWeight:700 }}>— {user.dc}</span>
             )}
@@ -299,6 +380,55 @@ export default function Shell({ user, lang, setLang, page, setPage, onLogout, ch
         </header>
 
         {showNotif && <div onClick={() => setShowNotif(false)} style={{ position:"fixed", inset:0, zIndex:499 }} />}
+
+        {/* CHANGE PASSWORD MODAL */}
+        {showChangePw&&(
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+            <div style={{background:"white",borderRadius:12,padding:28,width:"100%",maxWidth:400,boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+              <div style={{fontWeight:800,fontSize:18,color:"#0f172a",marginBottom:4}}>🔑 Change Password</div>
+              <div style={{fontSize:13,color:"#64748b",marginBottom:20}}>{user.name} — {user.email}</div>
+              {pwDone?(
+                <div style={{background:"#d1fae5",color:"#065f46",borderRadius:8,padding:"14px 16px",fontSize:14,fontWeight:600,textAlign:"center"}}>
+                  {pwDone}
+                </div>
+              ):(
+                <>
+                  <div style={{marginBottom:12}}>
+                    <label style={{display:"block",fontSize:13,fontWeight:600,color:"#374151",marginBottom:6}}>Current Password *</label>
+                    <input type="password" value={currentPw} onChange={e=>setCurrentPw(e.target.value)}
+                      placeholder="Enter current password"
+                      style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"11px 14px",fontSize:15,outline:"none",boxSizing:"border-box"}} />
+                  </div>
+                  <div style={{marginBottom:12}}>
+                    <label style={{display:"block",fontSize:13,fontWeight:600,color:"#374151",marginBottom:6}}>New Password *</label>
+                    <input type="password" value={newPw} onChange={e=>setNewPw(e.target.value)}
+                      placeholder="Min 6 characters"
+                      style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"11px 14px",fontSize:15,outline:"none",boxSizing:"border-box"}} />
+                  </div>
+                  <div style={{marginBottom:14}}>
+                    <label style={{display:"block",fontSize:13,fontWeight:600,color:"#374151",marginBottom:6}}>Confirm New Password *</label>
+                    <input type="password" value={confirmPw} onChange={e=>setConfirmPw(e.target.value)}
+                      placeholder="Repeat new password"
+                      style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"11px 14px",fontSize:15,outline:"none",boxSizing:"border-box"}} />
+                  </div>
+                  {pwErr&&(
+                    <div style={{background:"#fee2e2",color:"#991b1b",borderRadius:8,padding:"10px 14px",fontSize:13,marginBottom:14}}>⚠️ {pwErr}</div>
+                  )}
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={changePassword} disabled={pwLoading}
+                      style={{flex:1,background:"#1A3A5C",color:"white",border:"none",padding:"12px",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:14,opacity:pwLoading?0.6:1}}>
+                      {pwLoading?"Changing...":"✅ Change Password"}
+                    </button>
+                    <button onClick={()=>{setShowChangePw(false);setCurrentPw("");setNewPw("");setConfirmPw("");setPwErr("");}}
+                      style={{background:"#f1f5f9",border:"none",padding:"12px 16px",borderRadius:8,fontWeight:600,cursor:"pointer",fontSize:14,color:"#64748b"}}>
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         <main style={{ flex:1, padding:"20px", overflowY:"auto", maxWidth:1400, width:"100%", margin:"0 auto", boxSizing:"border-box" }}>
           {children}
