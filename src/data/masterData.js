@@ -16,7 +16,8 @@ export const DEPARTMENTS = [
   "IT", "HR", "Operations", "Quality", "Regulatory"
 ];
 
-export const ROLES = ["admin", "planning", "manager", "driver", "viewonly"];
+// All roles including new ones
+export const ROLES = ["admin", "planning", "manager", "logistic", "driver", "viewonly", "management"];
 
 export const CITIES = [
   "Riyadh", "Jeddah", "Dammam", "Makkah", "Madinah",
@@ -55,37 +56,71 @@ export const MAINTENANCE_TYPES = [
   "Brake Service", "Engine Repair", "Electrical", "Body Work", "Other"
 ];
 
+// Failed delivery reasons — dropdown
+export const FAILED_REASONS = [
+  "Customer Postponed",
+  "Customer Not Available",
+  "Customer Refusal",
+  "Wrong Address",
+  "Order Duplication",
+  "Insufficient Stock (System Mismatch)",
+];
+
 export const DC_GPS = {
   Riyadh:  { lat: "24.7136", lng: "46.6753" },
   Jeddah:  { lat: "21.4858", lng: "39.1925" },
   Dammam:  { lat: "26.4207", lng: "50.0888" },
 };
 
-// Drivers ab Firestore se load honge — yeh empty hai
 export const DRIVERS_BY_DC = {
   Riyadh: [],
   Jeddah: [],
   Dammam: [],
 };
 
-// Role Colors
+// ── ROLE COLORS ──────────────────────────────────────────
+// RC = sidebar background color
 export const RC = {
-  admin:    "#1A3A5C",
-  planning: "#7c3aed",
-  manager:  "#0f766e",
-  driver:   "#b45309",
-  viewonly: "#475569",
+  admin:      "#1A3A5C",
+  planning:   "#7c3aed",
+  manager:    "#0f766e",
+  logistic:   "#b91c1c",   // dark red — fleet/fuel focus
+  driver:     "#b45309",
+  viewonly:   "#475569",
+  management: "#1e3a5f",   // navy — read only
 };
+
+// RA = active nav item / accent color
 export const RA = {
-  admin:    "#2471A3",
-  planning: "#9333ea",
-  manager:  "#0d9488",
-  driver:   "#d97706",
-  viewonly: "#64748b",
+  admin:      "#2471A3",
+  planning:   "#9333ea",
+  manager:    "#0d9488",
+  logistic:   "#dc2626",
+  driver:     "#d97706",
+  viewonly:   "#64748b",
+  management: "#2563eb",
 };
+
+// RI = role icon
 export const RI = {
-  admin: "👑", planning: "📄",
-  manager: "🏢", driver: "🚚", viewonly: "👁️"
+  admin:      "👑",
+  planning:   "📄",
+  manager:    "🏢",
+  logistic:   "🔧",
+  driver:     "🚚",
+  viewonly:   "👁️",
+  management: "📊",
+};
+
+// Role display labels
+export const ROLE_LABELS = {
+  admin:      "System Administrator",
+  planning:   "Planning",
+  manager:    "Distribution Center Manager",
+  logistic:   "Logistics Manager",
+  driver:     "Delivery Partner",
+  viewonly:   "View Only",
+  management: "Management",
 };
 
 export function genId(prefix) {
@@ -98,21 +133,22 @@ export function genId(prefix) {
 }
 
 export const STATUS_STYLES = {
-  pending:     { bg:"#fef3c7", c:"#92400e", label:"Pending",           icon:"⏳" },
-  assigned:    { bg:"#dbeafe", c:"#1e40af", label:"Assigned",          icon:"👤" },
-  delivered:   { bg:"#d1fae5", c:"#065f46", label:"Delivered",         icon:"✅" },
-  failed:      { bg:"#fee2e2", c:"#991b1b", label:"Failed",            icon:"❌" },
-  outstanding: { bg:"#ffedd5", c:"#9a3412", label:"Outstanding",       icon:"⚠️" },
-  scheduled:   { bg:"#f3e8ff", c:"#6b21a8", label:"Scheduled",        icon:"📅" },
-  hold_await:  { bg:"#f3e8ff", c:"#6b21a8", label:"Awaiting Response", icon:"📅" },
-  hold_ship:   { bg:"#f3e8ff", c:"#6b21a8", label:"Pending Shipment",  icon:"📅" },
-  intransit:   { bg:"#ede9fe", c:"#4c1d95", label:"In Transit",        icon:"🚚" },
+  pending:          { bg:"#fef3c7", c:"#92400e", label:"Pending",            icon:"⏳" },
+  staged:           { bg:"#dbeafe", c:"#1e40af", label:"Staged for Dispatch", icon:"📦" },
+  assigned:         { bg:"#dbeafe", c:"#1e40af", label:"Assigned",            icon:"👤" },
+  delivered:        { bg:"#d1fae5", c:"#065f46", label:"Delivered",           icon:"✅" },
+  failed:           { bg:"#fee2e2", c:"#991b1b", label:"Failed",              icon:"❌" },
+  outstanding:      { bg:"#ffedd5", c:"#9a3412", label:"Outstanding",         icon:"⚠️" },
+  scheduled:        { bg:"#f3e8ff", c:"#6b21a8", label:"Scheduled",           icon:"📅" },
+  hold_await:       { bg:"#f3e8ff", c:"#6b21a8", label:"Awaiting Response",   icon:"📅" },
+  hold_ship:        { bg:"#f3e8ff", c:"#6b21a8", label:"Pending Shipment",    icon:"📅" },
+  intransit:        { bg:"#ede9fe", c:"#4c1d95", label:"In Transit",          icon:"🚚" },
+  cancelled:        { bg:"#f1f5f9", c:"#475569", label:"Cancelled",           icon:"🚫" },
+  to_be_assigned:   { bg:"#fef3c7", c:"#92400e", label:"To Be Assigned",      icon:"⏳" },
 };
 
-// Demo users — EMPTY (ab Firestore se aata hai)
 export const DEMO_USERS = [];
 
-// Yeh sab ab Firestore se aata hai — empty initial state
 export const INITIAL_INVOICES = [];
 export const INITIAL_VEHICLES = [
   { plate:"Dyna 5784", type:"Dyna", dc:"Riyadh", brand:"Toyota", model:"Dyna 300", chassis:"JK8AB59E90K012345", year:"2020", fahas:"2026-08-15", istimara:"2026-09-01", insurance:"2026-12-31", fuelCapacity:80, fuelLevel:45, mileage:12, totalKM:45230, nextOilKM:47000, nextOilDate:"2026-07-01", status:"Active", maintHistory:[], photos:[] },
