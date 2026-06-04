@@ -8,7 +8,7 @@ import { sendNotification } from "../notificationService.js";
 const T = {
   en: {
     vehicles:"Vehicles", drivers:"Drivers", maintenance:"Maintenance Log",
-    overview:"Overview", total:"Total", active:"Active",
+    overview:"Summarized View", total:"Total", active:"Active",
     inMaint:"In Maintenance", expiryAlerts:"Expiry Alerts",
     fuelLevel:"Fuel Level", totalKM:"Total KM",
     fahas:"Fahas", nextOil:"Next Oil", insurance:"Insurance",
@@ -34,7 +34,7 @@ const T = {
   },
   ar: {
     vehicles:"المركبات", drivers:"السائقون", maintenance:"سجل الصيانة",
-    overview:"نظرة عامة", total:"الإجمالي",
+    overview:"عرض ملخص", total:"الإجمالي",
     active:"نشط", inMaint:"في الصيانة", expiryAlerts:"تنبيهات الانتهاء",
     fuelLevel:"مستوى الوقود", totalKM:"إجمالي الكيلومترات",
     fahas:"الفحص", nextOil:"تغيير الزيت", insurance:"التأمين",
@@ -75,16 +75,19 @@ export default function Fleet({ user, vehicles: masterVehicles, setVehicles: set
   const [fsDrivers, setFsDrivers] = useState([]);
   const [vehicleRequests, setVehicleRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [overviewDC, setOverviewDC] = useState("all");
   const rtl = lang==="ar";
   const t = T[lang]||T.en;
   const dc = user.dc==="Head Office"?null:user.dc;
   const isAdmin = user.role==="admin";
   const isManager = user.role==="manager";
-  const canManage = user.role==="admin"||user.role==="manager";
+  const isLogistic = user.role==="logistic";
+  const isManagement = user.role==="management";
+  const canManage = isAdmin||isManager||isLogistic;
 
-  const tabs = isAdmin
+  const tabs = (isAdmin||isManagement)
     ? [["overview","📊",t.overview],["vehicles","🚗",t.vehicles],["drivers","👤",t.drivers],["maintenance","🔧",t.maintenance]]
-    : [["vehicles","🚗",t.vehicles],["drivers","👤",t.drivers],["maintenance","🔧",t.maintenance]];
+    : [["overview","📊",t.overview],["vehicles","🚗",t.vehicles],["drivers","👤",t.drivers],["maintenance","🔧",t.maintenance]];
 
   function flash(msg) { setDone(msg); setTimeout(()=>setDone(""),4000); }
 
@@ -181,7 +184,7 @@ export default function Fleet({ user, vehicles: masterVehicles, setVehicles: set
       <TabBar tabs={tabs} active={tab} onChange={setTab}/>
 
       {/* OVERVIEW — Admin only */}
-      {tab==="overview"&&isAdmin&&(
+      {tab==="overview"&&(
         <div>
           {/* Vehicles Overview */}
           <Card style={{ borderTop:"4px solid #1A3A5C" }}>
@@ -192,11 +195,33 @@ export default function Fleet({ user, vehicles: masterVehicles, setVehicles: set
               <StatCard icon="🔧" label={t.inMaint} value={allVehicles.filter(v=>v.status==="Maintenance").length} color="#f59e0b" />
               <StatCard icon="⚠️" label={t.expired} value={allVehicles.filter(v=>v.fahas&&Math.ceil((new Date(v.fahas)-new Date())/(1000*60*60*24))<=30).length} color="#ef4444" />
             </div>
+            {/* Fuel efficiency drop alerts */}
+            {allVehicles.filter(v=>{
+              const kmpl = v.mileage||12;
+              const actual = v.totalKM&&v.fuelUsedTotal ? v.totalKM/v.fuelUsedTotal : null;
+              return actual && actual < kmpl*0.8;
+            }).map(v=>(
+              <div key={v.plate} style={{ background:"#fef3c7", border:"1px solid #fed7aa", borderRadius:7, padding:"7px 12px", marginTop:8, fontSize:13, color:"#92400e", fontWeight:600 }}>
+                ⚠️ {v.plate} — Fuel efficiency drop detected (KMPL below 80% of baseline)
+              </div>
+            ))}
           </Card>
+          {/* DC Filter tabs */}
+          {!dc&&(
+            <div style={{ display:"flex", gap:6, marginBottom:14, flexWrap:"wrap" }}>
+              {["all","Riyadh","Jeddah","Dammam"].map(d=>(
+                <button key={d} onClick={()=>setOverviewDC(d)}
+                  style={{ padding:"6px 14px", borderRadius:7, border:"none", fontSize:12, fontWeight:600, cursor:"pointer",
+                    background:overviewDC===d?"#1A3A5C":"#f1f5f9", color:overviewDC===d?"white":"#374151" }}>
+                  {d==="all"?"All DCs":d}
+                </button>
+              ))}
+            </div>
+          )}
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:16, marginBottom:16 }}>
-            <DCVehBox dcName="Riyadh"/>
-            <DCVehBox dcName="Jeddah"/>
-            <DCVehBox dcName="Dammam"/>
+            {(dc?[dc]:overviewDC==="all"?["Riyadh","Jeddah","Dammam"]:[overviewDC]).map(dcN=>(
+              <DCVehBox key={dcN} dcName={dcN}/>
+            ))}
           </div>
 
           {/* Drivers Overview */}
@@ -210,9 +235,9 @@ export default function Fleet({ user, vehicles: masterVehicles, setVehicles: set
             </div>
           </Card>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:16 }}>
-            <DCDrvBox dcName="Riyadh"/>
-            <DCDrvBox dcName="Jeddah"/>
-            <DCDrvBox dcName="Dammam"/>
+            {(dc?[dc]:overviewDC==="all"?["Riyadh","Jeddah","Dammam"]:[overviewDC]).map(dcN=>(
+              <DCDrvBox key={dcN} dcName={dcN}/>
+            ))}
           </div>
         </div>
       )}

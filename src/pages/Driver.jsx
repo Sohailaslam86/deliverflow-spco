@@ -4,10 +4,11 @@ import CameraCapture from "../components/CameraCapture.jsx";
 import { updateDoc, doc, addDoc, collection } from "firebase/firestore";
 import { db } from "../firebase";
 import { sendNotification } from "../notificationService.js";
+import { FAILED_REASONS } from "../data/masterData.js";
 
 const T = {
   en: {
-    pending:"Pending Deliveries", completed:"Completed Today", remaining:"Remaining",
+    pending:"Staged for Dispatch", completed:"Completed Today", remaining:"Remaining",
     inCity:"In-City", outCity:"Out-City", startDelivery:"Start Delivery",
     gpsStep:"Step 1: Get GPS Location (Required)",
     podStep:"Step 2: Take POD Photo (Required)",
@@ -26,8 +27,9 @@ const T = {
     histStatus:"Status", histDistance:"Distance (km)", histSuccess:"Success Rate",
     histType:"Type", noHistory:"No delivery history yet",
     tripStarted:"Trip started! Timer running.", tripEnded:"Trip ended.",
-    failReason:"Reason for Failed Delivery *", failReasonPlaceholder:"e.g. Customer not available, Wrong address...",
-    failReasonRequired:"Please enter reason for failed delivery",
+    failReason:"Reason for Failed Delivery *", failReasonPlaceholder:"Select reason...",
+    failReasonRequired:"Please select reason for failed delivery",
+    fuelInsufficient:"Cannot end trip — fuel insufficient. Please add fuel entry first.",
     halfDay:"Half Day recorded", fullDay:"Full Day recorded",
     kmCovered:"KM Covered", fuelDeducted:"Fuel Deducted",
     tripSaved:"Trip saved to records!",
@@ -39,7 +41,7 @@ const T = {
     kmMismatch:"Warning: GPS distance and odometer difference is more than 20%. Please verify.",
   },
   ar: {
-    pending:"تسليمات معلقة", completed:"مكتملة اليوم", remaining:"المتبقي",
+    pending:"مرحلة الإرسال", completed:"مكتملة اليوم", remaining:"المتبقي",
     inCity:"داخل المدينة", outCity:"خارج المدينة", startDelivery:"بدء التسليم",
     gpsStep:"الخطوة 1: تحديد الموقع (مطلوب)",
     podStep:"الخطوة 2: صورة إثبات التسليم (مطلوبة)",
@@ -58,8 +60,9 @@ const T = {
     histStatus:"الحالة", histDistance:"المسافة (كم)", histSuccess:"معدل النجاح",
     histType:"النوع", noHistory:"لا يوجد سجل تسليم",
     tripStarted:"بدأت الرحلة!", tripEnded:"انتهت الرحلة.",
-    failReason:"سبب فشل التسليم *", failReasonPlaceholder:"مثال: العميل غير متاح، عنوان خاطئ...",
-    failReasonRequired:"يرجى إدخال سبب فشل التسليم",
+    failReason:"سبب فشل التسليم *", failReasonPlaceholder:"اختر السبب...",
+    failReasonRequired:"يرجى اختيار سبب فشل التسليم",
+    fuelInsufficient:"لا يمكن إنهاء الرحلة — الوقود غير كافٍ. يرجى إضافة وقود أولاً.",
     halfDay:"تم تسجيل نصف يوم", fullDay:"تم تسجيل يوم كامل",
     kmCovered:"كم مقطوعة", fuelDeducted:"وقود مستهلك",
     tripSaved:"تم حفظ الرحلة في السجلات!",
@@ -242,6 +245,13 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
     const mileage = assignedVehicle?.mileage || 12;
     const fuelUsed = totalKM > 0 ? Math.round((totalKM / mileage) * 10) / 10 : 0;
 
+    // Fuel validation — agar fuel insufficient ho toh trip end nahi hogi
+    const currentFuel = assignedVehicle?.fuelLevel || 0;
+    if (fuelUsed > currentFuel) {
+      setOdometerWarning(t.fuelInsufficient);
+      return;
+    }
+
     const entry = {
       driverId: user.uid,
       driverName: user.name,
@@ -342,15 +352,27 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
       await sendNotification({
         toRole: "manager", toDC: inv.dc,
         type: "delivered",
-        title: "Invoice Delivered",
-        message: `Invoice ${inv.id} (${inv.customer}) has been successfully delivered by ${user.name}.`,
+        title: "Invoice Delivered ✅",
+        message: `Invoice ${inv.id} (${inv.customer}) successfully delivered by ${user.name}.`,
+      });
+      await sendNotification({
+        toRole: "logistic", toDC: inv.dc,
+        type: "delivered",
+        title: "Invoice Delivered ✅",
+        message: `Invoice ${inv.id} (${inv.customer}) delivered by ${user.name}.`,
       });
     } else if (status==="failed") {
       await sendNotification({
         toRole: "manager", toDC: inv.dc,
         type: "failed",
-        title: "Invoice Delivery Failed",
-        message: `Invoice ${inv.id} (${inv.customer}) delivery failed by ${user.name}. Reason: ${failReason}. Please re-assign.`,
+        title: "Invoice Delivery Failed ❌",
+        message: `Invoice ${inv.id} (${inv.customer}) failed by ${user.name}. Reason: ${failReason}. Please re-assign.`,
+      });
+      await sendNotification({
+        toRole: "logistic", toDC: inv.dc,
+        type: "failed",
+        title: "Invoice Delivery Failed ❌",
+        message: `Invoice ${inv.id} (${inv.customer}) failed. Reason: ${failReason}.`,
       });
     }
 
@@ -399,17 +421,18 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
               </div>
             )}
 
-            {/* Failed Reason */}
+            {/* Failed Reason — dropdown */}
             {showFailForm&&(
               <div style={{ marginBottom:16 }}>
                 <div style={{ fontWeight:700,fontSize:15,marginBottom:8,color:"#ef4444" }}>{t.failReason}</div>
-                <textarea
+                <select
                   value={failReason}
                   onChange={e=>setFailReason(e.target.value)}
-                  placeholder={t.failReasonPlaceholder}
-                  rows={3}
-                  style={{ width:"100%",border:"1.5px solid #fca5a5",borderRadius:8,padding:"10px 12px",fontSize:14,outline:"none",boxSizing:"border-box",resize:"vertical" }}
-                />
+                  style={{ width:"100%",border:"1.5px solid #fca5a5",borderRadius:8,padding:"11px 12px",fontSize:14,outline:"none",boxSizing:"border-box",background:"white" }}
+                >
+                  <option value="">{t.failReasonPlaceholder}</option>
+                  {FAILED_REASONS.map(r=><option key={r} value={r}>{r}</option>)}
+                </select>
               </div>
             )}
 
@@ -460,7 +483,7 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
       {/* Tabs */}
       <div style={{ display:"flex",gap:8,marginBottom:16,flexWrap:"wrap" }}>
         {[
-          ["deliveries","📦",`Pending (${pending.length})`],
+          ["deliveries","📦",`Staged for Dispatch (${pending.length})`],
           ["delivered","✅",`Delivered (${deliveredInv.length})`],
           ["failed","❌",`Failed (${failedInv.length})`],
           ["history","📊","Trip History"]

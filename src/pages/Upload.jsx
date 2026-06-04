@@ -13,7 +13,7 @@ const T = {
     postBtn:"POST — Make Invoices Live", history:"Upload & Posting History",
     noHistory:"No uploads yet", postedBy:"Posted by", uploadedBy:"Uploaded by",
     invoices:"invoices", warning:"Once POSTED, invoices will be live in all DC queues. Verify before posting.",
-    posted:"POSTED", draft:"DRAFT", deleteBtn:"Delete", confirmDel:"Are you sure you want to delete this batch?",
+    posted:"POSTED", draft:"DRAFT", pendingPosting:"PENDING POSTING", deleteBtn:"Delete", confirmDel:"Are you sure you want to delete this batch?",
     viewPDF:"View PDF", pdfNote:"CSV is automatically saved as a PDF record",
     adminOnly:"Admin only — Edit/Delete"
   },
@@ -24,7 +24,7 @@ const T = {
     postBtn:"ترحيل الفواتير", history:"سجل الرفع والترحيل",
     noHistory:"لا يوجد سجلات بعد", postedBy:"رحّل بواسطة", uploadedBy:"رفع بواسطة",
     invoices:"فواتير", warning:"بعد الترحيل ستظهر الفواتير في جميع طوابير المراكز. تحقق قبل الترحيل.",
-    posted:"مُرحَّل", draft:"مسودة", deleteBtn:"حذف", confirmDel:"هل أنت متأكد من حذف هذه الدفعة؟",
+    posted:"مُرحَّل", draft:"مسودة", pendingPosting:"في انتظار الترحيل", deleteBtn:"حذف", confirmDel:"هل أنت متأكد من حذف هذه الدفعة؟",
     viewPDF:"عرض PDF", pdfNote:"يتم حفظ CSV تلقائياً كسجل PDF",
     adminOnly:"للمسؤول فقط — تعديل/حذف",
     fillCols:"حمّل النموذج، املأ 5 أعمدة، ثم ارفعه أدناه.",
@@ -164,6 +164,7 @@ export default function Upload({ user, invoices, setInvoices, uploads, setUpload
         notes: "", createdAt: serverTimestamp()
       };
       await addDoc(collection(db, "uploads"), uploadData);
+      // Note: status "posted" = live. status "pending" = pending posting (not visible to other screens)
 
       // Notification — DC Managers ko batao kitni invoices upload huin
       const dcCounts = {};
@@ -290,6 +291,9 @@ export default function Upload({ user, invoices, setInvoices, uploads, setUpload
             </table>
           </div>
           <div style={{ background:"#fef3c7",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#92400e",margin:"12px 0" }}>⚠️ {t.warning}</div>
+          <div style={{ background:"#eff6ff",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#1e40af",marginBottom:12 }}>
+            ℹ️ Once POSTED, invoices go live in all DC queues. Uploaded but not posted invoices show as "PENDING POSTING" in history and are not visible on any other screen.
+          </div>
           <Btn onClick={postInvoices} color="#10b981" style={{ width:"100%",padding:12 }} disabled={loading}>
             {loading ? "Posting..." : `🚀 ${t.postBtn} (${pendingBatch.rows.length})`}
           </Btn>
@@ -306,8 +310,10 @@ export default function Upload({ user, invoices, setInvoices, uploads, setUpload
               <div style={{ fontSize:12,color:"#64748b" }}>{u.date} {u.time} — {t.uploadedBy}: {u.uploadedBy} — {u.invoiceCount} {t.invoices}</div>
               {u.postedAt&&<div style={{ fontSize:11,color:"#10b981" }}>{t.postedBy}: {u.postedBy} | {u.postedAt}</div>}
             </div>
-            <span style={{ fontSize:12,fontWeight:600,padding:"3px 10px",borderRadius:99,background:u.status==="posted"?"#d1fae5":"#fef3c7",color:u.status==="posted"?"#065f46":"#92400e" }}>
-              {u.status==="posted"?t.posted:t.draft}
+            <span style={{ fontSize:12,fontWeight:600,padding:"3px 10px",borderRadius:99,
+              background:u.status==="posted"?"#d1fae5":u.status==="pending"?"#fef3c7":"#f3e8ff",
+              color:u.status==="posted"?"#065f46":u.status==="pending"?"#92400e":"#6b21a8" }}>
+              {u.status==="posted"?t.posted:u.status==="pending"?t.pendingPosting:t.draft}
             </span>
             <Btn small onClick={()=>setViewPDF(u)} color="#6366f1">📄 {t.viewPDF}</Btn>
             {isAdmin&&<Btn small onClick={()=>deleteBatch(u.batchId)} color="#ef4444">🗑️ {t.deleteBtn}</Btn>}

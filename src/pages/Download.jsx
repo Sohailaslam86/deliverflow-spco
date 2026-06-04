@@ -38,6 +38,7 @@ export default function Download({ user, lang, invoices }) {
   // DC filter — always show all DCs for admin/planning, only own DC for others
   const userDC = (user.dc && user.dc !== "Head Office") ? user.dc : null;
   const [filter, setFilter] = useState(userDC || "all");
+  const [dcTab, setDcTab] = useState(userDC || "all");
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -140,10 +141,22 @@ export default function Download({ user, lang, invoices }) {
 
   return (
     <div style={{ direction:rtl?"rtl":"ltr" }}>
-      <div style={{ marginBottom:20 }}>
+      <div style={{ marginBottom:16 }}>
         <h2 style={{ fontSize:24,fontWeight:900,color:"#0f172a",margin:"0 0 4px" }}>{t.title}</h2>
         <p style={{ fontSize:15,color:"#64748b",margin:0 }}>{t.subtitle}</p>
       </div>
+      {/* DC Tabs */}
+      {(isAdmin||isPlanning||!userDC)&&(
+        <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
+          {["all","Riyadh","Jeddah","Dammam"].map(dc2=>(
+            <button key={dc2} onClick={()=>{setDcTab(dc2);setFilter(dc2);setSelected([]);}}
+              style={{ padding:"8px 16px", borderRadius:8, border:"none", fontSize:13, fontWeight:600, cursor:"pointer",
+                background:dcTab===dc2?"#1A3A5C":"#f1f5f9", color:dcTab===dc2?"white":"#374151" }}>
+              {dc2==="all"?t.allDCs:dc2}
+            </button>
+          ))}
+        </div>
+      )}
       <Card>
         {/* Search + DC Filter */}
         <div style={{ display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:12 }}>

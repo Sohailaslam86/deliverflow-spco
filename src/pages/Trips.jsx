@@ -92,7 +92,7 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
     toCity:"", driver:"", vehicle:"",
-    storage:"Ambient (15-25°C)", notes:"",
+    storage:"Ambient (15-25°C)", notes:"", tentativeDate:"",
     date: new Date().toISOString().split("T")[0]
   });
 
@@ -158,7 +158,7 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
   const selDriver = fsDrivers.find(d=>d.name===form.driver);
 
   async function createTrip() {
-    if (!form.toCity||!form.driver||!form.vehicle) return;
+    if (!form.toCity||!form.driver||!form.vehicle||!form.tentativeDate) { alert("Please fill all required fields including Tentative Completion Date"); return; }
     const dest = TRIP_DESTINATIONS?.find(d=>d.value===form.toCity);
     const newTrip = {
       tripNumber:tripNum,
@@ -170,6 +170,7 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
       vehicle:form.vehicle,
       storage:form.storage,
       notes:form.notes,
+      tentativeDate:form.tentativeDate||"",
       status:"dispatched",
       invoiceIds:selInv,
       createdBy:user.name,
@@ -196,7 +197,7 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
       setTrips(prev=>[...prev,newTrip]);
       setDone(t.tripCreated);
       setShowForm(false);
-      setForm({toCity:"",driver:"",vehicle:"",storage:"Ambient (15-25°C)",notes:"",date:new Date().toISOString().split("T")[0]});
+      setForm({toCity:"",driver:"",vehicle:"",storage:"Ambient (15-25°C)",notes:"",tentativeDate:"",date:new Date().toISOString().split("T")[0]});
       setSelInv([]);
     } catch(e) { setDone("❌ Error: "+e.message); }
   }
@@ -222,12 +223,12 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
         let invUpdate = {};
         if (inv.status==="intransit") {
           // Normal assigned invoice — pending
-          invUpdate = {status:"pending",tripId:null};
+          invUpdate = {status:"pending_trip",tripId:null};
         } else if (inv.status==="hold_ship") {
           // Transit invoice — DC change karo
           const destDC = trip.toCity?.startsWith("DC-") ? trip.toCity.replace("DC-","") : userDC;
           invUpdate = {
-            status:"pending",
+            status:"pending_trip",
             dc:destDC,
             city:destDC,
             holdType:null,
@@ -246,8 +247,8 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
       setInvoices(prev=>prev.map(i=>{
         if (!(trip.invoiceIds||[]).includes(i.id)&&!(trip.invoiceIds||[]).includes(i.firestoreId)) return i;
         const destDC = trip.toCity?.startsWith("DC-") ? trip.toCity.replace("DC-","") : userDC;
-        if (i.status==="intransit") return {...i,status:"pending",tripId:null};
-        if (i.status==="hold_ship") return {...i,status:"pending",dc:destDC,city:destDC,holdType:null,holdOrigin:null,originDC:null,holdReason:null,tripId:null};
+        if (i.status==="intransit") return {...i,status:"pending_trip",tripId:null};
+        if (i.status==="hold_ship") return {...i,status:"pending_trip",dc:destDC,city:destDC,holdType:null,holdOrigin:null,originDC:null,holdReason:null,tripId:null};
         return i;
       }));
 
@@ -370,6 +371,14 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
                 {/* Notes */}
                 <div style={{gridColumn:"1/-1",marginBottom:14}}>
                   <label style={{display:"block",fontSize:14,fontWeight:600,color:"#374151",marginBottom:6}}>📝 {t.notes}</label>
+                  <div style={{marginBottom:14}}>
+                    <label style={{display:"block",fontSize:14,fontWeight:600,color:"#374151",marginBottom:6}}>
+                      📅 Tentative Completion Date * <span style={{color:"#ef4444"}}>*</span>
+                    </label>
+                    <input type="date" value={form.tentativeDate} onChange={e=>setForm({...form,tentativeDate:e.target.value})}
+                      style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"11px 14px",fontSize:15,outline:"none",boxSizing:"border-box"}} />
+                    <div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>Required for SLA tracking</div>
+                  </div>
                   <textarea value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})} rows={2}
                     style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"11px 14px",fontSize:15,outline:"none",boxSizing:"border-box",resize:"vertical",fontFamily:"inherit"}}/>
                 </div>
@@ -471,7 +480,7 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
 
               <Btn onClick={createTrip} color="#10b981"
                 style={{width:"100%",padding:14,fontSize:15}}
-                disabled={!form.toCity||!form.driver||!form.vehicle}>
+                disabled={!form.toCity||!form.driver||!form.vehicle||!form.tentativeDate}>
                 🚀 {t.createBtn} {selInv.length>0?"("+selInv.length+" "+t.invoiceCount+")":""}
               </Btn>
             </Card>
