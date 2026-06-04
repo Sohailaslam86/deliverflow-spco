@@ -24,7 +24,6 @@ import {
   INITIAL_USER_REQUESTS, INITIAL_ALERTS, DEMO_USERS
 } from "./data/masterData.js";
 
-// Admin email hardcoded fallback
 const ADMIN_EMAIL = "sohail@spco.sa";
 
 export default function App() {
@@ -47,11 +46,9 @@ export default function App() {
         try {
           const docRef = doc(db, "users", firebaseUser.uid);
           const docSnap = await getDoc(docRef);
-
           if (docSnap.exists()) {
             setUser({ uid: firebaseUser.uid, email: firebaseUser.email, ...docSnap.data() });
           } else {
-            console.warn("No Firestore doc for:", firebaseUser.uid, firebaseUser.email);
             setUser({
               uid: firebaseUser.uid, email: firebaseUser.email,
               name: firebaseUser.email === ADMIN_EMAIL ? "Sohail Aslam" : firebaseUser.email,
@@ -61,7 +58,6 @@ export default function App() {
             });
           }
         } catch (e) {
-          console.error("Firestore error:", e.message);
           setUser({
             uid: firebaseUser.uid, email: firebaseUser.email,
             name: firebaseUser.email === ADMIN_EMAIL ? "Sohail Aslam" : firebaseUser.email,
@@ -78,7 +74,7 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // Firestore se sare users load karo
+  // Load all users from Firestore
   useEffect(() => {
     async function loadUsers() {
       try {
@@ -116,21 +112,71 @@ export default function App() {
     users, setUsers, requests, setRequests, alerts, setAlerts, setPage
   };
 
+  // Role-based page guard
+  function guardPage(role, allowedRoles, component, fallback = null) {
+    return allowedRoles.includes(role) ? component : (fallback || <div style={{ padding:40, textAlign:"center", color:"#94a3b8" }}>⛔ Access not permitted for your role.</div>);
+  }
+
   const pages = {
     dashboard:    <Dashboard  {...props} users={users} />,
-    invoices:     <Invoices   {...props} />,
-    upload:       <Upload     {...props} />,
-    assign:       <Assign     {...props} users={users} />,
-    trips:        <Trips      {...props} vehicles={vehicles} users={users} />,
-    users:        <Users      {...props} />,
-    masterdata:   <MasterData {...props} />,
-    fleet:        <Fleet      {...props} setUsers={setUsers} />,
-    fuel:         <Fuel       {...props} />,
-    reports:      <Reports    {...props} users={users} />,
-    mydeliveries: <Driver     {...props} />,
-    odometer:     <Odometer   {...props} />,
+
+    // Dispatch Management — admin, manager, planning view
+    assign:       guardPage(user.role,
+      ["admin","manager","planning"],
+      <Assign {...props} users={users} />
+    ),
+
+    upload:       guardPage(user.role,
+      ["admin","planning"],
+      <Upload {...props} />
+    ),
+
+    trips:        guardPage(user.role,
+      ["admin","manager"],
+      <Trips {...props} vehicles={vehicles} users={users} />
+    ),
+
+    users:        guardPage(user.role,
+      ["admin","manager","logistic","planning"],
+      <Users {...props} />
+    ),
+
+    masterdata:   guardPage(user.role,
+      ["admin","manager","driver"],
+      <MasterData {...props} />
+    ),
+
+    fleet:        guardPage(user.role,
+      ["admin","manager","logistic","management"],
+      <Fleet {...props} setUsers={setUsers} />
+    ),
+
+    fuel:         guardPage(user.role,
+      ["admin","manager","logistic","management"],
+      <Fuel {...props} />
+    ),
+
+    reports:      guardPage(user.role,
+      ["admin","manager","logistic","management"],
+      <Reports {...props} users={users} />
+    ),
+
+    mydeliveries: guardPage(user.role,
+      ["driver"],
+      <Driver {...props} />
+    ),
+
+    odometer:     guardPage(user.role,
+      ["driver"],
+      <Odometer {...props} />
+    ),
+
     search:       <Search     {...props} />,
-    download:     <Download   {...props} />,
+
+    download:     guardPage(user.role,
+      ["admin","manager","logistic","planning","viewonly","management"],
+      <Download {...props} />
+    ),
   };
 
   return (
@@ -143,7 +189,7 @@ export default function App() {
       onLogout={()=>{ signOut(auth); setUser(null); setPage("dashboard"); }}
       alerts={alerts}
     >
-      {pages[page]||pages.dashboard}
+      {pages[page] || pages.dashboard}
     </Shell>
   );
 }
