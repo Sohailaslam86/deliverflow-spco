@@ -173,8 +173,8 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
     ["cities","🌆",t.cities],
     ["departments","🏢",t.departments],
     ["holidays","🏖️",t.holidays],
-    ...(isAdmin||isManager||isLogistic||user.role==="driver"?[["driverleaves","👤",t.driverLeaves]]:[])
-    ...(isAdmin||isManager||isLogistic?[["vehicleoff","🚗",t.vehicleOff]]:[])
+    ...(isAdmin||isManager||isLogistic||user.role==="driver"?[["driverleaves","👤",t.driverLeaves]]:[]),
+    ...(isAdmin||isManager||isLogistic?[["vehicleoff","🚗",t.vehicleOff]]:[]),
     ...(isAdmin?[["allusers","👥",t.allUsers]]:[]),
   ];
 
