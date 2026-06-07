@@ -85,9 +85,16 @@ export default function Fleet({ user, vehicles: masterVehicles, setVehicles: set
   const isManagement = user.role==="management";
   const canManage = isAdmin||isManager||isLogistic;
 
-  const tabs = (isAdmin||isManagement)
-    ? [["overview","📊",t.overview],["vehicles","🚗",t.vehicles],["drivers","👤",t.drivers],["maintenance","🔧",t.maintenance]]
-    : [["overview","📊",t.overview],["vehicles","🚗",t.vehicles],["drivers","👤",t.drivers],["maintenance","🔧",t.maintenance]];
+  // Tab visibility by role:
+  // Admin / Manager — all 4 tabs (full fleet + driver HR management)
+  // Logistic / Management — Overview, Vehicles, Maintenance only (no driver HR)
+  const canSeeDriversTab = isAdmin || isManager;
+  const tabs = [
+    ["overview","📊",t.overview],
+    ["vehicles","🚗",t.vehicles],
+    ...(canSeeDriversTab ? [["drivers","👤",t.drivers]] : []),
+    ["maintenance","🔧",t.maintenance],
+  ];
 
   function flash(msg) { setDone(msg); setTimeout(()=>setDone(""),4000); }
 

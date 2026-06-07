@@ -1,10 +1,7 @@
-// src/pages/Driver.jsx
-// Updated: Additional Activity feature + Operational Hours auto-calc on trip end
-
 import { useState, useEffect, useRef } from "react";
 import { Card, CardTitle, Btn, SuccessMsg, Badge } from "../components/Shared.jsx";
 import CameraCapture from "../components/CameraCapture.jsx";
-import { updateDoc, doc, addDoc, collection, getDocs } from "firebase/firestore";
+import { updateDoc, doc, addDoc, collection } from "firebase/firestore";
 import { db } from "../firebase";
 import { sendNotification } from "../notificationService.js";
 import { useSettings } from "../context/SettingsContext.jsx";
@@ -42,13 +39,6 @@ const T = {
     odometerStep:"Step: Take Odometer Photo & Enter Reading",
     cancelEndTrip:"Cancel — Continue Trip",
     kmMismatch:"Warning: GPS distance and odometer difference is more than 20%. Please verify.",
-    addActivity:"+ Additional Activity",
-    activityPurpose:"Purpose *", activityDest:"Destination *", activityVehicle:"Vehicle *",
-    activityNotes:"Notes", activityOtherNotes:"Notes (Required for 'Other') *",
-    activitySubmit:"Submit for Approval",
-    activitySubmitted:"Activity request submitted!",
-    markComplete:"Mark Complete",
-    activityApproved:"Activity approved — start trip when ready.",
   },
   ar: {
     pending:"مرحلة الإرسال", completed:"مكتملة اليوم", remaining:"المتبقي",
@@ -82,18 +72,12 @@ const T = {
     odometerStep:"الخطوة: التقط صورة العداد وأدخل القراءة",
     cancelEndTrip:"إلغاء — متابعة الرحلة",
     kmMismatch:"تحذير: الفرق بين المسافة عبر GPS وقراءة العداد أكثر من 20%. يرجى التحقق.",
-    addActivity:"+ نشاط إضافي",
-    activityPurpose:"الغرض *", activityDest:"الوجهة *", activityVehicle:"المركبة *",
-    activityNotes:"ملاحظات", activityOtherNotes:"ملاحظات (مطلوبة لـ 'أخرى') *",
-    activitySubmit:"إرسال للموافقة",
-    activitySubmitted:"تم إرسال طلب النشاط!",
-    markComplete:"تم الإنجاز",
-    activityApproved:"تمت الموافقة على النشاط — ابدأ الرحلة عندما تكون مستعداً.",
   }
 };
 
+// Calculate distance between 2 GPS points (Haversine formula)
 function calcDistance(lat1, lng1, lat2, lng2) {
-  const R = 6371;
+  const R = 6371; // Earth radius in km
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLng = (lng2 - lng1) * Math.PI / 180;
   const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -103,8 +87,6 @@ function calcDistance(lat1, lng1, lat2, lng2) {
 }
 
 export default function Driver({ user, invoices, setInvoices, vehicles, lang }) {
-  const { failedReasons, activityPurposes } = useSettings();
-
   const [active, setActive] = useState(null);
   const [completed, setCompleted] = useState([]);
   const [gps, setGps] = useState(null);
@@ -114,7 +96,7 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
   const [failReason, setFailReason] = useState("");
   const [showFailForm, setShowFailForm] = useState(false);
 
-  // Odometer state
+  // Odometer state — shown before trip end
   const [showOdometerForm, setShowOdometerForm] = useState(false);
   const [odometerPhoto, setOdometerPhoto] = useState("");
   const [odometerReading, setOdometerReading] = useState("");
@@ -131,24 +113,6 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
   const timerRef = useRef(null);
   const gpsWatchRef = useRef(null);
 
-  // Additional Activity state
-  const [showActivityForm, setShowActivityForm] = useState(false);
-  const [activityForm, setActivityForm] = useState({ purpose:"", destination:"", vehiclePlate:"", notes:"" });
-  const [activitySubmitting, setActivitySubmitting] = useState(false);
-  const [pendingActivities, setPendingActivities] = useState([]);
-  const [approvedActivities, setApprovedActivities] = useState([]);
-  const [activeActivity, setActiveActivity] = useState(null); // currently executing activity
-  const [activityTripStarted, setActivityTripStarted] = useState(false);
-  const [activityTripStartTime, setActivityTripStartTime] = useState(null);
-  const [showActivityOdometer, setShowActivityOdometer] = useState(false);
-  const [activityOdometerPhoto, setActivityOdometerPhoto] = useState("");
-  const [activityOdometerReading, setActivityOdometerReading] = useState("");
-  const [activityElapsed, setActivityElapsed] = useState(0);
-  const [activityKM, setActivityKM] = useState(0);
-  const activityTimerRef = useRef(null);
-
-  const [dcVehicles, setDcVehicles] = useState([]);
-
   const [history, setHistory] = useState(() => {
     try { return JSON.parse(localStorage.getItem("driver_history_"+user.uid)||"[]"); } catch { return []; }
   });
@@ -156,8 +120,9 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
   const rtl = lang==="ar";
   const t = T[lang]||T.en;
 
+  const { failedReasons } = useSettings();
   const allMyInv = invoices.filter(i=>i.driverId===user.uid);
-  const myInv = allMyInv.filter(i=>i.status==="assigned");
+  const myInv = allMyInv.filter(i=>i.status==="assigned"); // pending delivery
   const deliveredInv = allMyInv.filter(i=>i.status==="delivered");
   const failedInv = allMyInv.filter(i=>i.status==="failed");
   const pending = myInv.filter(i=>!completed.includes(i.id));
@@ -175,32 +140,7 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
     if (assignedVehicle.fahas&&Math.ceil((new Date(assignedVehicle.fahas)-new Date())/(1000*60*60*24))<=30) vAlerts.push({type:"warning",msg:"Fahas "+t.expirySoon});
   }
 
-  // Load DC vehicles for activity form
-  useEffect(() => {
-    async function loadVehicles() {
-      try {
-        const snap = await getDocs(collection(db, "vehicles"));
-        const all = snap.docs.map(d=>({firestoreId:d.id,...d.data()}));
-        setDcVehicles(all.filter(v=>v.dc===user.dc&&v.status==="Active"));
-      } catch(e) {}
-    }
-    loadVehicles();
-  }, [user.dc]);
-
-  // Load pending/approved activities for this driver
-  useEffect(() => {
-    async function loadActivities() {
-      try {
-        const snap = await getDocs(collection(db, "additionalActivities"));
-        const all = snap.docs.map(d=>({id:d.id,...d.data()})).filter(a=>a.driverId===user.uid);
-        setPendingActivities(all.filter(a=>a.status==="pending_approval"));
-        setApprovedActivities(all.filter(a=>a.status==="approved"&&!a.completed));
-      } catch(e) {}
-    }
-    loadActivities();
-  }, [user.uid]);
-
-  // Delivery trip timer
+  // Timer
   useEffect(() => {
     if (tripStarted) {
       timerRef.current = setInterval(() => setElapsed(prev=>prev+1), 1000);
@@ -210,17 +150,7 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
     return () => clearInterval(timerRef.current);
   }, [tripStarted]);
 
-  // Activity trip timer
-  useEffect(() => {
-    if (activityTripStarted) {
-      activityTimerRef.current = setInterval(() => setActivityElapsed(prev=>prev+1), 1000);
-    } else {
-      clearInterval(activityTimerRef.current);
-    }
-    return () => clearInterval(activityTimerRef.current);
-  }, [activityTripStarted]);
-
-  // GPS watch during delivery trip
+  // GPS watch during trip — real distance tracking
   useEffect(() => {
     if (tripStarted && navigator.geolocation) {
       gpsWatchRef.current = navigator.geolocation.watchPosition(
@@ -229,7 +159,9 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
           setLastGPS(prev => {
             if (prev) {
               const km = calcDistance(prev.lat, prev.lng, newGPS.lat, newGPS.lng);
-              if (km > 0.01) { setTotalKM(d => Math.round((d + km) * 10) / 10); }
+              if (km > 0.01) { // ignore tiny movements
+                setTotalKM(d => Math.round((d + km) * 10) / 10);
+              }
             }
             return newGPS;
           });
@@ -251,9 +183,14 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
   }
 
   function startTrip() {
+    // Get start GPS
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        p => { const sg={lat:p.coords.latitude,lng:p.coords.longitude}; setTripStartGPS(sg); setLastGPS(sg); },
+        p => {
+          const startGPS = { lat: p.coords.latitude, lng: p.coords.longitude };
+          setTripStartGPS(startGPS);
+          setLastGPS(startGPS);
+        },
         () => {}
       );
     }
@@ -262,27 +199,24 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
     setElapsed(0);
     setTotalKM(0);
     setDone(t.tripStarted);
+    setTimeout(()=>setDone(""),3000);
   }
 
+  // Step 1: Show odometer form when End Trip clicked
   function handleEndTripClick() {
     if (!tripStarted) return;
     setShowOdometerForm(true);
     setOdometerWarning("");
   }
 
-  // Auto-calculate operationalHours = (endTime - startTime) in hours
-  function calcOperationalHours(startTime, endTime) {
-    if (!startTime || !endTime) return 0;
-    const diff = (endTime - startTime) / (1000 * 60 * 60); // hours
-    return Math.round(diff * 100) / 100;
-  }
-
+  // Step 2: Validate odometer and end trip
   async function endTrip() {
     if (!odometerPhoto) { setOdometerWarning(t.odometerRequired); return; }
     if (!odometerReading || isNaN(Number(odometerReading)) || Number(odometerReading) <= 0) {
       setOdometerWarning(t.odometerRequired); return;
     }
 
+    // KM mismatch warning (GPS vs Odometer)
     const odomKM = Number(odometerReading);
     const prevKM = assignedVehicle?.totalKM || 0;
     const odomTripKM = odomKM - prevKM;
@@ -312,14 +246,12 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
     const mileage = assignedVehicle?.mileage || 12;
     const fuelUsed = totalKM > 0 ? Math.round((totalKM / mileage) * 10) / 10 : 0;
 
+    // Fuel validation — agar fuel insufficient ho toh trip end nahi hogi
     const currentFuel = assignedVehicle?.fuelLevel || 0;
     if (fuelUsed > currentFuel) {
       setOdometerWarning(t.fuelInsufficient);
       return;
     }
-
-    // Operational Hours — auto-calculated
-    const operationalHours = calcOperationalHours(tripStartTime, endTime);
 
     const entry = {
       driverId: user.uid,
@@ -340,14 +272,13 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
       outCity: myInv.filter(i=>i.dtype==="outcity").length,
       duration: formatTime(elapsed),
       isHalfDay, isMultiDay, daysActive,
-      operationalHours,  // TASK 4B — auto-calculated
-      type: "invoice_delivery",
       createdAt: new Date().toISOString()
     };
 
     try { await addDoc(collection(db, "tripLogs"), entry); }
     catch(e) { console.error("TripLog save error:", e); }
 
+    // Update vehicle — totalKM from odometer reading + fuelLevel
     if (assignedVehicle?.firestoreId) {
       try {
         const newFuel = Math.max(0, (assignedVehicle.fuelLevel||0) - fuelUsed);
@@ -359,6 +290,7 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
       } catch(e) { console.error("Vehicle update error:", e); }
     }
 
+    // Save to local history
     const histEntry = {
       date: startDate, vehicle: assignedVehiclePlate||"-",
       invoices: totalInv, delivered: doneList.length,
@@ -369,18 +301,19 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
       duration: formatTime(elapsed),
       startTime: tripStartTime?.toLocaleTimeString()||"-",
       endTime: endTime.toLocaleTimeString(),
-      fuelUsed, isHalfDay, daysActive, operationalHours
+      fuelUsed, isHalfDay, daysActive
     };
     const newHistory = [histEntry,...history].slice(0,30);
     setHistory(newHistory);
     try { localStorage.setItem("driver_history_"+user.uid, JSON.stringify(newHistory)); } catch{}
 
+    // Reset odometer state
     setOdometerPhoto("");
     setOdometerReading("");
     setOdometerWarning("");
 
     const dayMsg = isHalfDay ? t.halfDay : t.fullDay;
-    setDone(`🏁 ${t.tripEnded} ${totalKM} ${t.kmCovered} | ⛽ ${fuelUsed}L ${t.fuelDeducted} | ${dayMsg} | ⏱️ ${operationalHours}h Operational`);
+    setDone(`🏁 ${t.tripEnded} ${totalKM} ${t.kmCovered} | ⛽ ${fuelUsed}L ${t.fuelDeducted} | ${dayMsg}`);
     setTimeout(()=>setDone(""),6000);
   }
 
@@ -400,7 +333,9 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
     if (status==="failed" && !failReason.trim()) { alert(t.failReasonRequired); return; }
 
     const updateData = {
-      status, podImage: pod || null, gps: gps || null,
+      status,
+      podImage: pod || null,
+      gps: gps || null,
       deliveredAt: new Date().toLocaleString(),
       attempts: (inv.attempts||0)+1,
       failReason: status==="failed" ? failReason : null,
@@ -413,128 +348,38 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
     setInvoices(prev=>prev.map(i=>i.id===inv.id?{...i,...updateData}:i));
     setCompleted(p=>[...p,inv.id]);
 
+    // Notification to DC Manager
     if (status==="delivered") {
-      await sendNotification({ toRole:"manager", toDC:inv.dc, type:"delivered", title:"Invoice Delivered ✅", message:`Invoice ${inv.id} (${inv.customer}) successfully delivered by ${user.name}.` });
-      await sendNotification({ toRole:"logistic", toDC:inv.dc, type:"delivered", title:"Invoice Delivered ✅", message:`Invoice ${inv.id} (${inv.customer}) delivered by ${user.name}.` });
+      await sendNotification({
+        toRole: "manager", toDC: inv.dc,
+        type: "delivered",
+        title: "Invoice Delivered ✅",
+        message: `Invoice ${inv.id} (${inv.customer}) successfully delivered by ${user.name}.`,
+      });
+      await sendNotification({
+        toRole: "logistic", toDC: inv.dc,
+        type: "delivered",
+        title: "Invoice Delivered ✅",
+        message: `Invoice ${inv.id} (${inv.customer}) delivered by ${user.name}.`,
+      });
     } else if (status==="failed") {
-      await sendNotification({ toRole:"manager", toDC:inv.dc, type:"failed", title:"Invoice Delivery Failed ❌", message:`Invoice ${inv.id} (${inv.customer}) failed by ${user.name}. Reason: ${failReason}.` });
-      await sendNotification({ toRole:"logistic", toDC:inv.dc, type:"failed", title:"Invoice Delivery Failed ❌", message:`Invoice ${inv.id} (${inv.customer}) failed. Reason: ${failReason}.` });
+      await sendNotification({
+        toRole: "manager", toDC: inv.dc,
+        type: "failed",
+        title: "Invoice Delivery Failed ❌",
+        message: `Invoice ${inv.id} (${inv.customer}) failed by ${user.name}. Reason: ${failReason}. Please re-assign.`,
+      });
+      await sendNotification({
+        toRole: "logistic", toDC: inv.dc,
+        type: "failed",
+        title: "Invoice Delivery Failed ❌",
+        message: `Invoice ${inv.id} (${inv.customer}) failed. Reason: ${failReason}.`,
+      });
     }
 
     setDone(status==="delivered"?"✅ "+inv.id+" delivered!":"❌ "+inv.id+" failed — "+failReason);
     setActive(null); setPod(null); setGps(null); setFailReason(""); setShowFailForm(false);
     setTimeout(()=>setDone(""),3000);
-  }
-
-  // ── ADDITIONAL ACTIVITY FUNCTIONS ──────────────────────────────────────────
-  async function submitActivity() {
-    const { purpose, destination, vehiclePlate, notes } = activityForm;
-    if (!purpose || !destination || !vehiclePlate) { setDone("❌ Purpose, Destination, and Vehicle are required"); return; }
-    if (purpose==="Other (specify in notes)" && !notes.trim()) { setDone("❌ Notes are required when Purpose is 'Other'"); return; }
-    setActivitySubmitting(true);
-    try {
-      const data = {
-        driverId: user.uid,
-        driverName: user.name,
-        dc: user.dc,
-        purpose, destination, vehiclePlate, notes,
-        status: "pending_approval",
-        submittedAt: new Date().toISOString()
-      };
-      const docRef = await addDoc(collection(db, "additionalActivities"), data);
-      setPendingActivities(prev=>[...prev, { id:docRef.id, ...data }]);
-      await sendNotification({ toRole:"manager", toDC:user.dc, type:"activity_request", title:"Additional Activity Request", message:`${user.name} submitted an additional activity: ${purpose} to ${destination}.` });
-      await sendNotification({ toRole:"logistic", toDC:user.dc, type:"activity_request", title:"Additional Activity Request", message:`${user.name}: ${purpose} → ${destination}. Awaiting approval.` });
-      setDone(t.activitySubmitted);
-      setActivityForm({ purpose:"", destination:"", vehiclePlate:"", notes:"" });
-      setShowActivityForm(false);
-    } catch(e) { setDone("❌ "+e.message); }
-    setActivitySubmitting(false);
-  }
-
-  function startActivityTrip(activity) {
-    setActiveActivity(activity);
-    setActivityTripStarted(true);
-    setActivityTripStartTime(new Date());
-    setActivityElapsed(0);
-    setActivityKM(0);
-    setDone(t.tripStarted);
-  }
-
-  function handleActivityEndClick() {
-    if (!activityTripStarted) return;
-    setShowActivityOdometer(true);
-  }
-
-  async function endActivityTrip() {
-    if (!activityOdometerPhoto || !activityOdometerReading || isNaN(Number(activityOdometerReading))) {
-      setDone("❌ Odometer photo and reading are required");
-      return;
-    }
-    setShowActivityOdometer(false);
-    setActivityTripStarted(false);
-
-    const endTime = new Date();
-    const startDate = activityTripStartTime ? activityTripStartTime.toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
-    const operationalHours = calcOperationalHours(activityTripStartTime, endTime);
-    const mileage = vehicles?.find(v=>v.plate===activeActivity.vehiclePlate)?.mileage || 12;
-    const odomKM = Number(activityOdometerReading);
-    const fuelUsed = activityKM > 0 ? Math.round((activityKM / mileage) * 10) / 10 : 0;
-    const isHalfDay = endTime.getHours() < 12;
-    const daysActive = isHalfDay ? 0.5 : 1.0;
-
-    const tripLogEntry = {
-      driverId: user.uid,
-      driverName: user.name,
-      dc: user.dc,
-      vehiclePlate: activeActivity.vehiclePlate,
-      type: "additional_activity",
-      purpose: activeActivity.purpose,
-      destination: activeActivity.destination,
-      approvedBy: activeActivity.approvedBy || "Manager",
-      startDate, endDate: endTime.toISOString().split("T")[0],
-      startTime: activityTripStartTime?.toLocaleTimeString() || "-",
-      endTime: endTime.toLocaleTimeString(),
-      operationalHours,
-      totalKM: odomKM,
-      fuelUsed,
-      odometerReading: odomKM,
-      odometerPhotoUrl: activityOdometerPhoto,
-      isHalfDay, daysActive,
-      invoices: 0, delivered: 0, failed: 0, successRate: 0,
-      notes: activeActivity.notes,
-      createdAt: new Date().toISOString()
-    };
-
-    try { await addDoc(collection(db, "tripLogs"), tripLogEntry); } catch(e) { console.error(e); }
-
-    // Mark activity as completed
-    try {
-      await updateDoc(doc(db, "additionalActivities", activeActivity.id), { completed: true, completedAt: new Date().toISOString() });
-      setApprovedActivities(prev=>prev.filter(a=>a.id!==activeActivity.id));
-    } catch(e) { console.error(e); }
-
-    // Save to local history
-    const histEntry = {
-      date: startDate, vehicle: activeActivity.vehiclePlate,
-      type: "Additional Activity", purpose: activeActivity.purpose,
-      destination: activeActivity.destination,
-      invoices: 0, delivered: 0, distance: activityKM,
-      odometerReading: odomKM, successRate: 0,
-      duration: formatTime(activityElapsed),
-      startTime: activityTripStartTime?.toLocaleTimeString()||"-",
-      endTime: endTime.toLocaleTimeString(),
-      fuelUsed, operationalHours, isHalfDay, daysActive
-    };
-    const newHistory = [histEntry,...history].slice(0,30);
-    setHistory(newHistory);
-    try { localStorage.setItem("driver_history_"+user.uid, JSON.stringify(newHistory)); } catch{}
-
-    setActiveActivity(null);
-    setActivityOdometerPhoto("");
-    setActivityOdometerReading("");
-    setDone(`🏁 Activity completed! ⏱️ ${operationalHours}h Operational | ⛽ ${fuelUsed}L`);
-    setTimeout(()=>setDone(""),5000);
   }
 
   function InvCard({ inv }) {
@@ -552,6 +397,8 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
 
         {active?.id===inv.id?(
           <div style={{ marginTop:14,border:"1px solid #e2e8f0",borderRadius:10,padding:16,background:"#f8fafc" }}>
+
+            {/* Step 1 — GPS */}
             <div style={{ marginBottom:16 }}>
               <div style={{ fontWeight:700,fontSize:15,marginBottom:8,color:"#1A3A5C" }}>{t.gpsStep}</div>
               <button onClick={getGPS} disabled={locating}
@@ -559,32 +406,59 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
                 {locating?t.gettingGPS:gps?"✅ GPS: "+gps.lat.toFixed(4)+", "+gps.lng.toFixed(4):"📍 "+t.getGPS}
               </button>
             </div>
+
+            {/* Step 2 — POD Photo */}
             {!showFailForm&&(
               <div style={{ marginBottom:16 }}>
                 <div style={{ fontWeight:700,fontSize:15,marginBottom:8,color:"#1A3A5C" }}>{t.podStep}</div>
-                <CameraCapture label="" value={pod||""} onChange={url=>setPod(url)} folder="pod" lang={lang} required />
+                <CameraCapture
+                  label=""
+                  value={pod||""}
+                  onChange={url=>setPod(url)}
+                  folder="pod"
+                  lang={lang}
+                  required
+                />
               </div>
             )}
+
+            {/* Failed Reason — dropdown */}
             {showFailForm&&(
               <div style={{ marginBottom:16 }}>
                 <div style={{ fontWeight:700,fontSize:15,marginBottom:8,color:"#ef4444" }}>{t.failReason}</div>
-                <select value={failReason} onChange={e=>setFailReason(e.target.value)}
-                  style={{ width:"100%",border:"1.5px solid #fca5a5",borderRadius:8,padding:"11px 12px",fontSize:14,outline:"none",boxSizing:"border-box",background:"white" }}>
+                <select
+                  value={failReason}
+                  onChange={e=>setFailReason(e.target.value)}
+                  style={{ width:"100%",border:"1.5px solid #fca5a5",borderRadius:8,padding:"11px 12px",fontSize:14,outline:"none",boxSizing:"border-box",background:"white" }}
+                >
                   <option value="">{t.failReasonPlaceholder}</option>
-                  {failedReasons.map(r=><option key={r} value={r}>{r}</option>)}
+                  {(failedReasons.length ? failedReasons : ["Customer Absent","Address Not Found","Refused Delivery","Damaged Goods","Wrong Item","Rescheduled by Customer","Other"]).map(r=><option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
             )}
+
             <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
               {!showFailForm?(
                 <>
-                  <button onClick={()=>submit(inv,"delivered")} style={{ flex:1,background:"#10b981",color:"white",border:"none",padding:"12px 0",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:14 }}>✅ {t.markDelivered}</button>
-                  <button onClick={()=>setShowFailForm(true)} style={{ flex:1,background:"#ef4444",color:"white",border:"none",padding:"12px 0",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:14 }}>❌ {t.markFailed}</button>
+                  <button onClick={()=>submit(inv,"delivered")}
+                    style={{ flex:1,background:"#10b981",color:"white",border:"none",padding:"12px 0",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:14 }}>
+                    ✅ {t.markDelivered}
+                  </button>
+                  <button onClick={()=>setShowFailForm(true)}
+                    style={{ flex:1,background:"#ef4444",color:"white",border:"none",padding:"12px 0",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:14 }}>
+                    ❌ {t.markFailed}
+                  </button>
                 </>
               ):(
                 <>
-                  <button onClick={()=>submit(inv,"failed")} style={{ flex:1,background:"#ef4444",color:"white",border:"none",padding:"12px 0",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:14 }}>❌ {t.markFailed}</button>
-                  <button onClick={()=>setShowFailForm(false)} style={{ background:"#f1f5f9",border:"none",padding:"12px 16px",borderRadius:8,fontWeight:600,cursor:"pointer",fontSize:14,color:"#64748b" }}>← Back</button>
+                  <button onClick={()=>submit(inv,"failed")}
+                    style={{ flex:1,background:"#ef4444",color:"white",border:"none",padding:"12px 0",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:14 }}>
+                    ❌ {t.markFailed}
+                  </button>
+                  <button onClick={()=>setShowFailForm(false)}
+                    style={{ background:"#f1f5f9",border:"none",padding:"12px 16px",borderRadius:8,fontWeight:600,cursor:"pointer",fontSize:14,color:"#64748b" }}>
+                    ← Back
+                  </button>
                 </>
               )}
               <button onClick={()=>{setActive(null);setPod(null);setGps(null);setFailReason("");setShowFailForm(false);}}
@@ -607,10 +481,10 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
     <div style={{ direction:rtl?"rtl":"ltr" }}>
       {done&&<SuccessMsg msg={done} />}
 
-      {/* TABS */}
+      {/* Tabs */}
       <div style={{ display:"flex",gap:8,marginBottom:16,flexWrap:"wrap" }}>
         {[
-          ["deliveries","📦",`Staged for Dispatch (${pending.length + approvedActivities.length})`],
+          ["deliveries","📦",`Staged for Dispatch (${pending.length})`],
           ["delivered","✅",`Delivered (${deliveredInv.length})`],
           ["failed","❌",`Failed (${failedInv.length})`],
           ["history","📊","Trip History"]
@@ -648,142 +522,58 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
             </div>
           </Card>
 
-          {/* Additional Activity Button */}
-          <div style={{ marginBottom:12 }}>
-            <Btn onClick={()=>setShowActivityForm(!showActivityForm)} color="#7c3aed" small>
-              {t.addActivity}
-            </Btn>
-          </div>
+          {/* ODOMETER FORM MODAL — shown when End Trip clicked */}
+          {showOdometerForm&&(
+            <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+              <div style={{ background:"white", borderRadius:16, padding:24, width:"100%", maxWidth:420, boxShadow:"0 20px 60px rgba(0,0,0,0.3)" }}>
+                <div style={{ fontWeight:800, fontSize:17, color:"#1A3A5C", marginBottom:4 }}>🏁 {t.endTrip}</div>
+                <div style={{ fontSize:13, color:"#64748b", marginBottom:16 }}>{t.odometerStep}</div>
 
-          {/* Additional Activity Form */}
-          {showActivityForm&&(
-            <Card style={{ borderLeft:"4px solid #7c3aed", marginBottom:16 }}>
-              <CardTitle>🗂️ Additional Activity Request</CardTitle>
-              <div style={{ marginBottom:12 }}>
-                <label style={{ fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5 }}>{t.activityPurpose}</label>
-                <select value={activityForm.purpose} onChange={e=>setActivityForm({...activityForm,purpose:e.target.value})}
-                  style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box" }}>
-                  <option value="">Select purpose...</option>
-                  {activityPurposes.map(p=><option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-              <div style={{ marginBottom:12 }}>
-                <label style={{ fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5 }}>{t.activityDest}</label>
-                <input value={activityForm.destination} onChange={e=>setActivityForm({...activityForm,destination:e.target.value})}
-                  placeholder="Enter destination address / location"
-                  style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box" }} />
-              </div>
-              <div style={{ marginBottom:12 }}>
-                <label style={{ fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5 }}>{t.activityVehicle}</label>
-                <select value={activityForm.vehiclePlate} onChange={e=>setActivityForm({...activityForm,vehiclePlate:e.target.value})}
-                  style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box" }}>
-                  <option value="">Select vehicle...</option>
-                  {dcVehicles.map(v=><option key={v.plate} value={v.plate}>{v.plate} — {v.type}</option>)}
-                </select>
-              </div>
-              <div style={{ marginBottom:12 }}>
-                <label style={{ fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5 }}>
-                  {activityForm.purpose==="Other (specify in notes)" ? t.activityOtherNotes : t.activityNotes}
-                </label>
-                <textarea value={activityForm.notes} onChange={e=>setActivityForm({...activityForm,notes:e.target.value})}
-                  rows={2} placeholder="Notes..."
-                  style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box",resize:"vertical",fontFamily:"inherit" }} />
-              </div>
-              <div style={{ display:"flex",gap:8 }}>
-                <Btn onClick={submitActivity} color="#7c3aed" style={{ flex:1 }} disabled={activitySubmitting}>
-                  {activitySubmitting?"Submitting...":"📤 "+t.activitySubmit}
-                </Btn>
-                <Btn onClick={()=>setShowActivityForm(false)} color="#64748b">{t.cancel}</Btn>
-              </div>
-            </Card>
-          )}
-
-          {/* Pending activities (awaiting approval) */}
-          {pendingActivities.length>0&&(
-            <Card style={{ borderLeft:"4px solid #f59e0b", marginBottom:12 }}>
-              <CardTitle>⏳ Pending Activity Approval ({pendingActivities.length})</CardTitle>
-              {pendingActivities.map(a=>(
-                <div key={a.id} style={{ padding:"10px 0",borderBottom:"1px solid #f1f5f9",fontSize:14 }}>
-                  <div style={{ fontWeight:700 }}>🗂️ {a.purpose}</div>
-                  <div style={{ color:"#64748b",fontSize:13 }}>📍 {a.destination} | 🚗 {a.vehiclePlate}</div>
-                  {a.notes&&<div style={{ color:"#94a3b8",fontSize:12 }}>📝 {a.notes}</div>}
-                  <span style={{ fontSize:12,fontWeight:600,padding:"2px 8px",borderRadius:6,background:"#fef3c7",color:"#92400e" }}>⏳ Awaiting Approval</span>
+                {/* Odometer Photo */}
+                <div style={{ marginBottom:16 }}>
+                  <div style={{ fontWeight:700, fontSize:14, color:"#1A3A5C", marginBottom:8 }}>{t.odometerPhoto}</div>
+                  <CameraCapture
+                    label=""
+                    value={odometerPhoto}
+                    onChange={url=>setOdometerPhoto(url)}
+                    folder="odometer"
+                    lang={lang}
+                    required
+                  />
                 </div>
-              ))}
-            </Card>
-          )}
 
-          {/* Approved activities — can start */}
-          {approvedActivities.length>0&&(
-            <Card style={{ borderLeft:"4px solid #7c3aed", marginBottom:12 }}>
-              <CardTitle>✅ Approved Activities ({approvedActivities.length})</CardTitle>
-              {approvedActivities.map(a=>(
-                <div key={a.id} style={{ padding:"12px 0",borderBottom:"1px solid #f1f5f9" }}>
-                  <div style={{ fontWeight:700,fontSize:14 }}>🗂️ {a.purpose}</div>
-                  <div style={{ color:"#64748b",fontSize:13 }}>📍 {a.destination} | 🚗 {a.vehiclePlate}</div>
-                  {a.approvedBy&&<div style={{ fontSize:12,color:"#10b981" }}>✅ Approved by: {a.approvedBy}</div>}
-                  {activeActivity?.id===a.id?(
-                    <div style={{ marginTop:10 }}>
-                      <div style={{ fontSize:24,fontWeight:900,color:"#7c3aed",fontFamily:"monospace",marginBottom:6 }}>{formatTime(activityElapsed)}</div>
-                      <Btn onClick={handleActivityEndClick} color="#ef4444" small>🏁 End Activity Trip</Btn>
+                {/* Manual KM Reading */}
+                <div style={{ marginBottom:16 }}>
+                  <label style={{ fontWeight:700, fontSize:14, color:"#1A3A5C", display:"block", marginBottom:6 }}>{t.odometerReading}</label>
+                  <input
+                    type="number"
+                    value={odometerReading}
+                    onChange={e=>setOdometerReading(e.target.value)}
+                    placeholder={t.odometerPlaceholder}
+                    style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"11px 14px", fontSize:16, outline:"none", boxSizing:"border-box" }}
+                  />
+                  {totalKM > 0 && (
+                    <div style={{ fontSize:12, color:"#64748b", marginTop:4 }}>
+                      GPS measured distance this trip: {totalKM} km
                     </div>
-                  ):(
-                    <Btn onClick={()=>startActivityTrip(a)} color="#7c3aed" small style={{ marginTop:8 }}>🚀 Start Trip</Btn>
                   )}
                 </div>
-              ))}
-            </Card>
-          )}
 
-          {/* Activity trip odometer modal */}
-          {showActivityOdometer&&(
-            <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }}>
-              <div style={{ background:"white",borderRadius:16,padding:24,width:"100%",maxWidth:420,boxShadow:"0 20px 60px rgba(0,0,0,0.3)" }}>
-                <div style={{ fontWeight:800,fontSize:17,color:"#7c3aed",marginBottom:4 }}>🏁 End Activity Trip</div>
-                <div style={{ fontSize:13,color:"#64748b",marginBottom:16 }}>Take odometer photo and enter reading to complete</div>
-                <div style={{ marginBottom:16 }}>
-                  <div style={{ fontWeight:700,fontSize:14,color:"#1A3A5C",marginBottom:8 }}>{t.odometerPhoto}</div>
-                  <CameraCapture label="" value={activityOdometerPhoto} onChange={url=>setActivityOdometerPhoto(url)} folder="odometer" lang={lang} required />
-                </div>
-                <div style={{ marginBottom:16 }}>
-                  <label style={{ fontWeight:700,fontSize:14,color:"#1A3A5C",display:"block",marginBottom:6 }}>{t.odometerReading}</label>
-                  <input type="number" value={activityOdometerReading} onChange={e=>setActivityOdometerReading(e.target.value)}
-                    placeholder={t.odometerPlaceholder}
-                    style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"11px 14px",fontSize:16,outline:"none",boxSizing:"border-box" }} />
-                </div>
-                <div style={{ display:"flex",gap:8 }}>
-                  <Btn onClick={endActivityTrip} color="#7c3aed" style={{ flex:1,padding:12 }}>🏁 {t.markComplete}</Btn>
-                  <Btn onClick={()=>setShowActivityOdometer(false)} color="#64748b">{t.cancel}</Btn>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ODOMETER FORM MODAL — delivery trip */}
-          {showOdometerForm&&(
-            <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }}>
-              <div style={{ background:"white",borderRadius:16,padding:24,width:"100%",maxWidth:420,boxShadow:"0 20px 60px rgba(0,0,0,0.3)" }}>
-                <div style={{ fontWeight:800,fontSize:17,color:"#1A3A5C",marginBottom:4 }}>🏁 {t.endTrip}</div>
-                <div style={{ fontSize:13,color:"#64748b",marginBottom:16 }}>{t.odometerStep}</div>
-                <div style={{ marginBottom:16 }}>
-                  <div style={{ fontWeight:700,fontSize:14,color:"#1A3A5C",marginBottom:8 }}>{t.odometerPhoto}</div>
-                  <CameraCapture label="" value={odometerPhoto} onChange={url=>setOdometerPhoto(url)} folder="odometer" lang={lang} required />
-                </div>
-                <div style={{ marginBottom:16 }}>
-                  <label style={{ fontWeight:700,fontSize:14,color:"#1A3A5C",display:"block",marginBottom:6 }}>{t.odometerReading}</label>
-                  <input type="number" value={odometerReading} onChange={e=>setOdometerReading(e.target.value)}
-                    placeholder={t.odometerPlaceholder}
-                    style={{ width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"11px 14px",fontSize:16,outline:"none",boxSizing:"border-box" }} />
-                  {totalKM > 0 && (<div style={{ fontSize:12,color:"#64748b",marginTop:4 }}>GPS measured distance this trip: {totalKM} km</div>)}
-                </div>
+                {/* Warning */}
                 {odometerWarning&&(
-                  <div style={{ background:"#fef3c7",border:"1px solid #fbbf24",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#92400e",marginBottom:12 }}>
+                  <div style={{ background:"#fef3c7", border:"1px solid #fbbf24", borderRadius:8, padding:"10px 14px", fontSize:13, color:"#92400e", marginBottom:12 }}>
                     ⚠️ {odometerWarning}
                   </div>
                 )}
-                <div style={{ display:"flex",gap:8 }}>
-                  <Btn onClick={endTrip} color="#ef4444" style={{ flex:1,padding:12 }}>🏁 {t.confirmEndTrip}</Btn>
-                  <Btn onClick={()=>{setShowOdometerForm(false);setTripStarted(true);setOdometerWarning("");}} color="#64748b">{t.cancelEndTrip}</Btn>
+
+                {/* Buttons */}
+                <div style={{ display:"flex", gap:8 }}>
+                  <Btn onClick={endTrip} color="#ef4444" style={{ flex:1, padding:12 }}>
+                    🏁 {t.confirmEndTrip}
+                  </Btn>
+                  <Btn onClick={()=>{setShowOdometerForm(false);setTripStarted(true);setOdometerWarning("");}} color="#64748b">
+                    {t.cancelEndTrip}
+                  </Btn>
                 </div>
               </div>
             </div>
@@ -824,7 +614,7 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
             </Card>
           )}
 
-          {pending.length===0&&myInv.length===0&&approvedActivities.length===0&&(
+          {pending.length===0&&myInv.length===0&&(
             <Card style={{ textAlign:"center",padding:32 }}>
               <div style={{ fontSize:48,marginBottom:12 }}>📦</div>
               <div style={{ fontWeight:600,fontSize:16,color:"#94a3b8" }}>No invoices assigned yet</div>
@@ -849,7 +639,9 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
       {/* DELIVERED TAB */}
       {view==="delivered"&&(
         <div>
-          {deliveredInv.length===0&&(<Card><div style={{ textAlign:"center",padding:32,color:"#94a3b8",fontSize:15 }}>No delivered invoices yet.</div></Card>)}
+          {deliveredInv.length===0&&(
+            <Card><div style={{ textAlign:"center",padding:32,color:"#94a3b8",fontSize:15 }}>No delivered invoices yet.</div></Card>
+          )}
           {deliveredInv.map(inv=>(
             <Card key={inv.id||inv.firestoreId}>
               <div style={{ display:"flex",justifyContent:"space-between",marginBottom:8,flexWrap:"wrap",gap:6 }}>
@@ -869,7 +661,9 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
       {/* FAILED TAB */}
       {view==="failed"&&(
         <div>
-          {failedInv.length===0&&(<Card><div style={{ textAlign:"center",padding:32,color:"#94a3b8",fontSize:15 }}>No failed invoices.</div></Card>)}
+          {failedInv.length===0&&(
+            <Card><div style={{ textAlign:"center",padding:32,color:"#94a3b8",fontSize:15 }}>No failed invoices.</div></Card>
+          )}
           {failedInv.map(inv=>(
             <Card key={inv.id||inv.firestoreId} style={{ borderLeft:"4px solid #ef4444" }}>
               <div style={{ display:"flex",justifyContent:"space-between",marginBottom:8,flexWrap:"wrap",gap:6 }}>
@@ -888,7 +682,6 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
         </div>
       )}
 
-      {/* TRIP HISTORY TAB */}
       {view==="history"&&(
         <Card>
           <CardTitle>📊 {t.history}</CardTitle>
@@ -897,33 +690,16 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
             <div key={i} style={{ border:"1px solid #e2e8f0",borderRadius:8,padding:14,marginBottom:10 }}>
               <div style={{ display:"flex",justifyContent:"space-between",marginBottom:8,flexWrap:"wrap",gap:4 }}>
                 <span style={{ fontWeight:700,fontSize:15 }}>📅 {h.date}</span>
-                {h.type==="Additional Activity"?(
-                  <span style={{ fontSize:12,fontWeight:600,padding:"3px 8px",borderRadius:6,background:"#f3e8ff",color:"#7c3aed" }}>🗂️ Additional Activity</span>
-                ):(
-                  <span style={{ fontWeight:700,fontSize:15,color:h.successRate>=80?"#10b981":h.successRate>=60?"#f59e0b":"#ef4444" }}>{h.successRate}% success</span>
-                )}
+                <span style={{ fontWeight:700,fontSize:15,color:h.successRate>=80?"#10b981":h.successRate>=60?"#f59e0b":"#ef4444" }}>{h.successRate}% success</span>
               </div>
-              {h.type==="Additional Activity"?(
-                <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:6,fontSize:13,color:"#64748b" }}>
-                  <span>🗂️ {h.purpose}</span>
-                  <span>📍 {h.destination}</span>
-                  <span>🚗 {h.vehicle}</span>
-                  <span>📍 {h.distance} km</span>
-                  <span>⏱️ {h.duration}</span>
-                  <span>⛽ {h.fuelUsed||0}L</span>
-                  {h.operationalHours&&<span>🕐 {h.operationalHours}h Op</span>}
-                </div>
-              ):(
-                <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:6,fontSize:13,color:"#64748b" }}>
-                  <span>🚗 {h.vehicle}</span>
-                  <span>📋 {h.delivered}/{h.invoices} delivered</span>
-                  <span>📍 {h.distance} km</span>
-                  <span>⏱️ {h.duration}</span>
-                  <span>⛽ {h.fuelUsed||0}L used</span>
-                  {h.operationalHours&&<span>🕐 {h.operationalHours}h Op</span>}
-                  <span>{h.isHalfDay?"⏰ Half Day":"✅ Full Day"}</span>
-                </div>
-              )}
+              <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:6,fontSize:13,color:"#64748b" }}>
+                <span>🚗 {h.vehicle}</span>
+                <span>📋 {h.delivered}/{h.invoices} delivered</span>
+                <span>📍 {h.distance} km</span>
+                <span>⏱️ {h.duration}</span>
+                <span>⛽ {h.fuelUsed||0}L used</span>
+                <span>{h.isHalfDay?"⏰ Half Day":"✅ Full Day"}</span>
+              </div>
             </div>
           ))}
         </Card>
