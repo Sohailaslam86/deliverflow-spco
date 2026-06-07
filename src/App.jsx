@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, collection, getDocs } from "firebase/firestore";
 import { auth, db } from "./firebase";
-import { SettingsProvider } from "./context/SettingsContext.jsx";
 import Login from "./components/Login.jsx";
 import Shell from "./components/Shell.jsx";
 import Dashboard  from "./pages/Dashboard.jsx";
@@ -119,9 +118,14 @@ export default function App() {
   }
 
   const pages = {
-    dashboard:    <Dashboard  {...props} users={users} />,
+    // Dashboard — not for drivers (their home is mydeliveries) or viewonly
+    dashboard:    guardPage(user.role,
+      ["admin","manager","logistic","planning","management"],
+      <Dashboard {...props} users={users} />,
+      user.role === "driver" ? <Driver {...props} /> : null
+    ),
 
-    // Dispatch Management — admin, manager, planning view
+    // Dispatch Management — admin, manager, planning
     assign:       guardPage(user.role,
       ["admin","manager","planning"],
       <Assign {...props} users={users} />
@@ -137,6 +141,7 @@ export default function App() {
       <Trips {...props} vehicles={vehicles} users={users} />
     ),
 
+    // Users — planning sees all DCs (uploads for all); manager/logistic see own
     users:        guardPage(user.role,
       ["admin","manager","logistic","planning"],
       <Users {...props} />
@@ -172,8 +177,13 @@ export default function App() {
       <Odometer {...props} />
     ),
 
-    search:       <Search     {...props} />,
+    // Search — driver cannot search all invoices
+    search:       guardPage(user.role,
+      ["admin","manager","logistic","planning","viewonly","management"],
+      <Search {...props} />
+    ),
 
+    // Download/POD — planning included (uploads for all DCs, needs POD access)
     download:     guardPage(user.role,
       ["admin","manager","logistic","planning","viewonly","management"],
       <Download {...props} />
@@ -181,19 +191,16 @@ export default function App() {
   };
 
   return (
-    // SettingsProvider wraps the entire app so all pages can use useSettings()
-    <SettingsProvider>
-      <Shell
-        user={user}
-        lang={lang}
-        setLang={setLang}
-        page={page}
-        setPage={setPage}
-        onLogout={()=>{ signOut(auth); setUser(null); setPage("dashboard"); }}
-        alerts={alerts}
-      >
-        {pages[page] || pages.dashboard}
-      </Shell>
-    </SettingsProvider>
+    <Shell
+      user={user}
+      lang={lang}
+      setLang={setLang}
+      page={page}
+      setPage={setPage}
+      onLogout={()=>{ signOut(auth); setUser(null); setPage("dashboard"); }}
+      alerts={alerts}
+    >
+      {pages[page] || pages.dashboard}
+    </Shell>
   );
 }
