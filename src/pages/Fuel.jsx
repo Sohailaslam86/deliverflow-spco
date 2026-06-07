@@ -112,7 +112,9 @@ function canApprove(role) {
 }
 
 function canSubmitDirect(role) {
-  return ["admin", "manager", "logistic"].includes(role);
+  // Manager fuel entry removed — drivers submit from their own screen
+  // Admin retains direct entry for emergency/manual corrections
+  return ["admin"].includes(role);
 }
 
 // ─── Fleet Summary Card (BUS or Dyna) ────────────────────────────────────────
@@ -380,9 +382,11 @@ export default function Fuel({ user, fuelLogs, setFuelLogs, vehicles, setVehicle
       {/* ── Top Bar: main tabs + Add button ── */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
         <TabBar tabs={mainTabs} active={tab} onChange={setTab} />
-        <Btn small onClick={() => { setShowForm(!showForm); setErrMsg(""); }}>
-          ⛽ {t.addFuelEntry}
-        </Btn>
+        {isDirect && (
+          <Btn small onClick={() => { setShowForm(!showForm); setErrMsg(""); }}>
+            ⛽ {t.addFuelEntry}
+          </Btn>
+        )}
       </div>
 
       {/* ── Add Fuel Entry Form ── */}
