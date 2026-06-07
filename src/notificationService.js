@@ -1,23 +1,50 @@
 // src/notificationService.js
 // Shared notification helper — sab files yeh import karein
-import { collection, addDoc, getDocs, updateDoc, doc, query, where } from "firebase/firestore";
+import { collection, addDoc, getDocs, updateDoc, doc } from "firebase/firestore";
 import { db } from "./firebase";
 
+/**
+ * Notification types:
+ *   upload | delivered | failed | staged | leave |
+ *   leave_approved | leave_rejected | request |
+ *   request_action | vehicle | vehicle_approved |
+ *   vehicle_rejected | activity_request |
+ *   activity_approved | activity_rejected
+ *
+ * data shape (all optional — use what applies):
+ *   { dc, count, driverName, invoiceId, failReason,
+ *     name, status, plate, purpose, destination }
+ */
+
 // Send notification to Firestore
-export async function sendNotification({ toUserId, toRole, toDC, type, title, message, link }) {
+export async function sendNotification({
+  toUserId,
+  toRole,
+  toDC,
+  type,
+  data = {},
+  // Legacy fields — kept for backward compat but not required
+  title,
+  message,
+  link,
+}) {
   try {
     await addDoc(collection(db, "notifications"), {
-      toUserId: toUserId || null,    // specific user uid
-      toRole:   toRole   || null,    // role (admin/manager/driver)
-      toDC:     toDC     || null,    // DC filter
-      type,                          // "invoice_assigned" | "delivered" | "failed" | "upload" | "request" | "request_action"
-      title,
-      message,
-      link:     link || null,
-      read:     false,
-      createdAt: new Date().toISOString()
+      toUserId:  toUserId || null,   // specific user uid
+      toRole:    toRole   || null,   // role (admin/manager/driver/logistic)
+      toDC:      toDC     || null,   // DC filter
+      type,                          // notification type string
+      data,                          // structured payload — used by Shell to build bilingual text
+      // Legacy text fields — only written if explicitly provided (old callers)
+      ...(title   ? { title }   : {}),
+      ...(message ? { message } : {}),
+      link:      link || null,
+      read:      false,
+      createdAt: new Date().toISOString(),
     });
-  } catch(e) { console.error("Notification error:", e); }
+  } catch (e) {
+    console.error("Notification error:", e);
+  }
 }
 
 // Load notifications for current user
@@ -36,15 +63,20 @@ export async function loadNotifications(user) {
         }
         return false;
       })
-      .sort((a,b) => b.createdAt.localeCompare(a.createdAt));
-  } catch(e) { console.error("Load notifications error:", e); return []; }
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  } catch (e) {
+    console.error("Load notifications error:", e);
+    return [];
+  }
 }
 
 // Mark notification as read
 export async function markRead(notifId) {
   try {
     await updateDoc(doc(db, "notifications", notifId), { read: true });
-  } catch(e) { console.error("Mark read error:", e); }
+  } catch (e) {
+    console.error("Mark read error:", e);
+  }
 }
 
 // Mark all as read
@@ -55,5 +87,7 @@ export async function markAllRead(user) {
     for (const n of unread) {
       await updateDoc(doc(db, "notifications", n.id), { read: true });
     }
-  } catch(e) { console.error("Mark all read error:", e); }
+  } catch (e) {
+    console.error("Mark all read error:", e);
+  }
 }
