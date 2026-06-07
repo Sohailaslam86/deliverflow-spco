@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, collection, getDocs } from "firebase/firestore";
 import { auth, db } from "./firebase";
+import { SettingsProvider } from "./context/SettingsContext.jsx";
 import Login from "./components/Login.jsx";
 import Shell from "./components/Shell.jsx";
 import Dashboard  from "./pages/Dashboard.jsx";
@@ -180,16 +181,19 @@ export default function App() {
   };
 
   return (
-    <Shell
-      user={user}
-      lang={lang}
-      setLang={setLang}
-      page={page}
-      setPage={setPage}
-      onLogout={()=>{ signOut(auth); setUser(null); setPage("dashboard"); }}
-      alerts={alerts}
-    >
-      {pages[page] || pages.dashboard}
-    </Shell>
+    // SettingsProvider wraps the entire app so all pages can use useSettings()
+    <SettingsProvider>
+      <Shell
+        user={user}
+        lang={lang}
+        setLang={setLang}
+        page={page}
+        setPage={setPage}
+        onLogout={()=>{ signOut(auth); setUser(null); setPage("dashboard"); }}
+        alerts={alerts}
+      >
+        {pages[page] || pages.dashboard}
+      </Shell>
+    </SettingsProvider>
   );
 }
