@@ -167,7 +167,7 @@ export default function Fleet({ user, vehicles: masterVehicles, setVehicles: set
 
   function DCVehBox({ dcName }) {
     const color = DC_COLORS[dcName];
-    const dv = allVehicles.filter(v=>v.dc===dcName);
+    const dv = myVehicles.filter(v=>v.dc===dcName);
     const act = dv.filter(v=>v.status==="Active").length;
     const mnt = dv.filter(v=>v.status==="Maintenance").length;
     return (
@@ -184,7 +184,7 @@ export default function Fleet({ user, vehicles: masterVehicles, setVehicles: set
 
   function DCDrvBox({ dcName }) {
     const color = DC_COLORS[dcName];
-    const dv = allDrivers.filter(d=>d.dc===dcName);
+    const dv = myDrivers.filter(d=>d.dc===dcName);
     const act = dv.filter(d=>d.status==="active"||d.status==="Active").length;
     const leave = dv.filter(d=>d.status==="On Leave").length;
     return (
@@ -208,20 +208,20 @@ export default function Fleet({ user, vehicles: masterVehicles, setVehicles: set
       {done&&<SuccessMsg msg={done}/>}
       <TabBar tabs={tabs} active={tab} onChange={setTab}/>
 
-      {/* OVERVIEW — Admin only */}
+      {/* OVERVIEW */}
       {tab==="overview"&&(
         <div>
-          {/* Vehicles Overview */}
+          {/* Vehicles Overview — scoped to myVehicles (DC manager sees only his DC) */}
           <Card style={{ borderTop:"4px solid #1A3A5C" }}>
-            <CardTitle>🚗 {t.allVehicles}</CardTitle>
+            <CardTitle>🚗 {dc ? `${dc} — Vehicles Overview` : t.allVehicles}</CardTitle>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:12 }}>
-              <StatCard icon="🚗" label={t.total} value={allVehicles.length} color="#6366f1" />
-              <StatCard icon="✅" label={t.active} value={allVehicles.filter(v=>v.status==="Active").length} color="#10b981" />
-              <StatCard icon="🔧" label={t.inMaint} value={allVehicles.filter(v=>v.status==="Maintenance").length} color="#f59e0b" />
-              <StatCard icon="⚠️" label={t.expired} value={allVehicles.filter(v=>v.fahas&&Math.ceil((new Date(v.fahas)-new Date())/(1000*60*60*24))<=30).length} color="#ef4444" />
+              <StatCard icon="🚗" label={t.total} value={myVehicles.length} color="#6366f1" />
+              <StatCard icon="✅" label={t.active} value={myVehicles.filter(v=>v.status==="Active").length} color="#10b981" />
+              <StatCard icon="🔧" label={t.inMaint} value={myVehicles.filter(v=>v.status==="Maintenance").length} color="#f59e0b" />
+              <StatCard icon="⚠️" label={t.expired} value={myVehicles.filter(v=>v.fahas&&Math.ceil((new Date(v.fahas)-new Date())/(1000*60*60*24))<=30).length} color="#ef4444" />
             </div>
-            {/* Fuel efficiency drop alerts */}
-            {allVehicles.filter(v=>{
+            {/* Fuel efficiency drop alerts — only for this DC's vehicles */}
+            {myVehicles.filter(v=>{
               const kmpl = v.mileage||12;
               const actual = v.totalKM&&v.fuelUsedTotal ? v.totalKM/v.fuelUsedTotal : null;
               return actual && actual < kmpl*0.8;
@@ -231,7 +231,8 @@ export default function Fleet({ user, vehicles: masterVehicles, setVehicles: set
               </div>
             ))}
           </Card>
-          {/* DC Filter tabs */}
+
+          {/* DC Filter tabs — Admin/Logistic/Management only, not DC Manager */}
           {!dc&&(
             <div style={{ display:"flex", gap:6, marginBottom:14, flexWrap:"wrap" }}>
               {["all","Riyadh","Jeddah","Dammam"].map(d=>(
@@ -243,20 +244,22 @@ export default function Fleet({ user, vehicles: masterVehicles, setVehicles: set
               ))}
             </div>
           )}
+
+          {/* DC breakdown cards — manager sees only his DC, admin/logistic see all or filtered */}
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:16, marginBottom:16 }}>
             {(dc?[dc]:overviewDC==="all"?["Riyadh","Jeddah","Dammam"]:[overviewDC]).map(dcN=>(
               <DCVehBox key={dcN} dcName={dcN}/>
             ))}
           </div>
 
-          {/* Drivers Overview */}
+          {/* Drivers Overview — scoped to myDrivers */}
           <Card style={{ borderTop:"4px solid #0f766e" }}>
-            <CardTitle>👤 {t.allDrivers}</CardTitle>
+            <CardTitle>👤 {dc ? `${dc} — Drivers Overview` : t.allDrivers}</CardTitle>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:12 }}>
-              <StatCard icon="👤" label={t.total} value={allDrivers.length} color="#6366f1" />
-              <StatCard icon="✅" label={t.active} value={allDrivers.filter(d=>d.status==="active"||d.status==="Active").length} color="#10b981" />
-              <StatCard icon="🏖️" label={t.onLeave} value={allDrivers.filter(d=>d.status==="On Leave").length} color="#f59e0b" />
-              <StatCard icon="⚠️" label={t.inactive} value={allDrivers.filter(d=>d.status==="inactive"||d.status==="Inactive").length} color="#ef4444" />
+              <StatCard icon="👤" label={t.total} value={myDrivers.length} color="#6366f1" />
+              <StatCard icon="✅" label={t.active} value={myDrivers.filter(d=>d.status==="active"||d.status==="Active").length} color="#10b981" />
+              <StatCard icon="🏖️" label={t.onLeave} value={myDrivers.filter(d=>d.status==="On Leave").length} color="#f59e0b" />
+              <StatCard icon="⚠️" label={t.inactive} value={myDrivers.filter(d=>d.status==="inactive"||d.status==="Inactive").length} color="#ef4444" />
             </div>
           </Card>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:16 }}>
@@ -274,7 +277,7 @@ export default function Fleet({ user, vehicles: masterVehicles, setVehicles: set
 
       {/* DRIVERS TAB */}
       {tab==="drivers"&&(
-        <DriversTab drivers={myDrivers} dc={dc} t={t} canManage={canManage} onSetStatus={setDriverStatus} isAdmin={isAdmin} DCS={DCS} dcLabel={dcLabel} allDrivers={allDrivers} />
+        <DriversTab drivers={myDrivers} dc={dc} t={t} canManage={canManage} onSetStatus={setDriverStatus} isAdmin={isAdmin} DCS={DCS} dcLabel={dcLabel} />
       )}
 
       {/* MAINTENANCE TAB */}
@@ -519,14 +522,14 @@ function VehiclesTab({ vehicles, dc, t, canManage, user, onSendMaint, onReactiva
   );
 }
 
-function DriversTab({ drivers, dc, t, canManage, onSetStatus, isAdmin, DCS, dcLabel, allDrivers }) {
+function DriversTab({ drivers, dc, t, canManage, onSetStatus, isAdmin, DCS, dcLabel }) {
   return (
     <div>
       {drivers.length===0&&(
         <Card><div style={{ textAlign:"center", padding:32, color:"#94a3b8", fontSize:15 }}>👤 {t.noDrivers}</div></Card>
       )}
       {DCS.filter(d=>!dc||d===dc).map(dcName=>{
-        const dv = (dc?drivers:allDrivers).filter(d=>d.dc===dcName);
+        const dv = drivers.filter(d=>d.dc===dcName);
         if (!dv.length) return null;
         return (
           <Card key={dcName}>
