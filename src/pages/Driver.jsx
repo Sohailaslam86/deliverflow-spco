@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Card, CardTitle, Btn, SuccessMsg, Badge } from "../components/Shared.jsx";
 import CameraCapture from "../components/CameraCapture.jsx";
-import { updateDoc, doc, addDoc, collection } from "firebase/firestore";
+import { updateDoc, doc, addDoc, collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
 import { sendNotification } from "../notificationService.js";
 import { useSettings } from "../context/SettingsContext.jsx";
@@ -39,6 +39,14 @@ const T = {
     odometerStep:"Step: Take Odometer Photo & Enter Reading",
     cancelEndTrip:"Cancel — Continue Trip",
     kmMismatch:"Warning: GPS distance and odometer difference is more than 20%. Please verify.",
+    fuelTab:"Fuel Entry", fuelVehicle:"Vehicle *", fuelLiters:"Liters Added *",
+    fuelSAR:"Cost (SAR) *", fuelStation:"Station / Supplier", fuelReceiptNo:"Receipt No.",
+    fuelOdometer:"Current Odometer (KM)", fuelNotes:"Notes",
+    fuelSubmit:"Submit Fuel Entry", fuelSubmitting:"Submitting...",
+    fuelPending:"Pending Approval", fuelApproved:"Approved", fuelRejected:"Rejected",
+    fuelSubmitted:"Fuel entry submitted — pending manager approval ✅",
+    fuelNoVehicle:"No vehicle assigned to you today",
+    fuelHistory:"My Fuel Entries",
   },
   ar: {
     pending:"مرحلة الإرسال", completed:"مكتملة اليوم", remaining:"المتبقي",
@@ -72,6 +80,14 @@ const T = {
     odometerStep:"الخطوة: التقط صورة العداد وأدخل القراءة",
     cancelEndTrip:"إلغاء — متابعة الرحلة",
     kmMismatch:"تحذير: الفرق بين المسافة عبر GPS وقراءة العداد أكثر من 20%. يرجى التحقق.",
+    fuelTab:"إدخال وقود", fuelVehicle:"المركبة *", fuelLiters:"اللترات المضافة *",
+    fuelSAR:"التكلفة (ريال) *", fuelStation:"المحطة / المورد", fuelReceiptNo:"رقم الإيصال",
+    fuelOdometer:"قراءة العداد الحالية (كم)", fuelNotes:"ملاحظات",
+    fuelSubmit:"إرسال إدخال الوقود", fuelSubmitting:"جاري الإرسال...",
+    fuelPending:"في انتظار الموافقة", fuelApproved:"موافق عليه", fuelRejected:"مرفوض",
+    fuelSubmitted:"تم إرسال إدخال الوقود — في انتظار موافقة المدير ✅",
+    fuelNoVehicle:"لا توجد مركبة مخصصة لك اليوم",
+    fuelHistory:"سجل الوقود",
   }
 };
 
@@ -119,8 +135,14 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
 
   const rtl = lang==="ar";
   const t = T[lang]||T.en;
-
   const { failedReasons } = useSettings();
+
+  // ── Fuel Entry state ──
+  const [fuelForm, setFuelForm] = useState({ liters:"", sar:"", station:"", receiptNo:"", odometer:"", notes:"" });
+  const [fuelSubmitting, setFuelSubmitting] = useState(false);
+  const [myFuelEntries, setMyFuelEntries] = useState([]);
+  const [fuelLoaded, setFuelLoaded] = useState(false);
+
   const allMyInv = invoices.filter(i=>i.driverId===user.uid);
   const myInv = allMyInv.filter(i=>i.status==="assigned"); // pending delivery
   const deliveredInv = allMyInv.filter(i=>i.status==="delivered");
@@ -432,7 +454,7 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
                   style={{ width:"100%",border:"1.5px solid #fca5a5",borderRadius:8,padding:"11px 12px",fontSize:14,outline:"none",boxSizing:"border-box",background:"white" }}
                 >
                   <option value="">{t.failReasonPlaceholder}</option>
-                  {(failedReasons.length ? failedReasons : ["Customer Absent","Address Not Found","Refused Delivery","Damaged Goods","Wrong Item","Rescheduled by Customer","Other"]).map(r=><option key={r} value={r}>{r}</option>)}
+                  {(failedReasons.length?failedReasons:["Customer Absent","Address Not Found","Refused Delivery","Damaged Goods","Wrong Item","Rescheduled by Customer","Other"]).map(r=><option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
             )}
@@ -487,7 +509,8 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
           ["deliveries","📦",`Staged for Dispatch (${pending.length})`],
           ["delivered","✅",`Delivered (${deliveredInv.length})`],
           ["failed","❌",`Failed (${failedInv.length})`],
-          ["history","📊","Trip History"]
+          ["history","📊","Trip History"],
+          ["fuel","⛽",t.fuelTab]
         ].map(([v,icon,label])=>(
           <button key={v} onClick={()=>setView(v)}
             style={{ padding:"10px 18px",borderRadius:8,border:"none",
@@ -699,6 +722,214 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
                 <span>⏱️ {h.duration}</span>
                 <span>⛽ {h.fuelUsed||0}L used</span>
                 <span>{h.isHalfDay?"⏰ Half Day":"✅ Full Day"}</span>
+              </div>
+            </div>
+          ))}
+        </Card>
+      )}
+
+      {/* ── FUEL ENTRY TAB ── */}
+      {view==="fuel"&&(
+        <FuelEntryTab
+          user={user} t={t} lang={lang}
+          assignedVehicle={assignedVehicle}
+          assignedVehiclePlate={assignedVehiclePlate}
+          fuelForm={fuelForm} setFuelForm={setFuelForm}
+          fuelSubmitting={fuelSubmitting} setFuelSubmitting={setFuelSubmitting}
+          myFuelEntries={myFuelEntries} setMyFuelEntries={setMyFuelEntries}
+          fuelLoaded={fuelLoaded} setFuelLoaded={setFuelLoaded}
+          setDone={setDone}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// FUEL ENTRY TAB COMPONENT
+// Same data saved to fuelLogs collection — exact same schema as Fuel.jsx
+// Manager approves from Fuel Tracking screen — no change to that flow
+// ─────────────────────────────────────────────
+function FuelEntryTab({ user, t, lang, assignedVehicle, assignedVehiclePlate, fuelForm, setFuelForm, fuelSubmitting, setFuelSubmitting, myFuelEntries, setMyFuelEntries, fuelLoaded, setFuelLoaded, setDone }) {
+  const [localDone, setLocalDone] = useState("");
+
+  useEffect(() => {
+    if (!fuelLoaded) loadMyFuelEntries();
+  }, []);
+
+  async function loadMyFuelEntries() {
+    try {
+      const snap = await getDocs(collection(db, "fuelLogs"));
+      const mine = snap.docs
+        .map(d=>({id:d.id,...d.data()}))
+        .filter(l=>l.driverId===user.uid)
+        .sort((a,b)=>b.date?.localeCompare(a.date||""));
+      setMyFuelEntries(mine);
+      setFuelLoaded(true);
+    } catch(e) { console.error(e); }
+  }
+
+  async function submitFuelEntry() {
+    if (!fuelForm.liters || !fuelForm.sar) {
+      setLocalDone("❌ Liters and cost are required");
+      setTimeout(()=>setLocalDone(""),3000);
+      return;
+    }
+    if (!assignedVehiclePlate) {
+      setLocalDone("❌ "+t.fuelNoVehicle);
+      setTimeout(()=>setLocalDone(""),3000);
+      return;
+    }
+    setFuelSubmitting(true);
+    try {
+      const entry = {
+        // Exact same schema as Fuel.jsx entries — reports will pick these up
+        date:        new Date().toISOString().split("T")[0],
+        vehicle:     assignedVehiclePlate,
+        vehiclePlate: assignedVehiclePlate,
+        driver:      user.name,
+        driverId:    user.uid,
+        dc:          user.dc,
+        liters:      Number(fuelForm.liters),
+        sar:         Number(fuelForm.sar),
+        tripKM:      Number(fuelForm.odometer)||0,
+        station:     fuelForm.station||"",
+        receiptNo:   fuelForm.receiptNo||"",
+        notes:       fuelForm.notes||"",
+        // Approval flow — manager approves from Fuel Tracking screen
+        status:      "pending",
+        submittedAt: new Date().toISOString(),
+        submittedBy: user.name,
+        source:      "driver_entry",   // so Fuel.jsx can show driver-submitted entries
+      };
+      const docRef = await addDoc(collection(db, "fuelLogs"), entry);
+      setMyFuelEntries(prev=>[{id:docRef.id,...entry},...prev]);
+      // Notify manager to approve
+      const { sendNotification } = await import("../notificationService.js");
+      await sendNotification({
+        toRole:"manager", toDC:user.dc,
+        type:"activity_request",
+        data:{ driverName:user.name, purpose:"Fuel Entry", destination:fuelForm.station||"" }
+      });
+      setFuelForm({ liters:"", sar:"", station:"", receiptNo:"", odometer:"", notes:"" });
+      setDone(t.fuelSubmitted);
+      setTimeout(()=>setDone(""),5000);
+    } catch(e) {
+      setLocalDone("❌ Error: "+e.message);
+      setTimeout(()=>setLocalDone(""),4000);
+    }
+    setFuelSubmitting(false);
+  }
+
+  const statusColor = { pending:"#f59e0b", approved:"#10b981", rejected:"#ef4444" };
+  const statusBg    = { pending:"#fef3c7", approved:"#d1fae5", rejected:"#fee2e2" };
+  const statusText  = { pending:t.fuelPending, approved:t.fuelApproved, rejected:t.fuelRejected };
+
+  return (
+    <div>
+      {localDone&&(
+        <div style={{ background:localDone.startsWith("❌")?"#fee2e2":"#d1fae5", color:localDone.startsWith("❌")?"#991b1b":"#065f46", borderRadius:8, padding:"12px 16px", marginBottom:12, fontWeight:600, fontSize:14 }}>
+          {localDone}
+        </div>
+      )}
+
+      {/* Vehicle info */}
+      {assignedVehicle ? (
+        <Card style={{ borderTop:"4px solid #f59e0b", marginBottom:16 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
+            <div>
+              <div style={{ fontWeight:700, fontSize:15 }}>⛽ {assignedVehiclePlate}</div>
+              <div style={{ fontSize:13, color:"#64748b" }}>{assignedVehicle.type} — {assignedVehicle.brand} {assignedVehicle.model}</div>
+            </div>
+            <div style={{ textAlign:"right" }}>
+              <div style={{ fontSize:13, color:"#64748b" }}>Current Fuel</div>
+              <div style={{ fontWeight:800, fontSize:20, color:(assignedVehicle.fuelLevel||0)/(assignedVehicle.fuelCapacity||80)<0.25?"#ef4444":"#10b981" }}>
+                {assignedVehicle.fuelLevel||0}L / {assignedVehicle.fuelCapacity||80}L
+              </div>
+            </div>
+          </div>
+        </Card>
+      ) : (
+        <Card style={{ textAlign:"center", padding:24, color:"#94a3b8" }}>
+          🚗 {t.fuelNoVehicle}
+        </Card>
+      )}
+
+      {/* Fuel Entry Form */}
+      <Card style={{ borderLeft:"4px solid #f59e0b" }}>
+        <div style={{ fontWeight:700, fontSize:15, marginBottom:14, color:"#92400e" }}>⛽ {t.fuelTab}</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 12px" }}>
+
+          <div style={{ marginBottom:12 }}>
+            <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{t.fuelLiters}</label>
+            <input type="number" value={fuelForm.liters} onChange={e=>setFuelForm({...fuelForm,liters:e.target.value})}
+              placeholder="e.g. 45" min="1" max="200"
+              style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"11px 14px", fontSize:15, outline:"none", boxSizing:"border-box" }} />
+          </div>
+
+          <div style={{ marginBottom:12 }}>
+            <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{t.fuelSAR}</label>
+            <input type="number" value={fuelForm.sar} onChange={e=>setFuelForm({...fuelForm,sar:e.target.value})}
+              placeholder="e.g. 270"
+              style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"11px 14px", fontSize:15, outline:"none", boxSizing:"border-box" }} />
+          </div>
+
+          <div style={{ marginBottom:12 }}>
+            <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{t.fuelStation}</label>
+            <input type="text" value={fuelForm.station} onChange={e=>setFuelForm({...fuelForm,station:e.target.value})}
+              placeholder="e.g. ARAMCO Station, Riyadh"
+              style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"11px 14px", fontSize:14, outline:"none", boxSizing:"border-box" }} />
+          </div>
+
+          <div style={{ marginBottom:12 }}>
+            <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{t.fuelReceiptNo}</label>
+            <input type="text" value={fuelForm.receiptNo} onChange={e=>setFuelForm({...fuelForm,receiptNo:e.target.value})}
+              placeholder="e.g. REC-00123"
+              style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"11px 14px", fontSize:14, outline:"none", boxSizing:"border-box" }} />
+          </div>
+
+          <div style={{ marginBottom:12 }}>
+            <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{t.fuelOdometer}</label>
+            <input type="number" value={fuelForm.odometer} onChange={e=>setFuelForm({...fuelForm,odometer:e.target.value})}
+              placeholder="e.g. 45230"
+              style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"11px 14px", fontSize:14, outline:"none", boxSizing:"border-box" }} />
+          </div>
+
+          <div style={{ marginBottom:12 }}>
+            <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{t.fuelNotes}</label>
+            <input type="text" value={fuelForm.notes} onChange={e=>setFuelForm({...fuelForm,notes:e.target.value})}
+              placeholder="Optional"
+              style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"11px 14px", fontSize:14, outline:"none", boxSizing:"border-box" }} />
+          </div>
+        </div>
+
+        <div style={{ background:"#fef3c7", borderRadius:8, padding:"10px 14px", fontSize:13, color:"#92400e", marginBottom:14 }}>
+          ℹ️ Entry will be sent to your manager for approval. Fuel level updates after approval.
+        </div>
+
+        <button onClick={submitFuelEntry} disabled={fuelSubmitting}
+          style={{ width:"100%", background:fuelSubmitting?"#94a3b8":"#f59e0b", color:"white", border:"none", padding:"14px", borderRadius:8, fontWeight:700, cursor:fuelSubmitting?"not-allowed":"pointer", fontSize:15 }}>
+          {fuelSubmitting?t.fuelSubmitting:"⛽ "+t.fuelSubmit}
+        </button>
+      </Card>
+
+      {/* My fuel entry history */}
+      {myFuelEntries.length>0&&(
+        <Card style={{ marginTop:16 }}>
+          <div style={{ fontWeight:700, fontSize:15, marginBottom:12, color:"#374151" }}>📋 {t.fuelHistory}</div>
+          {myFuelEntries.slice(0,20).map(e=>(
+            <div key={e.id} style={{ padding:"10px 0", borderBottom:"1px solid #f8fafc", fontSize:14 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4, flexWrap:"wrap", gap:6 }}>
+                <span style={{ fontWeight:700 }}>📅 {e.date} — ⛽ {e.liters}L</span>
+                <span style={{ fontSize:12, fontWeight:600, padding:"2px 10px", borderRadius:99,
+                  background:statusBg[e.status]||"#f1f5f9",
+                  color:statusColor[e.status]||"#374151" }}>
+                  {statusText[e.status]||e.status}
+                </span>
+              </div>
+              <div style={{ fontSize:13, color:"#64748b" }}>
+                🚗 {e.vehicle} | 💰 SAR {e.sar} | 🏪 {e.station||"—"}
+                {e.receiptNo&&<span> | 🧾 {e.receiptNo}</span>}
               </div>
             </div>
           ))}
