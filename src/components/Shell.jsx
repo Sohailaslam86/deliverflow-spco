@@ -73,16 +73,73 @@ const NAV = {
 };
 
 const NOTIF_ICONS = {
-  invoice_assigned: "📦",
-  staged:           "📦",
-  delivered:        "✅",
-  failed:           "❌",
-  upload:           "📤",
-  request:          "📝",
-  request_action:   "🔔",
-  leave:            "🏖️",
-  vehicle:          "🚗",
+  upload:             "📤",
+  delivered:          "✅",
+  failed:             "❌",
+  staged:             "📦",
+  invoice_assigned:   "📦",
+  leave:              "🏖️",
+  leave_approved:     "✅",
+  leave_rejected:     "❌",
+  request:            "📝",
+  request_action:     "🔔",
+  vehicle:            "🚗",
+  vehicle_approved:   "✅",
+  vehicle_rejected:   "❌",
+  activity_request:   "🏃",
+  activity_approved:  "✅",
+  activity_rejected:  "❌",
 };
+
+// Bilingual notification text — uses structured data payload
+const NOTIF_T = {
+  en: {
+    upload:             (d) => (d.count || "") + " new invoices for " + (d.dc || "") + " DC",
+    delivered:          (d) => "Invoice " + (d.invoiceId || "") + " delivered by " + (d.driverName || ""),
+    failed:             (d) => "Invoice " + (d.invoiceId || "") + " failed — " + (d.failReason || ""),
+    staged:             (d) => "Invoice " + (d.invoiceId || "") + " assigned to you",
+    invoice_assigned:   (d) => "Invoice " + (d.invoiceId || "") + " assigned to you",
+    leave:              (d) => (d.driverName || "") + " submitted a leave request",
+    leave_approved:     ()  => "Your leave request has been approved",
+    leave_rejected:     ()  => "Your leave request was rejected",
+    request:            (d) => "New access request from " + (d.name || ""),
+    request_action:     (d) => "Your request status: " + (d.status || ""),
+    vehicle:            (d) => "Vehicle request from " + (d.dc || "") + " DC",
+    vehicle_approved:   (d) => "Vehicle " + (d.plate || "") + " request approved",
+    vehicle_rejected:   ()  => "Your vehicle request was rejected",
+    activity_request:   (d) => (d.driverName || "") + " submitted an additional activity request",
+    activity_approved:  (d) => "Your additional activity has been approved" + (d.purpose ? ": " + d.purpose : ""),
+    activity_rejected:  ()  => "Your additional activity request was rejected",
+  },
+  ar: {
+    upload:             (d) => "تم رفع " + (d.count || "") + " فواتير لمركز " + (d.dc || ""),
+    delivered:          (d) => "تم تسليم الفاتورة " + (d.invoiceId || "") + " بواسطة " + (d.driverName || ""),
+    failed:             (d) => "فشل تسليم الفاتورة " + (d.invoiceId || ""),
+    staged:             (d) => "تم تخصيص الفاتورة " + (d.invoiceId || "") + " لك",
+    invoice_assigned:   (d) => "تم تخصيص الفاتورة " + (d.invoiceId || "") + " لك",
+    leave:              (d) => (d.driverName || "") + " قدّم طلب إجازة",
+    leave_approved:     ()  => "تمت الموافقة على طلب إجازتك",
+    leave_rejected:     ()  => "تم رفض طلب إجازتك",
+    request:            (d) => "طلب وصول جديد من " + (d.name || ""),
+    request_action:     (d) => "تم اتخاذ إجراء على طلبك: " + (d.status || ""),
+    vehicle:            (d) => "طلب مركبة من مركز " + (d.dc || ""),
+    vehicle_approved:   (d) => "تمت الموافقة على طلب المركبة " + (d.plate || ""),
+    vehicle_rejected:   ()  => "تم رفض طلب المركبة",
+    activity_request:   (d) => (d.driverName || "") + " قدّم طلب نشاط إضافي",
+    activity_approved:  (d) => "تمت الموافقة على نشاطك الإضافي" + (d.purpose ? ": " + d.purpose : ""),
+    activity_rejected:  ()  => "تم رفض طلب نشاطك الإضافي",
+  },
+};
+
+// Resolve notification text in the current language
+// Falls back to legacy title/message fields for old notifications
+function getNotifText(n, lang) {
+  const langMap = NOTIF_T[lang] || NOTIF_T.en;
+  const fn = langMap[n.type];
+  if (fn) return fn(n.data || n);
+  // Legacy fallback — old notifications stored title/message directly
+  return n.message || n.title || "🔔";
+}
 
 export default function Shell({ user, lang, setLang, page, setPage, onLogout, children, alerts }) {
   const [open, setOpen] = useState(false);
@@ -350,8 +407,12 @@ export default function Shell({ user, lang, setLang, page, setPage, onLogout, ch
                       <div style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
                         <span style={{ fontSize:18, flexShrink:0 }}>{NOTIF_ICONS[n.type]||"🔔"}</span>
                         <div style={{ flex:1 }}>
-                          <div style={{ fontWeight:n.read?400:700, fontSize:13, color:"#0f172a", marginBottom:2 }}>{n.title}</div>
-                          <div style={{ fontSize:12, color:"#64748b", marginBottom:4 }}>{n.message}</div>
+                          <div style={{ fontWeight:n.read?400:700, fontSize:13, color:"#0f172a", marginBottom:2 }}>
+                            {getNotifText(n, lang)}
+                          </div>
+                          {n.data?.destination && (
+                            <div style={{ fontSize:12, color:"#64748b", marginBottom:2 }}>📍 {n.data.destination}</div>
+                          )}
                           <div style={{ fontSize:11, color:"#94a3b8" }}>{timeAgo(n.createdAt)}</div>
                         </div>
                         {!n.read && (
