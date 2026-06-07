@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Card, CardTitle, StatCard, TabBar } from "../components/Shared.jsx";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
+import { useSettings } from "../context/SettingsContext.jsx";
 
 const T = {
   en: {
@@ -182,6 +183,7 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
   const [holidays, setHolidays] = useState([]);
   const [driverLeaves, setDriverLeaves] = useState([]);
   const [vehicleOffDays, setVehicleOffDays] = useState([]);
+  const [additionalActivities, setAdditionalActivities] = useState([]);
 
   // Date range state
   const today = getToday();
@@ -197,21 +199,25 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
   const rtl = lang==="ar";
   const t = T[lang]||T.en;
   const isAdmin = user.role==="admin";
+  const isLogistic = user.role==="logistic";
   const userDC = getUserDC(user);
+  const { getShiftForDCAndDate } = useSettings();
 
   useEffect(() => {
     async function loadData() {
       try {
-        const [tSnap, hSnap, lSnap, vSnap] = await Promise.all([
+        const [tSnap, hSnap, lSnap, vSnap, aSnap] = await Promise.all([
           getDocs(collection(db, "tripLogs")),
           getDocs(collection(db, "publicHolidays")),
           getDocs(collection(db, "driverLeaves")),
           getDocs(collection(db, "vehicleOffDays")),
+          getDocs(collection(db, "additionalActivities")),
         ]);
         setTripLogs(tSnap.docs.map(d=>({id:d.id,...d.data()})));
         setHolidays(hSnap.docs.map(d=>({id:d.id,...d.data()})));
         setDriverLeaves(lSnap.docs.map(d=>({id:d.id,...d.data()})));
         setVehicleOffDays(vSnap.docs.map(d=>({id:d.id,...d.data()})));
+        setAdditionalActivities(aSnap.docs.map(d=>({id:d.id,...d.data()})));
       } catch(e) { console.error("Reports load:", e); }
     }
     loadData();
@@ -241,11 +247,14 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
   const myVeh = userDC ? vehicles.filter(v=>v.dc===userDC) : vehicles;
   const myUsers = userDC ? (users||[]).filter(u=>u.dc===userDC) : (users||[]);
 
-  const tabs = [
-    ["daily","📊",t.daily],["driver","👤",t.driver],
-    ["vehicle","🚗",t.vehicle],["fuel","⛽",t.fuel],
-    ["aging","⏱️",t.aging],["unassigned","⚪",t.unassignedReport]
-  ];
+  const tabs = isLogistic
+    ? [["vehicle","🚗",t.vehicle],["fuel","⛽",t.fuel],["ledger","📒","Ledger"]]
+    : [
+        ["daily","📊",t.daily],["driver","👤",t.driver],
+        ["vehicle","🚗",t.vehicle],["fuel","⛽",t.fuel],
+        ["aging","⏱️",t.aging],["unassigned","⚪",t.unassignedReport],
+        ["ledger","📒","Ledger"]
+      ];
 
   // Trip logs filtered by period + DC
   const myTripLogs = tripLogs.filter(tl=>{
@@ -885,6 +894,347 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
           </Card>
         </div>
       )}
+
+      {/* ══════════════════════════════════════
+          TAB: LEDGER — Driver + Vehicle
+      ══════════════════════════════════════ */}
+      {tab==="ledger"&&(
+        <LedgerTab
+          tripLogs={tripLogs}
+          invoices={invoices}
+          driverLeaves={driverLeaves}
+          fuelLogs={fuelLogs}
+          vehicleOffDays={vehicleOffDays}
+          holidays={holidays}
+          additionalActivities={additionalActivities}
+          vehicles={vehicles}
+          users={users}
+          user={user}
+          fromDate={fromDate}
+          toDate={toDate}
+          setFromDate={setFromDate}
+          setToDate={setToDate}
+          t={t}
+          getShiftForDCAndDate={getShiftForDCAndDate}
+          userDC={userDC}
+        />
+      )}
     </div>
   );
 }
+
+// ── LEDGER TAB ────────────────────────────────────────────────────────────────
+function LedgerTab({ tripLogs, invoices, driverLeaves, fuelLogs, vehicleOffDays, holidays, additionalActivities, vehicles, users, user, fromDate, toDate, setFromDate, setToDate, t, getShiftForDCAndDate, userDC }) {
+  const [subTab, setSubTab] = useState("driver");
+  const [selDriver, setSelDriver] = useState("all");
+  const [selVehicle, setSelVehicle] = useState("all");
+  const [viewMode, setViewMode] = useState("monthly"); // daily | weekly | monthly
+
+  const driverList = (users||[]).filter(u=>u.role==="driver"&&(!userDC||u.dc===userDC));
+  const vehicleList = vehicles.filter(v=>!userDC||v.dc===userDC);
+
+  const inputStyle = { border:"1.5px solid #e2e8f0", borderRadius:8, padding:"7px 10px", fontSize:13, outline:"none", cursor:"pointer" };
+
+  // Get dates in range
+  function getDatesInRange(from, to) {
+    const dates=[]; let d=new Date(from); const end=new Date(to);
+    while(d<=end){ dates.push(d.toISOString().split("T")[0]); d.setDate(d.getDate()+1); }
+    return dates;
+  }
+
+  function isWorkingDay(dateStr) {
+    const d=new Date(dateStr); const day=d.getDay();
+    if(day===5||day===6) return false; // Fri/Sat
+    if(holidays.some(h=>dateStr>=h.from&&dateStr<=h.to)) return false;
+    return true;
+  }
+
+  function getHoursFromShift(dc, dateStr) {
+    const shift = getShiftForDCAndDate(dc, dateStr);
+    return shift.hours || 8;
+  }
+
+  function downloadCSV(rows, filename) {
+    if(!rows.length) return;
+    const keys=Object.keys(rows[0]);
+    const csv=[keys.join(","),...rows.map(r=>keys.map(k=>JSON.stringify(r[k]??"",-0)).join(","))].join("\n");
+    const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"})); a.download=filename+".csv"; a.click();
+  }
+
+  // ── DRIVER LEDGER ──────────────────────────────────────────────────────────
+  function DriverLedger() {
+    const driver = selDriver!=="all" ? driverList.find(d=>d.uid===selDriver) : null;
+    const dc = driver?.dc || userDC || "Riyadh";
+
+    const myLogs = tripLogs.filter(tl=>
+      (selDriver==="all"||tl.driverId===selDriver) &&
+      tl.startDate>=fromDate && tl.startDate<=toDate
+    );
+    const myInvs = invoices.filter(i=>
+      (selDriver==="all"||i.driverId===selDriver) &&
+      i.date>=fromDate && i.date<=toDate
+    );
+    const myLeaves = driverLeaves.filter(l=>
+      (selDriver==="all"||l.driverId===selDriver) &&
+      l.status==="approved"
+    );
+    const myActivities = additionalActivities.filter(a=>
+      (selDriver==="all"||a.driverId===selDriver)
+    );
+
+    const workDates = getDatesInRange(fromDate, toDate).filter(d=>isWorkingDay(d));
+    const leaveDates=new Set(); myLeaves.forEach(l=>{let d=new Date(l.from);while(d<=new Date(l.to)){leaveDates.add(d.toISOString().split("T")[0]);d.setDate(d.getDate()+1);}});
+
+    const workingDays=workDates.length;
+    const leaveDaysCount=[...leaveDates].filter(d=>workDates.includes(d)).length;
+    const actualWorkingDays=workingDays-leaveDaysCount;
+
+    // Build daily rows
+    const dailyRows = workDates.map(dateStr=>{
+      const dayLogs=myLogs.filter(tl=>tl.startDate===dateStr);
+      const dayInvs=myInvs.filter(i=>i.date===dateStr);
+      const isLeave=leaveDates.has(dateStr);
+      const shiftHrs=getHoursFromShift(dc,dateStr);
+      const opHrs=dayLogs.reduce((s,tl)=>s+(tl.operationalHours||0),0);
+      const standbyHrs=Math.max(0,shiftHrs-opHrs);
+      const util=shiftHrs>0?Math.round(opHrs/shiftHrs*100):0;
+      const km=dayLogs.reduce((s,tl)=>s+(tl.totalKM||0),0);
+      const delivered=dayInvs.filter(i=>i.status==="delivered").length;
+      const failed=dayInvs.filter(i=>i.status==="failed").length;
+      const inCity=dayInvs.filter(i=>i.dtype==="incity").length;
+      const outCity=dayInvs.filter(i=>i.dtype==="outcity").length;
+      const activity=myActivities.filter(a=>a.submittedAt?.split("T")[0]===dateStr&&a.completed);
+      const actType=dayLogs.some(tl=>tl.type==="additional_activity")?"Additional Activity":dayLogs.length>0?"Invoice Delivery":isLeave?"Leave":"Unassigned";
+      const vehicle=dayLogs[0]?.vehiclePlate||"—";
+      return { date:dateStr, actType, vehicle, inCity, outCity, km:Math.round(km*10)/10, shiftHrs, opHrs:Math.round(opHrs*100)/100, standbyHrs:Math.round(standbyHrs*100)/100, util, invoices:dayInvs.length, delivered, failed, isLeave };
+    });
+
+    const totalOpHrs=dailyRows.reduce((s,r)=>s+r.opHrs,0);
+    const totalShiftHrs=dailyRows.reduce((s,r)=>s+r.shiftHrs,0);
+    const totalKM=dailyRows.reduce((s,r)=>s+r.km,0);
+    const totalDelivered=dailyRows.reduce((s,r)=>s+r.delivered,0);
+    const totalFailed=dailyRows.reduce((s,r)=>s+r.failed,0);
+    const totalInvs=dailyRows.reduce((s,r)=>s+r.invoices,0);
+    const activeDays=dailyRows.filter(r=>r.actType!=="Unassigned"&&r.actType!=="Leave").length;
+    const totalUtil=totalShiftHrs>0?Math.round(totalOpHrs/totalShiftHrs*100):0;
+    const standbyHrsTotal=Math.max(0,totalShiftHrs-totalOpHrs);
+    const deliveryRate=totalInvs>0?Math.round(totalDelivered/totalInvs*100):0;
+
+    return (
+      <div>
+        <div style={{ display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center" }}>
+          <select value={selDriver} onChange={e=>setSelDriver(e.target.value)} style={{...inputStyle,minWidth:160}}>
+            <option value="all">All Drivers</option>
+            {driverList.map(d=><option key={d.uid} value={d.uid}>{d.name} ({d.dc})</option>)}
+          </select>
+          <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} style={inputStyle} />
+          <span style={{fontSize:13,color:"#64748b"}}>→</span>
+          <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} style={inputStyle} />
+          <button onClick={()=>downloadCSV(dailyRows,"driver_ledger")} style={{padding:"7px 14px",borderRadius:7,border:"1px solid #6366f1",background:"white",color:"#6366f1",cursor:"pointer",fontWeight:600,fontSize:13}}>📥 CSV</button>
+        </div>
+
+        {/* Monthly Summary */}
+        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:16 }}>
+          {[
+            {label:"Working Days",val:workingDays,color:"#1A3A5C"},
+            {label:"Active Days",val:activeDays,color:"#10b981"},
+            {label:"Leave Days",val:leaveDaysCount,color:"#f59e0b"},
+            {label:"Unassigned Days",val:Math.max(0,actualWorkingDays-activeDays),color:"#64748b"},
+            {label:"Shift Hours",val:Math.round(totalShiftHrs*10)/10+"h",color:"#6366f1"},
+            {label:"Operational Hours",val:Math.round(totalOpHrs*10)/10+"h",color:"#0891b2"},
+            {label:"Standby Hours",val:Math.round(standbyHrsTotal*10)/10+"h",color:"#94a3b8"},
+            {label:"Utilization %",val:totalUtil+"%",color:totalUtil>=80?"#10b981":totalUtil>=50?"#f59e0b":"#ef4444"},
+            {label:"Total KM",val:Math.round(totalKM)+" km",color:"#7c3aed"},
+            {label:"Delivery Rate",val:deliveryRate+"%",color:deliveryRate>=80?"#10b981":"#f59e0b"},
+          ].map(s=>(
+            <div key={s.label} style={{background:"white",borderRadius:8,padding:"10px 12px",borderLeft:"3px solid "+s.color,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+              <div style={{fontSize:11,color:"#64748b",marginBottom:3}}>{s.label}</div>
+              <div style={{fontSize:18,fontWeight:800,color:s.color}}>{s.val}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Daily Rows */}
+        <div style={{ overflowX:"auto" }}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+            <thead>
+              <tr style={{background:"#f8fafc"}}>
+                {["Date","Activity","Vehicle","In-City","Out-City","Shift Hrs","Op Hrs","Standby Hrs","Util%","KM","Invoices","Del","Failed"].map(h=>(
+                  <th key={h} style={{padding:"8px 10px",textAlign:"left",fontWeight:700,color:"#374151",borderBottom:"2px solid #e2e8f0",whiteSpace:"nowrap"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {dailyRows.map((r,i)=>(
+                <tr key={r.date} style={{background:i%2===0?"white":"#f8fafc",borderBottom:"1px solid #f1f5f9"}}>
+                  <td style={{padding:"7px 10px",fontWeight:600,whiteSpace:"nowrap"}}>{r.date}</td>
+                  <td style={{padding:"7px 10px"}}>
+                    <span style={{fontSize:12,fontWeight:600,padding:"2px 7px",borderRadius:5,
+                      background:r.actType==="Invoice Delivery"?"#dbeafe":r.actType==="Additional Activity"?"#f3e8ff":r.actType==="Leave"?"#fef3c7":"#f1f5f9",
+                      color:r.actType==="Invoice Delivery"?"#1e40af":r.actType==="Additional Activity"?"#7c3aed":r.actType==="Leave"?"#92400e":"#475569"
+                    }}>{r.actType}</span>
+                  </td>
+                  <td style={{padding:"7px 10px",color:"#64748b"}}>{r.vehicle}</td>
+                  <td style={{padding:"7px 10px",textAlign:"center"}}>{r.inCity||"—"}</td>
+                  <td style={{padding:"7px 10px",textAlign:"center"}}>{r.outCity||"—"}</td>
+                  <td style={{padding:"7px 10px",color:"#6366f1",fontWeight:600}}>{r.shiftHrs}h</td>
+                  <td style={{padding:"7px 10px",color:"#0891b2",fontWeight:600}}>{r.opHrs}h</td>
+                  <td style={{padding:"7px 10px",color:"#94a3b8"}}>{r.standbyHrs}h</td>
+                  <td style={{padding:"7px 10px",fontWeight:600,color:r.util>=80?"#10b981":r.util>=50?"#f59e0b":"#ef4444"}}>{r.util}%</td>
+                  <td style={{padding:"7px 10px"}}>{r.km}</td>
+                  <td style={{padding:"7px 10px",textAlign:"center"}}>{r.invoices||"—"}</td>
+                  <td style={{padding:"7px 10px",textAlign:"center",color:"#10b981",fontWeight:r.delivered>0?700:400}}>{r.delivered||"—"}</td>
+                  <td style={{padding:"7px 10px",textAlign:"center",color:"#ef4444",fontWeight:r.failed>0?700:400}}>{r.failed||"—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  // ── VEHICLE LEDGER ──────────────────────────────────────────────────────────
+  function VehicleLedger() {
+    const vehicle = selVehicle!=="all" ? vehicleList.find(v=>v.plate===selVehicle) : null;
+    const dc = vehicle?.dc || userDC || "Riyadh";
+
+    const myLogs = tripLogs.filter(tl=>
+      (selVehicle==="all"||tl.vehiclePlate===selVehicle) &&
+      tl.startDate>=fromDate && tl.startDate<=toDate
+    );
+    const myInvs = invoices.filter(i=>
+      (selVehicle==="all"||i.vehicle===selVehicle) &&
+      i.date>=fromDate && i.date<=toDate
+    );
+    const myFuelLogs = fuelLogs.filter(l=>
+      (selVehicle==="all"||l.vehicle===selVehicle) &&
+      l.date>=fromDate && l.date<=toDate
+    );
+    const myOffDays = vehicleOffDays.filter(o=>
+      (selVehicle==="all"||o.vehiclePlate===selVehicle)
+    );
+
+    const workDates = getDatesInRange(fromDate, toDate).filter(d=>isWorkingDay(d));
+    const offDayDates=new Set(); myOffDays.forEach(o=>{let d=new Date(o.from);while(d<=new Date(o.to)){offDayDates.add(d.toISOString().split("T")[0]);d.setDate(d.getDate()+1);}});
+
+    const workingDays=workDates.length;
+    const maintDays=[...offDayDates].filter(d=>workDates.includes(d)).length;
+
+    const dailyRows = workDates.map(dateStr=>{
+      const dayLogs=myLogs.filter(tl=>tl.startDate===dateStr);
+      const dayFuel=myFuelLogs.filter(l=>l.date===dateStr);
+      const dayInvs=myInvs.filter(i=>i.date===dateStr);
+      const isMaint=offDayDates.has(dateStr);
+      const shiftHrs=getHoursFromShift(dc,dateStr);
+      const onRoadHrs=dayLogs.reduce((s,tl)=>s+(tl.operationalHours||0),0);
+      const standbyHrs=Math.max(0,shiftHrs-onRoadHrs);
+      const util=shiftHrs>0?Math.round(onRoadHrs/shiftHrs*100):0;
+      const km=dayLogs.reduce((s,tl)=>s+(tl.totalKM||0),0);
+      const fuelAdded=dayFuel.reduce((s,l)=>s+(l.liters||0),0);
+      const fuelUsed=dayLogs.reduce((s,tl)=>s+(tl.fuelUsed||0),0);
+      const driver=dayLogs[0]?.driverName||"—";
+      const actType=isMaint?"Maintenance":dayLogs.length>0?"On-Road":"Standby";
+      return {date:dateStr,actType,driver,km:Math.round(km*10)/10,shiftHrs,onRoadHrs:Math.round(onRoadHrs*100)/100,standbyHrs:Math.round(standbyHrs*100)/100,util,fuelAdded:Math.round(fuelAdded*10)/10,fuelUsed:Math.round(fuelUsed*10)/10,invoices:dayInvs.length,isMaint};
+    });
+
+    const totalOnRoad=dailyRows.reduce((s,r)=>s+r.onRoadHrs,0);
+    const totalShift=dailyRows.reduce((s,r)=>s+r.shiftHrs,0);
+    const totalKM=dailyRows.reduce((s,r)=>s+r.km,0);
+    const totalFuelAdded=dailyRows.reduce((s,r)=>s+r.fuelAdded,0);
+    const totalFuelUsed=dailyRows.reduce((s,r)=>s+r.fuelUsed,0);
+    const onRoadDays=dailyRows.filter(r=>r.actType==="On-Road").length;
+    const totalUtil=totalShift>0?Math.round(totalOnRoad/totalShift*100):0;
+    const kmpl=totalFuelUsed>0?Math.round(totalKM/totalFuelUsed*10)/10:0;
+
+    return (
+      <div>
+        <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+          <select value={selVehicle} onChange={e=>setSelVehicle(e.target.value)} style={{...inputStyle,minWidth:160}}>
+            <option value="all">All Vehicles</option>
+            {vehicleList.map(v=><option key={v.plate} value={v.plate}>{v.plate} ({v.dc})</option>)}
+          </select>
+          <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} style={inputStyle} />
+          <span style={{fontSize:13,color:"#64748b"}}>→</span>
+          <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} style={inputStyle} />
+          <button onClick={()=>downloadCSV(dailyRows,"vehicle_ledger")} style={{padding:"7px 14px",borderRadius:7,border:"1px solid #6366f1",background:"white",color:"#6366f1",cursor:"pointer",fontWeight:600,fontSize:13}}>📥 CSV</button>
+        </div>
+
+        {/* Monthly Summary */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:16}}>
+          {[
+            {label:"Working Days",val:workingDays,color:"#1A3A5C"},
+            {label:"On-Road Days",val:onRoadDays,color:"#10b981"},
+            {label:"Maintenance Days",val:maintDays,color:"#f59e0b"},
+            {label:"Standby Days",val:Math.max(0,workingDays-onRoadDays-maintDays),color:"#64748b"},
+            {label:"Shift Hours",val:Math.round(totalShift*10)/10+"h",color:"#6366f1"},
+            {label:"On-Road Hours",val:Math.round(totalOnRoad*10)/10+"h",color:"#0891b2"},
+            {label:"Standby Hours",val:Math.round(Math.max(0,totalShift-totalOnRoad)*10)/10+"h",color:"#94a3b8"},
+            {label:"Utilization %",val:totalUtil+"%",color:totalUtil>=80?"#10b981":totalUtil>=50?"#f59e0b":"#ef4444"},
+            {label:"Total KM",val:Math.round(totalKM)+" km",color:"#7c3aed"},
+            {label:"Fuel Added",val:Math.round(totalFuelAdded*10)/10+"L",color:"#0ea5e9"},
+            {label:"Fuel Consumed",val:Math.round(totalFuelUsed*10)/10+"L",color:"#ef4444"},
+            {label:"KMPL Efficiency",val:kmpl+" km/L",color:kmpl>=10?"#10b981":"#f59e0b"},
+          ].map(s=>(
+            <div key={s.label} style={{background:"white",borderRadius:8,padding:"10px 12px",borderLeft:"3px solid "+s.color,boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
+              <div style={{fontSize:11,color:"#64748b",marginBottom:3}}>{s.label}</div>
+              <div style={{fontSize:18,fontWeight:800,color:s.color}}>{s.val}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Daily Rows */}
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+            <thead>
+              <tr style={{background:"#f8fafc"}}>
+                {["Date","Activity","Driver","KM","Shift Hrs","On-Road Hrs","Standby Hrs","Util%","Fuel Added","Fuel Used","Invoices"].map(h=>(
+                  <th key={h} style={{padding:"8px 10px",textAlign:"left",fontWeight:700,color:"#374151",borderBottom:"2px solid #e2e8f0",whiteSpace:"nowrap"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {dailyRows.map((r,i)=>(
+                <tr key={r.date} style={{background:i%2===0?"white":"#f8fafc",borderBottom:"1px solid #f1f5f9"}}>
+                  <td style={{padding:"7px 10px",fontWeight:600,whiteSpace:"nowrap"}}>{r.date}</td>
+                  <td style={{padding:"7px 10px"}}>
+                    <span style={{fontSize:12,fontWeight:600,padding:"2px 7px",borderRadius:5,
+                      background:r.actType==="On-Road"?"#dbeafe":r.actType==="Maintenance"?"#fef3c7":"#f1f5f9",
+                      color:r.actType==="On-Road"?"#1e40af":r.actType==="Maintenance"?"#92400e":"#475569"
+                    }}>{r.actType}</span>
+                  </td>
+                  <td style={{padding:"7px 10px",color:"#64748b"}}>{r.driver}</td>
+                  <td style={{padding:"7px 10px"}}>{r.km||"—"}</td>
+                  <td style={{padding:"7px 10px",color:"#6366f1",fontWeight:600}}>{r.shiftHrs}h</td>
+                  <td style={{padding:"7px 10px",color:"#0891b2",fontWeight:600}}>{r.onRoadHrs}h</td>
+                  <td style={{padding:"7px 10px",color:"#94a3b8"}}>{r.standbyHrs}h</td>
+                  <td style={{padding:"7px 10px",fontWeight:600,color:r.util>=80?"#10b981":r.util>=50?"#f59e0b":"#ef4444"}}>{r.util}%</td>
+                  <td style={{padding:"7px 10px",color:"#0ea5e9"}}>{r.fuelAdded||"—"}</td>
+                  <td style={{padding:"7px 10px",color:"#ef4444"}}>{r.fuelUsed||"—"}</td>
+                  <td style={{padding:"7px 10px",textAlign:"center"}}>{r.invoices||"—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Sub-tab switcher */}
+      <div style={{display:"flex",gap:8,marginBottom:16}}>
+        {[["driver","👤 Driver Ledger"],["vehicle","🚗 Vehicle Ledger"]].map(([v,l])=>(
+          <button key={v} onClick={()=>setSubTab(v)}
+            style={{padding:"10px 18px",borderRadius:8,border:"none",background:subTab===v?"#1A3A5C":"#f1f5f9",color:subTab===v?"white":"#374151",cursor:"pointer",fontSize:14,fontWeight:600}}>
+            {l}
+          </button>
+        ))}
+      </div>
+      {subTab==="driver"&&<DriverLedger />}
+      {subTab==="vehicle"&&<VehicleLedger />}
+    </div>
+  );
+}
+

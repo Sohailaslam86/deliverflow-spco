@@ -1,113 +1,90 @@
-import { useState, useRef, useEffect } from "react";
+// src/pages/MasterData.jsx
+// FINAL 8 TABS (per Handover v5 Section 3.9):
+// 1. DC Locations  2. Storage Conditions  3. Cities  4. Departments
+// 5. Driver Leaves  6. Vehicle Off Days (READ ONLY)
+// 7. Working Calendar (Shifts + Holidays)  8. App Settings (Failed Reasons + Activity Purposes)
+// REMOVED: Vehicles tab, Drivers tab, User Directory tab (all duplicates)
+
+import { useState, useEffect } from "react";
 import { Card, CardTitle, Btn, Input, Select, Textarea, SuccessMsg, TabBar } from "../components/Shared.jsx";
-import { STORAGE_CONDITIONS, CITIES, DCS } from "../data/masterData.js";
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
+import { STORAGE_CONDITIONS, CITIES, DCS, LEAVE_TYPES } from "../data/masterData.js";
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { sendNotification } from "../notificationService.js";
+import { useSettings } from "../context/SettingsContext.jsx";
 
 const T = {
   en: {
-    vehicles:"Vehicles", drivers:"Drivers", dcLocs:"Distribution Center Locations",
-    storage:"Storage Conditions", cities:"Cities", allUsers:"User Directory",
+    dcLocs:"Distribution Center Locations",
+    storage:"Storage Conditions", cities:"Cities",
     departments:"Departments",
     holidays:"Public Holidays", driverLeaves:"Driver Leaves", vehicleOff:"Vehicle Off Days",
-    addHoliday:"Add Holiday", addLeave:"Add Leave Request", addVehicleOff:"Add Vehicle Off",
+    workingCal:"Working Calendar", appSettings:"App Settings",
+    addHoliday:"Add Holiday", addLeave:"Add Leave Request",
     holidayName:"Holiday Name", fromDate:"From Date", toDate:"To Date",
-    leaveType:"Leave Type", annualLeave:"Annual Leave", sickLeave:"Sick Leave", emergencyLeave:"Emergency Leave",
-    selectDriver:"Select Driver", selectVehicle:"Select Vehicle", reason:"Reason",
+    leaveType:"Leave Type",
+    selectDriver:"Select Driver", reason:"Reason",
     myLeaveReq:"My Leave Requests", pendingApproval:"Pending Approval",
     approvedLeaves:"Approved Leaves", rejectedLeaves:"Rejected Leaves",
     approveLeave:"Approve", rejectLeave:"Reject",
-    managerApprove:"Manager Approved — Waiting Admin",
     leaveApproved:"Leave approved!", leaveRejected:"Leave rejected.",
     submitLeaveReq:"Submit Leave Request",
-    addVehicle:"Add Vehicle", addDriver:"Add Driver", addDC:"Add DC",
-    addStorage:"Add Storage Condition", addCity:"Add City",
+    addDC:"Add DC", addStorage:"Add Storage Condition", addCity:"Add City",
     addDept:"Add Department", deptName:"Department Name",
-    plate:"Plate Number", type:"Type", homeDC:"Home DC",
-    brand:"Brand", model:"Model", chassis:"Chassis", year:"Year",
-    fuelCap:"Fuel Capacity (L)", mileage:"Mileage (km/L)",
-    fahas:"Fahas Expiry", istimara:"Istimara Expiry", insurance:"Insurance Expiry",
-    nextOilKM:"Next Oil KM", nextOilDate:"Next Oil Date",
-    photos:"Vehicle Photos (up to 4)", uploadPhoto:"Upload Photo",
-    aiCheck:"AI Plate Verify", aiChecking:"Verifying...",
-    aiMatch:"Plate verified!", aiMismatch:"Plate mismatch",
-    aiNoPlate:"Take photo first", addBtn:"Add", edit:"Edit",
-    delete:"Delete", save:"Save", cancel:"Cancel",
+    addBtn:"Add", edit:"Edit", delete:"Delete", save:"Save", cancel:"Cancel",
     dcName:"DC Name", dcCity:"City", dcManager:"Manager",
     dcLat:"GPS Latitude", dcLng:"GPS Longitude",
     dcAddrEn:"Address (English)", dcAddrAr:"Address (Arabic)",
     storageName:"Condition Name", storageRange:"Temperature Range",
     storageColor:"Color", cityName:"City Name",
-    registered:"registered", active:"Active", maintenance:"Maintenance",
     viewMap:"View on Map",
-    driverName:"Driver Name", mobile:"Mobile", licNo:"License Number",
-    licExp:"License Expiry", driverCard:"Driver Card", driverCardExp:"Card Expiry",
-    status:"Status", onLeave:"On Leave", inactive:"Inactive",
-    requestVehicle:"Request New Vehicle", requestDriver:"Request New Driver",
-    reqPending:"Pending Requests", reqApprove:"Approve", reqReject:"Reject",
-    reqReason:"Reason / Notes", reqSubmitted:"Request submitted for Admin approval!",
+    driverName:"Driver Name",
+    status:"Status",
+    reqSubmitted:"Request submitted for Admin approval!",
     reqApproved:"Request approved!", reqRejected:"Request rejected.",
-    vehReqTab:"Vehicle Requests", drvReqTab:"Driver Requests"
   },
   ar: {
-    vehicles:"المركبات", drivers:"السائقون", dcLocs:"مواقع مراكز التوزيع",
-    storage:"ظروف التخزين", cities:"مدن التسليم", allUsers:"دليل المستخدمين",
+    dcLocs:"مواقع مراكز التوزيع",
+    storage:"ظروف التخزين", cities:"مدن التسليم",
     departments:"الأقسام",
     holidays:"الإجازات الرسمية", driverLeaves:"إجازات السائقين", vehicleOff:"أيام توقف المركبات",
-    addHoliday:"إضافة إجازة رسمية", addLeave:"طلب إجازة", addVehicleOff:"إضافة يوم توقف",
+    workingCal:"التقويم الوظيفي", appSettings:"إعدادات التطبيق",
+    addHoliday:"إضافة إجازة رسمية", addLeave:"طلب إجازة",
     holidayName:"اسم الإجازة", fromDate:"من تاريخ", toDate:"إلى تاريخ",
-    leaveType:"نوع الإجازة", annualLeave:"إجازة سنوية", sickLeave:"إجازة مرضية", emergencyLeave:"إجازة طارئة",
-    selectDriver:"اختر السائق", selectVehicle:"اختر المركبة", reason:"السبب",
+    leaveType:"نوع الإجازة",
+    selectDriver:"اختر السائق", reason:"السبب",
     myLeaveReq:"طلبات إجازاتي", pendingApproval:"بانتظار الموافقة",
     approvedLeaves:"الإجازات الموافق عليها", rejectedLeaves:"الإجازات المرفوضة",
     approveLeave:"موافقة", rejectLeave:"رفض",
-    managerApprove:"وافق المدير — بانتظار المسؤول",
     leaveApproved:"تمت الموافقة على الإجازة!", leaveRejected:"تم رفض الإجازة.",
     submitLeaveReq:"إرسال طلب الإجازة",
-    addVehicle:"إضافة مركبة", addDriver:"إضافة سائق", addDC:"إضافة مركز",
-    addStorage:"إضافة حالة تخزين", addCity:"إضافة مدينة",
+    addDC:"إضافة مركز", addStorage:"إضافة حالة تخزين", addCity:"إضافة مدينة",
     addDept:"إضافة قسم", deptName:"اسم القسم",
-    plate:"رقم اللوحة", type:"النوع", homeDC:"مركز التوزيع",
-    brand:"الماركة", model:"الموديل", chassis:"رقم الهيكل", year:"السنة",
-    fuelCap:"سعة الخزان (L)", mileage:"كفاءة الوقود (km/L)",
-    fahas:"انتهاء الفحص", istimara:"انتهاء الاستمارة", insurance:"انتهاء التأمين",
-    nextOilKM:"كم تغيير الزيت", nextOilDate:"تاريخ تغيير الزيت",
-    photos:"صور المركبة", uploadPhoto:"رفع صورة",
-    aiCheck:"التحقق من اللوحة", aiChecking:"جاري التحقق...",
-    aiMatch:"تم التحقق!", aiMismatch:"اللوحة غير مطابقة",
-    aiNoPlate:"التقط صورة أولاً", addBtn:"إضافة", edit:"تعديل",
-    delete:"حذف", save:"حفظ", cancel:"إلغاء",
+    addBtn:"إضافة", edit:"تعديل", delete:"حذف", save:"حفظ", cancel:"إلغاء",
     dcName:"اسم المركز", dcCity:"المدينة", dcManager:"المدير",
     dcLat:"خط العرض (GPS)", dcLng:"خط الطول (GPS)",
     dcAddrEn:"العنوان (إنجليزي)", dcAddrAr:"العنوان (عربي)",
     storageName:"اسم الحالة", storageRange:"نطاق الحرارة",
     storageColor:"اللون", cityName:"اسم المدينة",
-    registered:"مسجلة", active:"نشط", maintenance:"صيانة",
     viewMap:"عرض على الخريطة",
-    driverName:"اسم السائق", mobile:"الجوال", licNo:"رقم الرخصة",
-    licExp:"انتهاء الرخصة", driverCard:"بطاقة السائق", driverCardExp:"انتهاء البطاقة",
-    status:"الحالة", onLeave:"إجازة", inactive:"غير نشط",
-    requestVehicle:"طلب مركبة جديدة", requestDriver:"طلب سائق جديد",
-    reqPending:"الطلبات المعلقة", reqApprove:"موافقة", reqReject:"رفض",
-    reqReason:"السبب", reqSubmitted:"تم إرسال الطلب للمسؤول!",
+    driverName:"اسم السائق",
+    status:"الحالة",
+    reqSubmitted:"تم إرسال الطلب للمسؤول!",
     reqApproved:"تمت الموافقة!", reqRejected:"تم الرفض.",
-    vehReqTab:"طلبات المركبات", drvReqTab:"طلبات السائقين"
   }
 };
 
-const ROLE_LABELS = { admin:"System Administrator",planning:"Planning",manager:"Distribution Center Manager",driver:"Delivery Driver",viewonly:"View Only" };
-const EMPTY_VEH = { plate:"",type:"Dyna",dc:"Riyadh",brand:"",model:"",chassis:"",year:"",fahas:"",istimara:"",insurance:"",fuelCapacity:80,mileage:12,nextOilKM:"",nextOilDate:"" };
-const EMPTY_DRV = { name:"",mobile:"",dc:"Riyadh",licNo:"",licExp:"",driverCard:"",driverCardExp:"",status:"Active" };
-
 export default function MasterData({ vehicles, setVehicles, users, setUsers, lang, user }) {
-  const [tab, setTab] = useState("vehicles");
+  const [tab, setTab] = useState("dcs");
   const [done, setDone] = useState("");
-  const rtl = lang==="ar";
-  const t = T[lang]||T.en;
-  const isAdmin = user.role==="admin";
-  const isManager = user.role==="manager";
-  const isLogistic = user.role==="logistic";
+  const rtl = lang === "ar";
+  const t = T[lang] || T.en;
+  const isAdmin = user.role === "admin";
+  const isManager = user.role === "manager";
+  const isLogistic = user.role === "logistic";
+  const isDriver = user.role === "driver";
+
+  const { failedReasons, setFailedReasons, activityPurposes, setActivityPurposes, shifts, setShifts } = useSettings();
 
   const [dcList, setDcList] = useState([
     { dc:"Riyadh",city:"Riyadh",manager:"AlWaleed Qahtani",lat:"24.7136",lng:"46.6753",addrEn:"King Fahd Road, Al Olaya, Riyadh 12211",addrAr:"طريق الملك فهد، العليا، الرياض 12211" },
@@ -117,12 +94,8 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
   const [storageList, setStorageList] = useState(STORAGE_CONDITIONS.map(s=>({...s})));
   const [cityList, setCityList] = useState([...CITIES]);
 
-  // Issue #4 — Departments: Firestore se load
   const [deptList, setDeptList] = useState([]);
   const [deptLoading, setDeptLoading] = useState(false);
-
-
-  // Holidays + Leaves
   const [holidays, setHolidays] = useState([]);
   const [driverLeaves, setDriverLeaves] = useState([]);
   const [vehicleOffDays, setVehicleOffDays] = useState([]);
@@ -134,7 +107,6 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
     loadVehicleOffDays();
   }, []);
 
-  // Issue #4 — Departments Firestore load
   async function loadDepartments() {
     setDeptLoading(true);
     try {
@@ -165,130 +137,44 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
     } catch(e) { console.error("VehicleOff load error:", e); }
   }
 
+  // Build tabs — driver sees only Driver Leaves; others see their relevant tabs
   const tabs = [
-    ["vehicles","🚗",t.vehicles],
-    ["drivers","👤",t.drivers],
-    ["dcs","📍",t.dcLocs],
-    ["storage","🌡️",t.storage],
-    ["cities","🌆",t.cities],
-    ["departments","🏢",t.departments],
-    ["holidays","🏖️",t.holidays],
-    ...(isAdmin||isManager||isLogistic||user.role==="driver"?[["driverleaves","👤",t.driverLeaves]]:[]),
-    ...(isAdmin||isManager||isLogistic?[["vehicleoff","🚗",t.vehicleOff]]:[]),
-    ...(isAdmin?[["allusers","👥",t.allUsers]]:[]),
+    ...(isAdmin || isManager ? [["dcs","📍",t.dcLocs]] : []),
+    ...(isAdmin || isManager ? [["storage","🌡️",t.storage]] : []),
+    ...(isAdmin || isManager ? [["cities","🌆",t.cities]] : []),
+    ...(isAdmin || isManager ? [["departments","🏢",t.departments]] : []),
+    ...((isAdmin || isManager || isLogistic || isDriver) ? [["driverleaves","👤",t.driverLeaves]] : []),
+    ...((isAdmin || isManager || isLogistic) ? [["vehicleoff","🚗",t.vehicleOff]] : []),
+    ...(isAdmin ? [["workingcal","📅",t.workingCal]] : []),
+    ...(isAdmin ? [["appsettings","⚙️",t.appSettings]] : []),
   ];
+
+  // Set default tab based on role
+  useEffect(() => {
+    if (isDriver) setTab("driverleaves");
+    else setTab("dcs");
+  }, []);
 
   function flash(msg) { setDone(msg); setTimeout(()=>setDone(""),3000); }
 
   return (
-    <div style={{ direction:rtl?"rtl":"ltr" }}>
-      {done&&<SuccessMsg msg={done} />}
+    <div style={{ direction: rtl ? "rtl" : "ltr" }}>
+      {done && <SuccessMsg msg={done} />}
       <TabBar tabs={tabs} active={tab} onChange={setTab} />
-      {tab==="vehicles"&&<VehiclesTab vehicles={vehicles} setVehicles={setVehicles} setDone={flash} t={t} isAdmin={isAdmin} userDC={user.dc} />}
-      {tab==="drivers"&&<DriversTab users={users} setUsers={setUsers} setDone={flash} t={t} isAdmin={isAdmin} userDC={user.dc} />}
-      {tab==="dcs"&&<DCsTab dcList={dcList} setDcList={setDcList} setDone={flash} t={t} isAdmin={isAdmin} />}
-      {tab==="storage"&&<StorageTab storageList={storageList} setStorageList={setStorageList} setDone={flash} t={t} isAdmin={isAdmin} />}
-      {tab==="cities"&&<CitiesTab cityList={cityList} setCityList={setCityList} setDone={flash} t={t} isAdmin={isAdmin} />}
-      {tab==="departments"&&<DepartmentsTab deptList={deptList} setDeptList={setDeptList} setDone={flash} t={t} isAdmin={isAdmin} loading={deptLoading} reload={loadDepartments} />}
-      {tab==="holidays"&&<HolidaysTab holidays={holidays} setHolidays={setHolidays} setDone={flash} t={t} isAdmin={isAdmin} reload={loadHolidays} />}
-      {tab==="driverleaves"&&<DriverLeavesTab leaves={driverLeaves} setLeaves={setDriverLeaves} users={users} setDone={flash} t={t} isAdmin={isAdmin} isManager={isManager} isLogistic={isLogistic} user={user} reload={loadDriverLeaves} />}
-      {tab==="vehicleoff"&&<VehicleOffTab offDays={vehicleOffDays} setOffDays={setVehicleOffDays} vehicles={vehicles} setDone={flash} t={t} isAdmin={isAdmin} isManager={isManager} isLogistic={isLogistic} user={user} reload={loadVehicleOffDays} />}
-      {tab==="allusers"&&isAdmin&&<AllUsersTab users={users} setUsers={setUsers} setDone={flash} t={t} />}
+
+      {tab === "dcs" && <DCsTab dcList={dcList} setDcList={setDcList} setDone={flash} t={t} isAdmin={isAdmin} />}
+      {tab === "storage" && <StorageTab storageList={storageList} setStorageList={setStorageList} setDone={flash} t={t} isAdmin={isAdmin} />}
+      {tab === "cities" && <CitiesTab cityList={cityList} setCityList={setCityList} setDone={flash} t={t} isAdmin={isAdmin} />}
+      {tab === "departments" && <DepartmentsTab deptList={deptList} setDeptList={setDeptList} setDone={flash} t={t} isAdmin={isAdmin} loading={deptLoading} reload={loadDepartments} />}
+      {tab === "driverleaves" && <DriverLeavesTab leaves={driverLeaves} setLeaves={setDriverLeaves} users={users} setDone={flash} t={t} isAdmin={isAdmin} isManager={isManager} isLogistic={isLogistic} user={user} reload={loadDriverLeaves} />}
+      {tab === "vehicleoff" && <VehicleOffTab offDays={vehicleOffDays} isAdmin={isAdmin} user={user} />}
+      {tab === "workingcal" && isAdmin && <WorkingCalendarTab holidays={holidays} setHolidays={setHolidays} shifts={shifts} setShifts={setShifts} setDone={flash} t={t} reload={loadHolidays} />}
+      {tab === "appsettings" && isAdmin && <AppSettingsTab failedReasons={failedReasons} setFailedReasons={setFailedReasons} activityPurposes={activityPurposes} setActivityPurposes={setActivityPurposes} setDone={flash} />}
     </div>
   );
 }
 
-function VehiclesTab({ vehicles, setVehicles, setDone, t, isAdmin, userDC }) {
-  const myVehicles = userDC ? vehicles.filter(v=>v.dc===userDC) : vehicles;
-  const allDCs = [...new Set(vehicles.map(v=>v.dc))];
-
-  function toggleStatus(plate) {
-    setVehicles(prev=>prev.map(v=>v.plate===plate?{...v,status:v.status==="Active"?"Maintenance":"Active"}:v));
-  }
-  function toggleDC(plate, dc) {
-    setVehicles(prev=>prev.map(v=>v.plate===plate?{...v,dc}:v));
-    setDone(plate+" transferred to "+dc);
-  }
-
-  return (
-    <div>
-      <div style={{ fontSize:14, color:"#64748b", marginBottom:12 }}>
-        {myVehicles.length} {t.registered}
-        <span style={{ marginLeft:12, color:"#94a3b8", fontSize:13 }}>
-          (To add a vehicle, use Fleet Management)
-        </span>
-      </div>
-      {myVehicles.length===0&&(
-        <Card><div style={{ textAlign:"center", padding:32, color:"#94a3b8", fontSize:15 }}>🚗 No vehicles found</div></Card>
-      )}
-      {allDCs.filter(dc=>!userDC||dc===userDC).map(dc=>{
-        const dv = vehicles.filter(v=>v.dc===dc);
-        if (!dv.length) return null;
-        return (
-          <Card key={dc}>
-            <CardTitle>📍 {dc} Distribution Center — {dv.length} {t.vehicles}</CardTitle>
-            {dv.map(v=>(
-              <div key={v.plate} style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"12px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:700, fontSize:14 }}>{v.plate} <span style={{ fontSize:13, color:"#64748b" }}>({v.type}) {v.brand} {v.model}</span></div>
-                  <div style={{ fontSize:12, color:"#94a3b8" }}>{t.fahas}: {v.fahas||"-"} | {t.insurance}: {v.insurance||"-"}</div>
-                </div>
-                <span style={{ fontSize:13, fontWeight:600, padding:"3px 10px", borderRadius:99, background:v.status==="Maintenance"?"#fef3c7":"#d1fae5", color:v.status==="Maintenance"?"#92400e":"#065f46" }}>{v.status}</span>
-                {isAdmin&&(
-                  <select value={v.dc} onChange={e=>toggleDC(v.plate,e.target.value)}
-                    style={{ border:"1px solid #e2e8f0", borderRadius:6, padding:"5px 8px", fontSize:13, cursor:"pointer" }}>
-                    {DCS.map(d=><option key={d} value={d}>{d}</option>)}
-                  </select>
-                )}
-                {isAdmin&&<Btn small onClick={()=>toggleStatus(v.plate)} color={v.status==="Active"?"#f59e0b":"#10b981"}>{v.status==="Active"?"🔧":"✅"}</Btn>}
-              </div>
-            ))}
-          </Card>
-        );
-      })}
-    </div>
-  );
-}
-
-function DriversTab({ users, setUsers, setDone, t, isAdmin, userDC }) {
-  const allDCsForDrivers = [...new Set(users.filter(u=>u.role==="driver").map(u=>u.dc))];
-
-  return (
-    <div>
-      <div style={{ fontSize:14, color:"#64748b", marginBottom:12 }}>
-        {users.filter(u=>u.role==="driver"&&(!userDC||u.dc===userDC)).length} drivers
-        <span style={{ marginLeft:12, color:"#94a3b8", fontSize:13 }}>
-          (To add a driver, use User Management → Access Requests)
-        </span>
-      </div>
-      {allDCsForDrivers.filter(dc=>!userDC||dc===userDC).map(dc=>{
-        const dv = users.filter(u=>u.role==="driver"&&u.dc===dc);
-        if (!dv.length) return null;
-        return (
-          <Card key={dc}>
-            <CardTitle>📍 {dc} Distribution Center — {dv.length} Drivers</CardTitle>
-            {dv.map(d=>(
-              <div key={d.uid} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
-                <div style={{ width:36, height:36, borderRadius:"50%", background:"#b45309", display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontWeight:700, fontSize:14, flexShrink:0 }}>{(d.name||"?").charAt(0)}</div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:600, fontSize:14 }}>{d.name}</div>
-                  <div style={{ fontSize:13, color:"#64748b" }}>{d.phone||d.mobile}</div>
-                  {d.licNo&&<div style={{ fontSize:12, color:"#6366f1" }}>📄 Lic: {d.licNo} | Exp: {d.licExp}</div>}
-                </div>
-                <span style={{ fontSize:13, fontWeight:600, padding:"3px 10px", borderRadius:99,
-                  background:d.status==="active"||d.status==="Active"?"#d1fae5":d.status==="On Leave"?"#fef3c7":"#fee2e2",
-                  color:d.status==="active"||d.status==="Active"?"#065f46":d.status==="On Leave"?"#92400e":"#991b1b"
-                }}>{d.status||"Active"}</span>
-              </div>
-            ))}
-          </Card>
-        );
-      })}
-    </div>
-  );
-}
-
-
+// ── DC LOCATIONS TAB ──────────────────────────────────────────────────────────
 function DCsTab({ dcList, setDcList, setDone, t, isAdmin }) {
   const [showAdd, setShowAdd] = useState(false);
   const [editIdx, setEditIdx] = useState(null);
@@ -300,7 +186,6 @@ function DCsTab({ dcList, setDcList, setDone, t, isAdmin }) {
     else { setDcList(prev=>[...prev,{...f}]); setDone(f.dc+" added!"); }
     setShowAdd(false); setEditIdx(null); setF({ dc:"",city:"",manager:"",lat:"",lng:"",addrEn:"",addrAr:"" });
   }
-
   function startEdit(dc,idx) { setEditIdx(idx); setF({...dc}); setShowAdd(true); }
   function deleteDC(idx) { if (window.confirm("Delete this DC?")) { setDcList(prev=>prev.filter((_,i)=>i!==idx)); setDone("DC deleted."); } }
 
@@ -353,6 +238,7 @@ function DCsTab({ dcList, setDcList, setDone, t, isAdmin }) {
   );
 }
 
+// ── STORAGE CONDITIONS TAB ────────────────────────────────────────────────────
 function StorageTab({ storageList, setStorageList, setDone, t, isAdmin }) {
   const [showAdd, setShowAdd] = useState(false);
   const [editIdx, setEditIdx] = useState(null);
@@ -403,6 +289,7 @@ function StorageTab({ storageList, setStorageList, setDone, t, isAdmin }) {
   );
 }
 
+// ── CITIES TAB ────────────────────────────────────────────────────────────────
 function CitiesTab({ cityList, setCityList, setDone, t, isAdmin }) {
   const [showAdd, setShowAdd] = useState(false);
   const [newCity, setNewCity] = useState("");
@@ -448,7 +335,7 @@ function CitiesTab({ cityList, setCityList, setDone, t, isAdmin }) {
   );
 }
 
-// Issue #4 — Departments Tab — Firestore CRUD
+// ── DEPARTMENTS TAB ───────────────────────────────────────────────────────────
 function DepartmentsTab({ deptList, setDeptList, setDone, t, isAdmin, loading, reload }) {
   const [showAdd, setShowAdd] = useState(false);
   const [newDeptName, setNewDeptName] = useState("");
@@ -460,14 +347,10 @@ function DepartmentsTab({ deptList, setDeptList, setDone, t, isAdmin, loading, r
     if (!newDeptName.trim()) return;
     setSaving(true);
     try {
-      const docRef = await addDoc(collection(db, "departments"), {
-        name: newDeptName.trim(),
-        createdAt: new Date().toISOString()
-      });
+      const docRef = await addDoc(collection(db, "departments"), { name: newDeptName.trim(), createdAt: new Date().toISOString() });
       setDeptList(prev=>[...prev, { id:docRef.id, name:newDeptName.trim() }]);
       setDone(newDeptName+" added!");
-      setNewDeptName("");
-      setShowAdd(false);
+      setNewDeptName(""); setShowAdd(false);
     } catch(e) { setDone("❌ Error: "+e.message); }
     setSaving(false);
   }
@@ -478,9 +361,7 @@ function DepartmentsTab({ deptList, setDeptList, setDone, t, isAdmin, loading, r
     try {
       await updateDoc(doc(db, "departments", id), { name: editVal.trim() });
       setDeptList(prev=>prev.map(d=>d.id===id?{...d,name:editVal.trim()}:d));
-      setDone(editVal+" updated!");
-      setEditId(null);
-      setEditVal("");
+      setDone(editVal+" updated!"); setEditId(null); setEditVal("");
     } catch(e) { setDone("❌ Error: "+e.message); }
     setSaving(false);
   }
@@ -500,40 +381,28 @@ function DepartmentsTab({ deptList, setDeptList, setDone, t, isAdmin, loading, r
         <CardTitle style={{ margin:0 }}>🏢 {t.departments}</CardTitle>
         {isAdmin&&<Btn small onClick={()=>setShowAdd(!showAdd)} color="#6366f1">➕ {t.addDept}</Btn>}
       </div>
-
       {loading&&<div style={{ textAlign:"center", padding:16, color:"#94a3b8" }}>⏳ Loading...</div>}
-
       {showAdd&&isAdmin&&(
         <div style={{ display:"flex", gap:8, marginBottom:16 }}>
-          <input
-            value={newDeptName}
-            onChange={e=>setNewDeptName(e.target.value)}
-            placeholder={t.deptName}
+          <input value={newDeptName} onChange={e=>setNewDeptName(e.target.value)} placeholder={t.deptName}
             style={{ flex:1, border:"1.5px solid #6366f1", borderRadius:8, padding:"9px 14px", fontSize:14, outline:"none" }}
-            onKeyDown={e=>e.key==="Enter"&&addDept()}
-          />
+            onKeyDown={e=>e.key==="Enter"&&addDept()} />
           <Btn onClick={addDept} color="#10b981" disabled={saving}>✅</Btn>
           <Btn onClick={()=>{setShowAdd(false);setNewDeptName("");}} color="#64748b">✕</Btn>
         </div>
       )}
-
       {deptList.length===0&&!loading&&(
         <div style={{ textAlign:"center", padding:24, color:"#94a3b8", fontSize:15 }}>
           No departments yet. {isAdmin?"Click '+ Add Department' to add one.":""}
         </div>
       )}
-
       {deptList.map(dept=>(
         <div key={dept.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 0", borderBottom:"1px solid #f1f5f9" }}>
           {editId===dept.id?(
             <>
-              <input
-                value={editVal}
-                onChange={e=>setEditVal(e.target.value)}
+              <input value={editVal} onChange={e=>setEditVal(e.target.value)}
                 style={{ flex:1, border:"1.5px solid #6366f1", borderRadius:8, padding:"7px 12px", fontSize:14, outline:"none" }}
-                onKeyDown={e=>e.key==="Enter"&&saveDeptEdit(dept.id)}
-                autoFocus
-              />
+                onKeyDown={e=>e.key==="Enter"&&saveDeptEdit(dept.id)} autoFocus />
               <Btn small onClick={()=>saveDeptEdit(dept.id)} color="#10b981" disabled={saving}>✅</Btn>
               <Btn small onClick={()=>{setEditId(null);setEditVal("");}} color="#64748b">✕</Btn>
             </>
@@ -554,263 +423,244 @@ function DepartmentsTab({ deptList, setDeptList, setDone, t, isAdmin, loading, r
   );
 }
 
-function AllUsersTab({ users, setUsers, setDone, t }) {
-  const [editId, setEditId] = useState(null);
-  const [form, setForm] = useState({});
-
-  function startEdit(u) { setEditId(u.uid); setForm({ name:u.name,displayName:u.displayName||"",dept:u.dept||"",role:u.role,location:u.location||"",status:u.status||"Active" }); }
-  function save() { setUsers(prev=>prev.map(u=>u.uid===editId?{...u,...form}:u)); setDone(form.name+" updated!"); setEditId(null); setForm({}); }
-
-  return (
-    <Card>
-      <CardTitle>👥 {t.allUsers}</CardTitle>
-      <div style={{ overflowX:"auto" }}>
-        <table style={{ width:"100%",borderCollapse:"collapse",fontSize:14 }}>
-          <thead>
-            <tr style={{ background:"#f8fafc" }}>
-              {["Name","Display","Dept","Role","Location","Status",""].map(h=>(
-                <th key={h} style={{ padding:"10px 12px",textAlign:"left",fontWeight:700,color:"#374151",borderBottom:"2px solid #e2e8f0",whiteSpace:"nowrap" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u,i)=>(
-              <tr key={u.uid} style={{ background:i%2===0?"white":"#f8fafc" }}>
-                {editId===u.uid?(
-                  <>
-                    <td style={{ padding:"8px 12px" }}><input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} style={{ border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 8px",fontSize:14,width:100 }} /></td>
-                    <td style={{ padding:"8px 12px" }}><input value={form.displayName} onChange={e=>setForm({...form,displayName:e.target.value})} style={{ border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 8px",fontSize:14,width:90 }} /></td>
-                    <td style={{ padding:"8px 12px" }}><input value={form.dept} onChange={e=>setForm({...form,dept:e.target.value})} style={{ border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 8px",fontSize:14,width:80 }} /></td>
-                    <td style={{ padding:"8px 12px" }}>
-                      <select value={form.role} onChange={e=>setForm({...form,role:e.target.value})} style={{ border:"1px solid #e2e8f0",borderRadius:6,padding:"4px",fontSize:13 }}>
-                        {Object.entries(ROLE_LABELS).map(([v,l])=><option key={v} value={v}>{l}</option>)}
-                      </select>
-                    </td>
-                    <td style={{ padding:"8px 12px" }}><input value={form.location} onChange={e=>setForm({...form,location:e.target.value})} style={{ border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 8px",fontSize:14,width:110 }} /></td>
-                    <td style={{ padding:"8px 12px" }}>
-                      <select value={form.status} onChange={e=>setForm({...form,status:e.target.value})} style={{ border:"1px solid #e2e8f0",borderRadius:6,padding:"4px",fontSize:13 }}>
-                        {["Active","Inactive"].map(s=><option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </td>
-                    <td style={{ padding:"8px 12px" }}>
-                      <div style={{ display:"flex",gap:4 }}>
-                        <Btn small onClick={save} color="#10b981">✅</Btn>
-                        <Btn small onClick={()=>{setEditId(null);setForm({});}} color="#64748b">✕</Btn>
-                      </div>
-                    </td>
-                  </>
-                ):(
-                  <>
-                    <td style={{ padding:"10px 12px",fontWeight:600 }}>{u.name}</td>
-                    <td style={{ padding:"10px 12px",color:"#64748b" }}>{u.displayName||"-"}</td>
-                    <td style={{ padding:"10px 12px",color:"#64748b" }}>{u.dept||"-"}</td>
-                    <td style={{ padding:"10px 12px" }}><span style={{ fontSize:13,fontWeight:600,padding:"2px 8px",borderRadius:99,background:"#f1f5f9",color:"#374151" }}>{ROLE_LABELS[u.role]||u.role}</span></td>
-                    <td style={{ padding:"10px 12px",color:"#64748b",fontSize:13 }}>{u.location||"-"}</td>
-                    <td style={{ padding:"10px 12px" }}><span style={{ fontSize:13,fontWeight:600,padding:"2px 8px",borderRadius:99,background:u.status==="Active"?"#d1fae5":"#fee2e2",color:u.status==="Active"?"#065f46":"#991b1b" }}>{u.status||"Active"}</span></td>
-                    <td style={{ padding:"10px 12px" }}>
-                      <div style={{ display:"flex",gap:4 }}>
-                        <Btn small onClick={()=>startEdit(u)} color="#6366f1">✎</Btn>
-                        <Btn small onClick={()=>setUsers(prev=>prev.map(u2=>u2.uid===u.uid?{...u2,status:"Inactive"}:u2))} color="#ef4444">🗑</Btn>
-                      </div>
-                    </td>
-                  </>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Card>
-  );
-}
-
-// ── PUBLIC HOLIDAYS TAB ──────────────────────────────────────
-function HolidaysTab({ holidays, setHolidays, setDone, t, isAdmin, reload }) {
-  const [showAdd, setShowAdd] = useState(false);
-  const [f, setF] = useState({ name:"", from:"", to:"" });
-  const [saving, setSaving] = useState(false);
-
-  async function addHoliday() {
-    if (!f.name||!f.from||!f.to) return;
-    setSaving(true);
-    try {
-      const docRef = await addDoc(collection(db, "publicHolidays"), { ...f, createdAt: new Date().toISOString() });
-      setHolidays(prev=>[...prev, { id:docRef.id, ...f }]);
-      setDone(f.name+" added!");
-      setF({ name:"", from:"", to:"" });
-      setShowAdd(false);
-    } catch(e) { setDone("❌ Error: "+e.message); }
-    setSaving(false);
-  }
-
-  async function deleteHoliday(id, name) {
-    if (!window.confirm("Delete '"+name+"'?")) return;
-    try {
-      await deleteDoc(doc(db, "publicHolidays", id));
-      setHolidays(prev=>prev.filter(h=>h.id!==id));
-      setDone(name+" deleted!");
-    } catch(e) { setDone("❌ Error: "+e.message); }
-  }
-
-  // Days count between 2 dates
-  function daysBetween(from, to) {
-    const d = (new Date(to) - new Date(from)) / (1000*60*60*24);
-    return Math.round(d) + 1;
-  }
-
-  return (
-    <Card>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-        <CardTitle style={{ margin:0 }}>🏖️ {t.holidays}</CardTitle>
-        {isAdmin&&<Btn small onClick={()=>setShowAdd(!showAdd)} color="#6366f1">➕ {t.addHoliday}</Btn>}
-      </div>
-      {showAdd&&isAdmin&&(
-        <div style={{ background:"#f8fafc", borderRadius:8, padding:14, marginBottom:16, border:"1px solid #e2e8f0" }}>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 12px" }}>
-            <div style={{ gridColumn:"1/-1", marginBottom:12 }}>
-              <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{t.holidayName} *</label>
-              <input value={f.name} onChange={e=>setF({...f,name:e.target.value})}
-                placeholder="e.g. Eid Al Fitr 2026"
-                style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", boxSizing:"border-box" }} />
-            </div>
-            <div style={{ marginBottom:12 }}>
-              <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{t.fromDate} *</label>
-              <input type="date" value={f.from} onChange={e=>setF({...f,from:e.target.value})}
-                style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", boxSizing:"border-box" }} />
-            </div>
-            <div style={{ marginBottom:12 }}>
-              <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{t.toDate} *</label>
-              <input type="date" value={f.to} onChange={e=>setF({...f,to:e.target.value})}
-                style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", boxSizing:"border-box" }} />
-            </div>
-          </div>
-          <div style={{ display:"flex", gap:8 }}>
-            <Btn onClick={addHoliday} color="#10b981" style={{ flex:1 }} disabled={saving}>✅ {saving?"Saving...":"Add Holiday"}</Btn>
-            <Btn onClick={()=>setShowAdd(false)} color="#64748b">Cancel</Btn>
-          </div>
-        </div>
-      )}
-      {holidays.length===0&&<div style={{ textAlign:"center", padding:24, color:"#94a3b8", fontSize:15 }}>No public holidays defined yet.</div>}
-      {holidays.map(h=>(
-        <div key={h.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
-          <div style={{ flex:1 }}>
-            <div style={{ fontWeight:700, fontSize:14 }}>🏖️ {h.name}</div>
-            <div style={{ fontSize:13, color:"#64748b" }}>📅 {h.from} → {h.to} <span style={{ color:"#6366f1", fontWeight:600 }}>({daysBetween(h.from,h.to)} days)</span></div>
-          </div>
-          {isAdmin&&<Btn small onClick={()=>deleteHoliday(h.id,h.name)} color="#ef4444">🗑️</Btn>}
-        </div>
-      ))}
-    </Card>
-  );
-}
-
-
-// ── DRIVER LEAVES TAB ─────────────────────────────────────────
+// ── DRIVER LEAVES TAB ─────────────────────────────────────────────────────────
 function DriverLeavesTab({ leaves, setLeaves, users, setDone, t, isAdmin, isManager, isLogistic, user, reload }) {
   const [showAdd, setShowAdd] = useState(false);
   const [f, setF] = useState({ driverId:"", from:"", to:"", type:"Annual Leave", reason:"" });
   const [saving, setSaving] = useState(false);
   const isDriver = user.role === "driver";
-  const isLogisticRole = isLogistic || false;
   const drivers = users.filter(u=>u.role==="driver"&&(!user.dc||u.dc===user.dc||user.dc==="Head Office"));
   const myLeaves = isDriver ? leaves.filter(l=>l.driverId===user.uid) : isAdmin ? leaves : leaves.filter(l=>l.dc===user.dc);
   const pendingManagerLeaves = (isManager||isLogistic) ? myLeaves.filter(l=>l.status==="pending_manager") : [];
   const pendingAdminLeaves = isAdmin ? leaves.filter(l=>l.status==="pending_admin") : [];
-  function daysBetween(from,to){return Math.round((new Date(to)-new Date(from))/(1000*60*60*24))+1;}
-  async function submitDriverLeave(){if(!f.from||!f.to||!f.reason.trim()){setDone("❌ Fill all required fields");return;}setSaving(true);try{const data={driverId:user.uid,driverName:user.name,dc:user.dc,from:f.from,to:f.to,type:f.type,reason:f.reason,status:"pending_manager",submittedAt:new Date().toISOString(),submittedBy:user.name};const docRef=await addDoc(collection(db,"driverLeaves"),data);setLeaves(prev=>[...prev,{id:docRef.id,...data}]);await sendNotification({toRole:"manager",toDC:user.dc,type:"leave",title:"Driver Leave Request",message:`${user.name} submitted ${f.type} from ${f.from} to ${f.to}.`});setDone("Submitted!");setF({driverId:"",from:"",to:"",type:"Annual Leave",reason:""});setShowAdd(false);}catch(e){setDone("❌ "+e.message);}setSaving(false);}
-  async function submitManagerLeave(){const sel=f.driverId?drivers.find(d=>d.uid===f.driverId):null;if(!f.from||!f.to){setDone("❌ Dates required");return;}setSaving(true);try{const data={driverId:sel?.uid||user.uid,driverName:sel?.name||user.name,dc:sel?.dc||user.dc,from:f.from,to:f.to,type:f.type,reason:f.reason||"",status:"pending_admin",submittedAt:new Date().toISOString(),submittedBy:user.name,managerApprovedBy:user.name,managerApprovedAt:new Date().toISOString()};const docRef=await addDoc(collection(db,"driverLeaves"),data);setLeaves(prev=>[...prev,{id:docRef.id,...data}]);await sendNotification({toRole:"admin",type:"leave",title:"Leave — Manager Approved",message:`${user.name} approved ${f.type} for ${data.driverName} (${data.dc}) ${f.from}→${f.to}.`});setDone("Submitted for Admin!");setF({driverId:"",from:"",to:"",type:"Annual Leave",reason:""});setShowAdd(false);}catch(e){setDone("❌ "+e.message);}setSaving(false);}
-  async function managerApprove(l){try{await updateDoc(doc(db,"driverLeaves",l.id),{status:"pending_admin",managerApprovedBy:user.name,managerApprovedAt:new Date().toISOString()});setLeaves(prev=>prev.map(x=>x.id===l.id?{...x,status:"pending_admin",managerApprovedBy:user.name}:x));await sendNotification({toRole:"admin",type:"leave",title:"Leave — Manager Approved",message:`${user.name} approved ${l.driverName} ${l.type} (${l.from}→${l.to}).`});await sendNotification({toUserId:l.driverId,type:"request_action",title:"Leave — Manager Approved ✅",message:`Your ${l.type} approved by ${user.name}. Waiting Admin.`});setDone("Forwarded to Admin!");}catch(e){setDone("❌ "+e.message);}}
-  async function managerReject(l){try{await updateDoc(doc(db,"driverLeaves",l.id),{status:"rejected",rejectedBy:user.name,rejectedAt:new Date().toISOString()});setLeaves(prev=>prev.map(x=>x.id===l.id?{...x,status:"rejected",rejectedBy:user.name}:x));await sendNotification({toUserId:l.driverId,type:"request_action",title:"Leave Rejected ❌",message:`Your ${l.type} (${l.from}→${l.to}) rejected by ${user.name}.`});setDone("Rejected.");}catch(e){setDone("❌ "+e.message);}}
-  async function adminApprove(l){try{await updateDoc(doc(db,"driverLeaves",l.id),{status:"approved",approvedBy:user.name,approvedAt:new Date().toISOString()});setLeaves(prev=>prev.map(x=>x.id===l.id?{...x,status:"approved",approvedBy:user.name}:x));await sendNotification({toUserId:l.driverId,type:"request_action",title:"Leave Approved ✅",message:`Your ${l.type} (${l.from}→${l.to}) fully approved. Excluded from working days.`});setDone(t.leaveApproved);}catch(e){setDone("❌ "+e.message);}}
-  async function adminReject(l){try{await updateDoc(doc(db,"driverLeaves",l.id),{status:"rejected",rejectedBy:user.name,rejectedAt:new Date().toISOString()});setLeaves(prev=>prev.map(x=>x.id===l.id?{...x,status:"rejected",rejectedBy:user.name}:x));await sendNotification({toUserId:l.driverId,type:"request_action",title:"Leave Rejected ❌",message:`Your ${l.type} (${l.from}→${l.to}) rejected by Admin.`});setDone(t.leaveRejected);}catch(e){setDone("❌ "+e.message);}}
-  async function deleteLeave(id){if(!window.confirm("Delete?"))return;try{await deleteDoc(doc(db,"driverLeaves",id));setLeaves(prev=>prev.filter(l=>l.id!==id));setDone("Deleted!");}catch(e){setDone("❌ "+e.message);}}
-  function statusBadge(s){const m={pending_manager:["#fef3c7","#92400e","⏳ Pending Manager"],pending_admin:["#dbeafe","#1e40af","⏳ Pending Admin"],approved:["#d1fae5","#065f46","✅ Approved"],rejected:["#fee2e2","#991b1b","❌ Rejected"]};const[bg,c,lbl]=m[s]||["#f1f5f9","#64748b",s];return<span style={{fontSize:12,fontWeight:600,padding:"3px 10px",borderRadius:99,background:bg,color:c}}>{lbl}</span>;}
-  function LeaveCard({l,showMgr,showAdmin}){return(<div style={{border:"1px solid #e2e8f0",borderRadius:8,padding:14,marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:8,marginBottom:8}}><div><div style={{fontWeight:700,fontSize:14}}>👤 {l.driverName} <span style={{color:"#64748b",fontSize:13}}>— {l.dc}</span></div><div style={{fontSize:13,color:"#64748b"}}>{l.type} | 📅 {l.from} → {l.to} <span style={{color:"#6366f1",fontWeight:600}}>({daysBetween(l.from,l.to)} days)</span></div>{l.reason&&<div style={{fontSize:12,color:"#94a3b8"}}>📝 {l.reason}</div>}{l.managerApprovedBy&&<div style={{fontSize:11,color:"#10b981"}}>✅ Manager: {l.managerApprovedBy}</div>}{l.approvedBy&&<div style={{fontSize:11,color:"#10b981"}}>✅ Admin: {l.approvedBy}</div>}{l.rejectedBy&&<div style={{fontSize:11,color:"#ef4444"}}>❌ Rejected: {l.rejectedBy}</div>}</div>{statusBadge(l.status)}</div>{showMgr&&l.status==="pending_manager"&&<div style={{display:"flex",gap:8,marginTop:8}}><Btn small onClick={()=>managerApprove(l)} color="#10b981">✅ {t.approveLeave}</Btn><Btn small onClick={()=>managerReject(l)} color="#ef4444">❌ {t.rejectLeave}</Btn></div>}{showAdmin&&l.status==="pending_admin"&&<div style={{display:"flex",gap:8,marginTop:8}}><Btn small onClick={()=>adminApprove(l)} color="#10b981">✅ {t.approveLeave}</Btn><Btn small onClick={()=>adminReject(l)} color="#ef4444">❌ {t.rejectLeave}</Btn></div>}{isAdmin&&<Btn small onClick={()=>deleteLeave(l.id)} color="#ef4444" style={{marginTop:6}}>🗑️</Btn>}</div>);}
-  return(<div><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><div style={{fontWeight:700,fontSize:15,color:"#1A3A5C"}}>👤 {t.driverLeaves}</div>{(isDriver||isManager||isLogistic)&&<Btn small onClick={()=>setShowAdd(!showAdd)} color="#6366f1">➕ {t.addLeave}</Btn>}</div>{showAdd&&isDriver&&(<Card style={{borderLeft:"4px solid #6366f1",marginBottom:16}}><CardTitle>📝 Submit Leave Request</CardTitle><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px"}}><div style={{gridColumn:"1/-1",marginBottom:10}}><label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>Leave Type</label><select value={f.type} onChange={e=>setF({...f,type:e.target.value})} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}><option>Annual Leave</option><option>Sick Leave</option><option>Emergency Leave</option><option>Unpaid Leave</option></select></div><div style={{marginBottom:10}}><label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>From *</label><input type="date" value={f.from} onChange={e=>setF({...f,from:e.target.value})} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box"}}/></div><div style={{marginBottom:10}}><label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>To *</label><input type="date" value={f.to} onChange={e=>setF({...f,to:e.target.value})} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box"}}/></div><div style={{gridColumn:"1/-1",marginBottom:10}}><label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>Reason *</label><input value={f.reason} onChange={e=>setF({...f,reason:e.target.value})} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box"}}/></div></div><div style={{display:"flex",gap:8}}><Btn onClick={submitDriverLeave} color="#10b981" style={{flex:1}} disabled={saving}>{saving?"Submitting...":"📤 Submit Request"}</Btn><Btn onClick={()=>setShowAdd(false)} color="#64748b">Cancel</Btn></div></Card>)}{showAdd&&isManager&&!isAdmin&&(<Card style={{borderLeft:"4px solid #6366f1",marginBottom:16}}><CardTitle>📝 Add Leave</CardTitle><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px"}}><div style={{gridColumn:"1/-1",marginBottom:10}}><label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>Driver (blank = own leave)</label><select value={f.driverId||""} onChange={e=>setF({...f,driverId:e.target.value})} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}><option value="">My Own Leave</option>{drivers.map(d=><option key={d.uid} value={d.uid}>{d.name} — {d.dc}</option>)}</select></div><div style={{gridColumn:"1/-1",marginBottom:10}}><label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>Leave Type</label><select value={f.type} onChange={e=>setF({...f,type:e.target.value})} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}><option>Annual Leave</option><option>Sick Leave</option><option>Emergency Leave</option><option>Unpaid Leave</option></select></div><div style={{marginBottom:10}}><label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>From *</label><input type="date" value={f.from} onChange={e=>setF({...f,from:e.target.value})} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box"}}/></div><div style={{marginBottom:10}}><label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>To *</label><input type="date" value={f.to} onChange={e=>setF({...f,to:e.target.value})} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box"}}/></div><div style={{gridColumn:"1/-1",marginBottom:10}}><label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>Reason</label><input value={f.reason} onChange={e=>setF({...f,reason:e.target.value})} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box"}}/></div></div><div style={{display:"flex",gap:8}}><Btn onClick={submitManagerLeave} color="#10b981" style={{flex:1}} disabled={saving}>{saving?"Submitting...":"📤 Submit for Admin Approval"}</Btn><Btn onClick={()=>setShowAdd(false)} color="#64748b">Cancel</Btn></div></Card>)}{(isManager||isLogistic)&&!isAdmin&&pendingManagerLeaves.length>0&&(<Card style={{borderLeft:"4px solid #f59e0b",marginBottom:12}}><CardTitle>⏳ Pending Driver Requests ({pendingManagerLeaves.length})</CardTitle>{pendingManagerLeaves.map(l=><LeaveCard key={l.id} l={l} showMgr={true} showAdmin={false}/>)}</Card>)}{isAdmin&&pendingAdminLeaves.length>0&&(<Card style={{borderLeft:"4px solid #6366f1",marginBottom:12}}><CardTitle>⏳ Pending Admin Approval ({pendingAdminLeaves.length})</CardTitle>{pendingAdminLeaves.map(l=><LeaveCard key={l.id} l={l} showMgr={false} showAdmin={true}/>)}</Card>)}<Card><CardTitle>📋 All Leave Records ({myLeaves.length})</CardTitle>{myLeaves.length===0&&<div style={{textAlign:"center",padding:24,color:"#94a3b8",fontSize:15}}>No leave records yet.</div>}{myLeaves.map(l=><LeaveCard key={l.id} l={l} showMgr={false} showAdmin={false}/>)}</Card></div>);
-}
 
+  function daysBetween(from,to){ return Math.round((new Date(to)-new Date(from))/(1000*60*60*24))+1; }
 
-
-function VehicleOffTab({ offDays, setOffDays, vehicles, setDone, t, isAdmin, isManager, user, reload }) {
-  const [showAdd, setShowAdd] = useState(false);
-  const [f, setF] = useState({ vehiclePlate:"", from:"", to:"", reason:"Scheduled Maintenance" });
-  const [saving, setSaving] = useState(false);
-
-  const myVehicles = vehicles.filter(v=>!user.dc||v.dc===user.dc||user.dc==="Head Office");
-  const myOffDays = isAdmin ? offDays : offDays.filter(o=>o.dc===user.dc);
-
-  async function addOffDay() {
-    if (!f.vehiclePlate||!f.from||!f.to) { setDone("❌ Please fill all required fields"); return; }
+  async function submitDriverLeave() {
+    if(!f.from||!f.to||!f.reason.trim()){setDone("❌ Fill all required fields");return;}
     setSaving(true);
     try {
-      const vehicle = myVehicles.find(v=>v.plate===f.vehiclePlate);
-      const data = { ...f, dc:vehicle?.dc||user.dc, addedBy:user.name, createdAt:new Date().toISOString() };
-      const docRef = await addDoc(collection(db, "vehicleOffDays"), data);
-      setOffDays(prev=>[...prev, { id:docRef.id, ...data }]);
-      setDone(f.vehiclePlate+" off day added!");
-      setF({ vehiclePlate:"", from:"", to:"", reason:"Scheduled Maintenance" });
+      const data={driverId:user.uid,driverName:user.name,dc:user.dc,from:f.from,to:f.to,type:f.type,reason:f.reason,status:"pending_manager",submittedAt:new Date().toISOString(),submittedBy:user.name};
+      const docRef=await addDoc(collection(db,"driverLeaves"),data);
+      setLeaves(prev=>[...prev,{id:docRef.id,...data}]);
+      await sendNotification({toRole:"manager",toDC:user.dc,type:"leave",title:"Driver Leave Request",message:`${user.name} submitted ${f.type} from ${f.from} to ${f.to}.`});
+      setDone("Submitted!");
+      setF({driverId:"",from:"",to:"",type:"Annual Leave",reason:""});
       setShowAdd(false);
-    } catch(e) { setDone("❌ Error: "+e.message); }
+    } catch(e){setDone("❌ "+e.message);}
     setSaving(false);
   }
 
-  async function deleteOffDay(id) {
-    if (!window.confirm("Delete this off day record?")) return;
+  async function submitManagerLeave() {
+    const sel=f.driverId?drivers.find(d=>d.uid===f.driverId):null;
+    if(!f.from||!f.to){setDone("❌ Dates required");return;}
+    setSaving(true);
     try {
-      await deleteDoc(doc(db, "vehicleOffDays", id));
-      setOffDays(prev=>prev.filter(o=>o.id!==id));
-      setDone("Off day deleted!");
-    } catch(e) { setDone("❌ Error: "+e.message); }
+      const data={driverId:sel?.uid||user.uid,driverName:sel?.name||user.name,dc:sel?.dc||user.dc,from:f.from,to:f.to,type:f.type,reason:f.reason||"",status:"pending_admin",submittedAt:new Date().toISOString(),submittedBy:user.name,managerApprovedBy:user.name,managerApprovedAt:new Date().toISOString()};
+      const docRef=await addDoc(collection(db,"driverLeaves"),data);
+      setLeaves(prev=>[...prev,{id:docRef.id,...data}]);
+      await sendNotification({toRole:"admin",type:"leave",title:"Leave — Manager Approved",message:`${user.name} approved ${f.type} for ${data.driverName} (${data.dc}) ${f.from}→${f.to}.`});
+      setDone("Submitted for Admin!");
+      setF({driverId:"",from:"",to:"",type:"Annual Leave",reason:""});
+      setShowAdd(false);
+    } catch(e){setDone("❌ "+e.message);}
+    setSaving(false);
   }
+
+  async function managerApprove(l) {
+    try {
+      await updateDoc(doc(db,"driverLeaves",l.id),{status:"pending_admin",managerApprovedBy:user.name,managerApprovedAt:new Date().toISOString()});
+      setLeaves(prev=>prev.map(x=>x.id===l.id?{...x,status:"pending_admin",managerApprovedBy:user.name}:x));
+      await sendNotification({toRole:"admin",type:"leave",title:"Leave — Manager Approved",message:`${user.name} approved ${l.driverName} ${l.type} (${l.from}→${l.to}).`});
+      await sendNotification({toUserId:l.driverId,type:"leave_approved",title:"Leave — Manager Approved ✅",message:`Your ${l.type} approved by ${user.name}. Waiting Admin.`});
+      setDone("Forwarded to Admin!");
+    } catch(e){setDone("❌ "+e.message);}
+  }
+
+  async function managerReject(l) {
+    try {
+      await updateDoc(doc(db,"driverLeaves",l.id),{status:"rejected",rejectedBy:user.name,rejectedAt:new Date().toISOString()});
+      setLeaves(prev=>prev.map(x=>x.id===l.id?{...x,status:"rejected",rejectedBy:user.name}:x));
+      await sendNotification({toUserId:l.driverId,type:"leave_rejected",title:"Leave Rejected ❌",message:`Your ${l.type} (${l.from}→${l.to}) rejected by ${user.name}.`});
+      setDone("Rejected.");
+    } catch(e){setDone("❌ "+e.message);}
+  }
+
+  async function adminApprove(l) {
+    try {
+      await updateDoc(doc(db,"driverLeaves",l.id),{status:"approved",approvedBy:user.name,approvedAt:new Date().toISOString()});
+      setLeaves(prev=>prev.map(x=>x.id===l.id?{...x,status:"approved",approvedBy:user.name}:x));
+      await sendNotification({toUserId:l.driverId,type:"leave_approved",title:"Leave Approved ✅",message:`Your ${l.type} (${l.from}→${l.to}) fully approved. Excluded from working days.`});
+      setDone(t.leaveApproved);
+    } catch(e){setDone("❌ "+e.message);}
+  }
+
+  async function adminReject(l) {
+    try {
+      await updateDoc(doc(db,"driverLeaves",l.id),{status:"rejected",rejectedBy:user.name,rejectedAt:new Date().toISOString()});
+      setLeaves(prev=>prev.map(x=>x.id===l.id?{...x,status:"rejected",rejectedBy:user.name}:x));
+      await sendNotification({toUserId:l.driverId,type:"leave_rejected",title:"Leave Rejected ❌",message:`Your ${l.type} (${l.from}→${l.to}) rejected by Admin.`});
+      setDone(t.leaveRejected);
+    } catch(e){setDone("❌ "+e.message);}
+  }
+
+  async function deleteLeave(id) {
+    if(!window.confirm("Delete?"))return;
+    try {
+      await deleteDoc(doc(db,"driverLeaves",id));
+      setLeaves(prev=>prev.filter(l=>l.id!==id));
+      setDone("Deleted!");
+    } catch(e){setDone("❌ "+e.message);}
+  }
+
+  function statusBadge(s){
+    const m={pending_manager:["#fef3c7","#92400e","⏳ Pending Manager"],pending_admin:["#dbeafe","#1e40af","⏳ Pending Admin"],approved:["#d1fae5","#065f46","✅ Approved"],rejected:["#fee2e2","#991b1b","❌ Rejected"]};
+    const[bg,c,lbl]=m[s]||["#f1f5f9","#64748b",s];
+    return<span style={{fontSize:12,fontWeight:600,padding:"3px 10px",borderRadius:99,background:bg,color:c}}>{lbl}</span>;
+  }
+
+  function LeaveCard({l,showMgr,showAdmin}){
+    return(
+      <div style={{border:"1px solid #e2e8f0",borderRadius:8,padding:14,marginBottom:10}}>
+        <div style={{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:8,marginBottom:8}}>
+          <div>
+            <div style={{fontWeight:700,fontSize:14}}>👤 {l.driverName} <span style={{color:"#64748b",fontSize:13}}>— {l.dc}</span></div>
+            <div style={{fontSize:13,color:"#64748b"}}>{l.type} | 📅 {l.from} → {l.to} <span style={{color:"#6366f1",fontWeight:600}}>({daysBetween(l.from,l.to)} days)</span></div>
+            {l.reason&&<div style={{fontSize:12,color:"#94a3b8"}}>📝 {l.reason}</div>}
+            {l.managerApprovedBy&&<div style={{fontSize:11,color:"#10b981"}}>✅ Manager: {l.managerApprovedBy}</div>}
+            {l.approvedBy&&<div style={{fontSize:11,color:"#10b981"}}>✅ Admin: {l.approvedBy}</div>}
+            {l.rejectedBy&&<div style={{fontSize:11,color:"#ef4444"}}>❌ Rejected: {l.rejectedBy}</div>}
+          </div>
+          {statusBadge(l.status)}
+        </div>
+        {showMgr&&l.status==="pending_manager"&&<div style={{display:"flex",gap:8,marginTop:8}}><Btn small onClick={()=>managerApprove(l)} color="#10b981">✅ {t.approveLeave}</Btn><Btn small onClick={()=>managerReject(l)} color="#ef4444">❌ {t.rejectLeave}</Btn></div>}
+        {showAdmin&&l.status==="pending_admin"&&<div style={{display:"flex",gap:8,marginTop:8}}><Btn small onClick={()=>adminApprove(l)} color="#10b981">✅ {t.approveLeave}</Btn><Btn small onClick={()=>adminReject(l)} color="#ef4444">❌ {t.rejectLeave}</Btn></div>}
+        {isAdmin&&<Btn small onClick={()=>deleteLeave(l.id)} color="#ef4444" style={{marginTop:6}}>🗑️</Btn>}
+      </div>
+    );
+  }
+
+  // Shared leave type select using LEAVE_TYPES from masterData
+  const LeaveTypeSelect = () => (
+    <select value={f.type} onChange={e=>setF({...f,type:e.target.value})}
+      style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
+      {LEAVE_TYPES.map(lt=><option key={lt} value={lt}>{lt}</option>)}
+    </select>
+  );
+
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{fontWeight:700,fontSize:15,color:"#1A3A5C"}}>👤 {t.driverLeaves}</div>
+        {(isDriver||isManager||isLogistic)&&<Btn small onClick={()=>setShowAdd(!showAdd)} color="#6366f1">➕ {t.addLeave}</Btn>}
+      </div>
+
+      {/* Driver — submit own leave */}
+      {showAdd&&isDriver&&(
+        <Card style={{borderLeft:"4px solid #6366f1",marginBottom:16}}>
+          <CardTitle>📝 Submit Leave Request</CardTitle>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px"}}>
+            <div style={{gridColumn:"1/-1",marginBottom:10}}>
+              <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>Leave Type</label>
+              <LeaveTypeSelect />
+            </div>
+            <div style={{marginBottom:10}}>
+              <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>From *</label>
+              <input type="date" value={f.from} onChange={e=>setF({...f,from:e.target.value})} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box"}}/>
+            </div>
+            <div style={{marginBottom:10}}>
+              <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>To *</label>
+              <input type="date" value={f.to} onChange={e=>setF({...f,to:e.target.value})} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box"}}/>
+            </div>
+            <div style={{gridColumn:"1/-1",marginBottom:10}}>
+              <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>Reason *</label>
+              <input value={f.reason} onChange={e=>setF({...f,reason:e.target.value})} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box"}}/>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <Btn onClick={submitDriverLeave} color="#10b981" style={{flex:1}} disabled={saving}>{saving?"Submitting...":"📤 Submit Request"}</Btn>
+            <Btn onClick={()=>setShowAdd(false)} color="#64748b">Cancel</Btn>
+          </div>
+        </Card>
+      )}
+
+      {/* Manager / Logistic — submit leave for driver */}
+      {showAdd&&(isManager||isLogistic)&&!isAdmin&&(
+        <Card style={{borderLeft:"4px solid #6366f1",marginBottom:16}}>
+          <CardTitle>📝 Add Leave</CardTitle>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px"}}>
+            <div style={{gridColumn:"1/-1",marginBottom:10}}>
+              <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>Driver (blank = own leave)</label>
+              <select value={f.driverId||""} onChange={e=>setF({...f,driverId:e.target.value})} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
+                <option value="">My Own Leave</option>
+                {drivers.map(d=><option key={d.uid} value={d.uid}>{d.name} — {d.dc}</option>)}
+              </select>
+            </div>
+            <div style={{gridColumn:"1/-1",marginBottom:10}}>
+              <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>Leave Type</label>
+              <LeaveTypeSelect />
+            </div>
+            <div style={{marginBottom:10}}>
+              <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>From *</label>
+              <input type="date" value={f.from} onChange={e=>setF({...f,from:e.target.value})} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box"}}/>
+            </div>
+            <div style={{marginBottom:10}}>
+              <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>To *</label>
+              <input type="date" value={f.to} onChange={e=>setF({...f,to:e.target.value})} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box"}}/>
+            </div>
+            <div style={{gridColumn:"1/-1",marginBottom:10}}>
+              <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>Reason</label>
+              <input value={f.reason} onChange={e=>setF({...f,reason:e.target.value})} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box"}}/>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <Btn onClick={submitManagerLeave} color="#10b981" style={{flex:1}} disabled={saving}>{saving?"Submitting...":"📤 Submit for Admin Approval"}</Btn>
+            <Btn onClick={()=>setShowAdd(false)} color="#64748b">Cancel</Btn>
+          </div>
+        </Card>
+      )}
+
+      {(isManager||isLogistic)&&!isAdmin&&pendingManagerLeaves.length>0&&(
+        <Card style={{borderLeft:"4px solid #f59e0b",marginBottom:12}}>
+          <CardTitle>⏳ Pending Driver Requests ({pendingManagerLeaves.length})</CardTitle>
+          {pendingManagerLeaves.map(l=><LeaveCard key={l.id} l={l} showMgr={true} showAdmin={false}/>)}
+        </Card>
+      )}
+
+      {isAdmin&&pendingAdminLeaves.length>0&&(
+        <Card style={{borderLeft:"4px solid #6366f1",marginBottom:12}}>
+          <CardTitle>⏳ Pending Admin Approval ({pendingAdminLeaves.length})</CardTitle>
+          {pendingAdminLeaves.map(l=><LeaveCard key={l.id} l={l} showMgr={false} showAdmin={true}/>)}
+        </Card>
+      )}
+
+      <Card>
+        <CardTitle>📋 All Leave Records ({myLeaves.length})</CardTitle>
+        {myLeaves.length===0&&<div style={{textAlign:"center",padding:24,color:"#94a3b8",fontSize:15}}>No leave records yet.</div>}
+        {myLeaves.map(l=><LeaveCard key={l.id} l={l} showMgr={false} showAdmin={false}/>)}
+      </Card>
+    </div>
+  );
+}
+
+// ── VEHICLE OFF DAYS TAB — READ ONLY ─────────────────────────────────────────
+function VehicleOffTab({ offDays, isAdmin, user }) {
+  const myOffDays = isAdmin ? offDays : offDays.filter(o=>o.dc===user.dc);
 
   function daysBetween(from, to) { return Math.round((new Date(to)-new Date(from))/(1000*60*60*24))+1; }
 
   return (
     <Card>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-        <CardTitle style={{ margin:0 }}>🚗 {t.vehicleOff}</CardTitle>
-        <Btn small onClick={()=>setShowAdd(!showAdd)} color="#6366f1">➕ {t.addVehicleOff}</Btn>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+        <CardTitle style={{ margin:0 }}>🚗 Vehicle Off Days</CardTitle>
+        <span style={{ fontSize:13, color:"#64748b", background:"#f1f5f9", padding:"4px 10px", borderRadius:6 }}>
+          ℹ️ Auto-populated from Fleet Maintenance
+        </span>
       </div>
-      {showAdd&&(
-        <div style={{ background:"#f8fafc", borderRadius:8, padding:14, marginBottom:16, border:"1px solid #e2e8f0" }}>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 12px" }}>
-            <div style={{ gridColumn:"1/-1", marginBottom:12 }}>
-              <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>Vehicle *</label>
-              <select value={f.vehiclePlate} onChange={e=>setF({...f,vehiclePlate:e.target.value})}
-                style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", background:"white", boxSizing:"border-box" }}>
-                <option value="">Select Vehicle...</option>
-                {myVehicles.map(v=><option key={v.plate} value={v.plate}>{v.plate} — {v.dc}</option>)}
-              </select>
-            </div>
-            <div style={{ marginBottom:12 }}>
-              <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>Reason</label>
-              <select value={f.reason} onChange={e=>setF({...f,reason:e.target.value})}
-                style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", background:"white", boxSizing:"border-box" }}>
-                <option>Scheduled Maintenance</option>
-                <option>Breakdown</option>
-                <option>Inspection</option>
-                <option>Off Season</option>
-                <option>Other</option>
-              </select>
-            </div>
-            <div style={{ marginBottom:12 }}>
-              <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{t.fromDate} *</label>
-              <input type="date" value={f.from} onChange={e=>setF({...f,from:e.target.value})}
-                style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", boxSizing:"border-box" }} />
-            </div>
-            <div style={{ marginBottom:12 }}>
-              <label style={{ fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 }}>{t.toDate} *</label>
-              <input type="date" value={f.to} onChange={e=>setF({...f,to:e.target.value})}
-                style={{ width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", boxSizing:"border-box" }} />
-            </div>
-          </div>
-          <div style={{ display:"flex", gap:8 }}>
-            <Btn onClick={addOffDay} color="#10b981" style={{ flex:1 }} disabled={saving}>✅ {saving?"Saving...":"Add Off Day"}</Btn>
-            <Btn onClick={()=>setShowAdd(false)} color="#64748b">Cancel</Btn>
-          </div>
-        </div>
-      )}
-      {myOffDays.length===0&&<div style={{ textAlign:"center", padding:24, color:"#94a3b8", fontSize:15 }}>No vehicle off days recorded yet.</div>}
+      <div style={{ background:"#fef3c7", borderLeft:"4px solid #f59e0b", borderRadius:"0 8px 8px 0", padding:"10px 14px", fontSize:13, color:"#92400e", marginBottom:16 }}>
+        ⚠️ This list is automatically populated when maintenance records are saved in Fleet Management → Maintenance tab. No manual entry required here.
+      </div>
+      {myOffDays.length===0&&<div style={{ textAlign:"center", padding:24, color:"#94a3b8", fontSize:15 }}>No vehicle off days recorded yet. Off days appear here automatically when maintenance is logged in Fleet Management.</div>}
       {myOffDays.map(o=>(
         <div key={o.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
           <div style={{ flex:1 }}>
@@ -819,12 +669,386 @@ function VehicleOffTab({ offDays, setOffDays, vehicles, setDone, t, isAdmin, isM
               {o.reason} | 📅 {o.from} → {o.to}
               <span style={{ color:"#6366f1", fontWeight:600, marginLeft:6 }}>({daysBetween(o.from,o.to)} days)</span>
             </div>
-            <div style={{ fontSize:11, color:"#94a3b8" }}>By: {o.addedBy} | {o.dc}</div>
+            <div style={{ fontSize:11, color:"#94a3b8" }}>DC: {o.dc}{o.addedBy&&" | By: "+o.addedBy}{o.source==="fleet_maintenance"&&" | Source: Fleet Maintenance"}</div>
           </div>
           <span style={{ fontSize:12, fontWeight:600, padding:"3px 10px", borderRadius:99, background:"#fee2e2", color:"#991b1b" }}>{o.reason}</span>
-          <Btn small onClick={()=>deleteOffDay(o.id)} color="#ef4444">🗑️</Btn>
         </div>
       ))}
     </Card>
+  );
+}
+
+// ── WORKING CALENDAR TAB — Shifts + Public Holidays ──────────────────────────
+function WorkingCalendarTab({ holidays, setHolidays, shifts, setShifts, setDone, t, reload }) {
+  const [showAddShift, setShowAddShift] = useState(false);
+  const [editShiftId, setEditShiftId] = useState(null);
+  const [shiftForm, setShiftForm] = useState({ name:"", start:"08:00", end:"16:00", validFrom:"", validTo:"", applyTo:"all", selectedDCs:[] });
+  const [savingShift, setSavingShift] = useState(false);
+
+  const [showAddHoliday, setShowAddHoliday] = useState(false);
+  const [holidayForm, setHolidayForm] = useState({ name:"", from:"", to:"" });
+  const [savingHoliday, setSavingHoliday] = useState(false);
+
+  function calcHours(start, end) {
+    const [sh,sm] = start.split(":").map(Number);
+    const [eh,em] = end.split(":").map(Number);
+    const h = (eh*60+em-(sh*60+sm))/60;
+    return Math.max(0, Math.round(h*10)/10);
+  }
+
+  function toggleDC(dc) {
+    setShiftForm(prev=>{
+      const has = prev.selectedDCs.includes(dc);
+      return { ...prev, selectedDCs: has ? prev.selectedDCs.filter(d=>d!==dc) : [...prev.selectedDCs, dc] };
+    });
+  }
+
+  async function saveShift() {
+    if (!shiftForm.name || !shiftForm.start || !shiftForm.end) { setDone("❌ Name, Start, and End are required"); return; }
+    setSavingShift(true);
+    try {
+      const hours = calcHours(shiftForm.start, shiftForm.end);
+      const data = { ...shiftForm, hours, updatedAt: new Date().toISOString() };
+      if (editShiftId) {
+        await updateDoc(doc(db, "shifts", editShiftId), data);
+        setShifts(prev=>prev.map(s=>s.id===editShiftId?{...s,...data}:s));
+        setDone("Shift updated!");
+      } else {
+        const docRef = await addDoc(collection(db, "shifts"), { ...data, createdAt: new Date().toISOString() });
+        setShifts(prev=>[...prev, { id:docRef.id, ...data }]);
+        setDone("Shift added!");
+      }
+      setShowAddShift(false); setEditShiftId(null);
+      setShiftForm({ name:"", start:"08:00", end:"16:00", validFrom:"", validTo:"", applyTo:"all", selectedDCs:[] });
+    } catch(e) { setDone("❌ Error: "+e.message); }
+    setSavingShift(false);
+  }
+
+  async function deleteShift(id) {
+    if(!window.confirm("Delete this shift?"))return;
+    try {
+      await deleteDoc(doc(db,"shifts",id));
+      setShifts(prev=>prev.filter(s=>s.id!==id));
+      setDone("Shift deleted!");
+    } catch(e) { setDone("❌ Error: "+e.message); }
+  }
+
+  function startEditShift(s) {
+    setEditShiftId(s.id);
+    setShiftForm({ name:s.name||"", start:s.start||"08:00", end:s.end||"16:00", validFrom:s.validFrom||"", validTo:s.validTo||"", applyTo:s.applyTo||"all", selectedDCs:s.selectedDCs||[] });
+    setShowAddShift(true);
+  }
+
+  async function addHoliday() {
+    if(!holidayForm.name||!holidayForm.from||!holidayForm.to){setDone("❌ All fields required");return;}
+    setSavingHoliday(true);
+    try {
+      const docRef = await addDoc(collection(db,"publicHolidays"), {...holidayForm, createdAt:new Date().toISOString()});
+      setHolidays(prev=>[...prev, {id:docRef.id,...holidayForm}]);
+      setDone(holidayForm.name+" added!");
+      setHolidayForm({name:"",from:"",to:""});
+      setShowAddHoliday(false);
+    } catch(e){setDone("❌ Error: "+e.message);}
+    setSavingHoliday(false);
+  }
+
+  async function deleteHoliday(id,name) {
+    if(!window.confirm("Delete '"+name+"'?"))return;
+    try {
+      await deleteDoc(doc(db,"publicHolidays",id));
+      setHolidays(prev=>prev.filter(h=>h.id!==id));
+      setDone(name+" deleted!");
+    } catch(e){setDone("❌ Error: "+e.message);}
+  }
+
+  function daysBetween(from,to){return Math.round((new Date(to)-new Date(from))/(1000*60*60*24))+1;}
+
+  const inputStyle = { width:"100%", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none", boxSizing:"border-box" };
+  const labelStyle = { fontSize:13, fontWeight:600, color:"#374151", display:"block", marginBottom:5 };
+
+  return (
+    <div>
+      {/* SECTION 1: SHIFT TIMINGS */}
+      <Card>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+          <CardTitle style={{ margin:0 }}>⏰ Shift Timings</CardTitle>
+          <Btn small onClick={()=>{setShowAddShift(!showAddShift);setEditShiftId(null);setShiftForm({name:"",start:"08:00",end:"16:00",validFrom:"",validTo:"",applyTo:"all",selectedDCs:[]});}} color="#6366f1">
+            ➕ Add Shift
+          </Btn>
+        </div>
+
+        {showAddShift&&(
+          <div style={{ background:"#f8fafc", borderRadius:8, padding:16, marginBottom:16, border:"1px solid #e2e8f0" }}>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 12px" }}>
+              <div style={{ gridColumn:"1/-1", marginBottom:12 }}>
+                <label style={labelStyle}>Shift Name *</label>
+                <input value={shiftForm.name} onChange={e=>setShiftForm({...shiftForm,name:e.target.value})} placeholder="e.g. Morning Shift" style={inputStyle} />
+              </div>
+              <div style={{ marginBottom:12 }}>
+                <label style={labelStyle}>Start Time *</label>
+                <input type="time" value={shiftForm.start} onChange={e=>setShiftForm({...shiftForm,start:e.target.value})} style={inputStyle} />
+              </div>
+              <div style={{ marginBottom:12 }}>
+                <label style={labelStyle}>End Time *</label>
+                <input type="time" value={shiftForm.end} onChange={e=>setShiftForm({...shiftForm,end:e.target.value})} style={inputStyle} />
+              </div>
+              <div style={{ marginBottom:12 }}>
+                <label style={labelStyle}>Valid From</label>
+                <input type="date" value={shiftForm.validFrom} onChange={e=>setShiftForm({...shiftForm,validFrom:e.target.value})} style={inputStyle} />
+              </div>
+              <div style={{ marginBottom:12 }}>
+                <label style={labelStyle}>Valid To</label>
+                <input type="date" value={shiftForm.validTo} onChange={e=>setShiftForm({...shiftForm,validTo:e.target.value})} style={inputStyle} />
+              </div>
+              <div style={{ gridColumn:"1/-1", marginBottom:12 }}>
+                <label style={labelStyle}>Apply To</label>
+                <div style={{ display:"flex", gap:16, alignItems:"center", flexWrap:"wrap" }}>
+                  <label style={{ display:"flex", gap:6, alignItems:"center", cursor:"pointer", fontWeight:600, fontSize:14 }}>
+                    <input type="radio" name="applyTo" value="all" checked={shiftForm.applyTo==="all"} onChange={()=>setShiftForm({...shiftForm,applyTo:"all",selectedDCs:[]})} />
+                    All Warehouses
+                  </label>
+                  <label style={{ display:"flex", gap:6, alignItems:"center", cursor:"pointer", fontWeight:600, fontSize:14 }}>
+                    <input type="radio" name="applyTo" value="selected" checked={shiftForm.applyTo==="selected"} onChange={()=>setShiftForm({...shiftForm,applyTo:"selected"})} />
+                    Selected:
+                  </label>
+                  {shiftForm.applyTo==="selected"&&["Riyadh","Jeddah","Dammam"].map(dc=>(
+                    <label key={dc} style={{ display:"flex", gap:4, alignItems:"center", cursor:"pointer", fontSize:14 }}>
+                      <input type="checkbox" checked={shiftForm.selectedDCs.includes(dc)} onChange={()=>toggleDC(dc)} />
+                      {dc}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+            {shiftForm.start&&shiftForm.end&&(
+              <div style={{ background:"#dbeafe", borderRadius:6, padding:"8px 12px", fontSize:13, color:"#1e40af", marginBottom:12 }}>
+                ⏱️ Duration: <strong>{calcHours(shiftForm.start,shiftForm.end)} hours</strong>
+              </div>
+            )}
+            <div style={{ display:"flex", gap:8 }}>
+              <Btn onClick={saveShift} color="#10b981" style={{ flex:1 }} disabled={savingShift}>✅ {savingShift?"Saving...":(editShiftId?"Update Shift":"Save Shift")}</Btn>
+              <Btn onClick={()=>{setShowAddShift(false);setEditShiftId(null);}} color="#64748b">Cancel</Btn>
+            </div>
+          </div>
+        )}
+
+        {shifts.length===0&&(
+          <div style={{ textAlign:"center", padding:20, color:"#94a3b8", fontSize:14 }}>
+            No shifts configured. Default shift: 08:00 – 16:00 (8 hours) applies to all.
+          </div>
+        )}
+
+        {shifts.length>0&&(
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+              <thead>
+                <tr style={{ background:"#f8fafc" }}>
+                  {["Name","Start","End","Hours","DC","From","To",""].map(h=>(
+                    <th key={h} style={{ padding:"8px 10px", textAlign:"left", fontWeight:700, color:"#374151", borderBottom:"2px solid #e2e8f0", whiteSpace:"nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {shifts.map(s=>(
+                  <tr key={s.id} style={{ borderBottom:"1px solid #f1f5f9" }}>
+                    <td style={{ padding:"8px 10px", fontWeight:600 }}>{s.name}</td>
+                    <td style={{ padding:"8px 10px" }}>{s.start}</td>
+                    <td style={{ padding:"8px 10px" }}>{s.end}</td>
+                    <td style={{ padding:"8px 10px", color:"#6366f1", fontWeight:600 }}>{s.hours||calcHours(s.start,s.end)}h</td>
+                    <td style={{ padding:"8px 10px", fontSize:13, color:"#64748b" }}>
+                      {s.applyTo==="all"?"All":(s.selectedDCs||[]).join(", ")||"—"}
+                    </td>
+                    <td style={{ padding:"8px 10px", fontSize:13, color:"#64748b" }}>{s.validFrom||"—"}</td>
+                    <td style={{ padding:"8px 10px", fontSize:13, color:"#64748b" }}>{s.validTo||"—"}</td>
+                    <td style={{ padding:"8px 10px" }}>
+                      <div style={{ display:"flex", gap:4 }}>
+                        <Btn small onClick={()=>startEditShift(s)} color="#6366f1">✎</Btn>
+                        <Btn small onClick={()=>deleteShift(s.id)} color="#ef4444">🗑</Btn>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* SECTION 2: PUBLIC HOLIDAYS */}
+      <Card>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+          <CardTitle style={{ margin:0 }}>🏖️ Public Holidays</CardTitle>
+          <Btn small onClick={()=>setShowAddHoliday(!showAddHoliday)} color="#6366f1">➕ Add Holiday</Btn>
+        </div>
+        {showAddHoliday&&(
+          <div style={{ background:"#f8fafc", borderRadius:8, padding:14, marginBottom:16, border:"1px solid #e2e8f0" }}>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 12px" }}>
+              <div style={{ gridColumn:"1/-1", marginBottom:12 }}>
+                <label style={labelStyle}>Holiday Name *</label>
+                <input value={holidayForm.name} onChange={e=>setHolidayForm({...holidayForm,name:e.target.value})} placeholder="e.g. Eid Al Fitr 2026" style={inputStyle} />
+              </div>
+              <div style={{ marginBottom:12 }}>
+                <label style={labelStyle}>From *</label>
+                <input type="date" value={holidayForm.from} onChange={e=>setHolidayForm({...holidayForm,from:e.target.value})} style={inputStyle} />
+              </div>
+              <div style={{ marginBottom:12 }}>
+                <label style={labelStyle}>To *</label>
+                <input type="date" value={holidayForm.to} onChange={e=>setHolidayForm({...holidayForm,to:e.target.value})} style={inputStyle} />
+              </div>
+            </div>
+            <div style={{ display:"flex", gap:8 }}>
+              <Btn onClick={addHoliday} color="#10b981" style={{ flex:1 }} disabled={savingHoliday}>✅ {savingHoliday?"Saving...":"Add Holiday"}</Btn>
+              <Btn onClick={()=>setShowAddHoliday(false)} color="#64748b">Cancel</Btn>
+            </div>
+          </div>
+        )}
+        {holidays.length===0&&<div style={{ textAlign:"center", padding:24, color:"#94a3b8", fontSize:15 }}>No public holidays defined yet.</div>}
+        {holidays.map(h=>(
+          <div key={h.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap" }}>
+            <div style={{ flex:1 }}>
+              <div style={{ fontWeight:700, fontSize:14 }}>🏖️ {h.name}</div>
+              <div style={{ fontSize:13, color:"#64748b" }}>📅 {h.from} → {h.to} <span style={{ color:"#6366f1", fontWeight:600 }}>({daysBetween(h.from,h.to)} days)</span></div>
+            </div>
+            <Btn small onClick={()=>deleteHoliday(h.id,h.name)} color="#ef4444">🗑️</Btn>
+          </div>
+        ))}
+      </Card>
+    </div>
+  );
+}
+
+// ── APP SETTINGS TAB — Failed Reasons + Activity Purposes ─────────────────────
+function AppSettingsTab({ failedReasons, setFailedReasons, activityPurposes, setActivityPurposes, setDone }) {
+  const [newReason, setNewReason] = useState("");
+  const [editReasonIdx, setEditReasonIdx] = useState(null);
+  const [editReasonVal, setEditReasonVal] = useState("");
+  const [newPurpose, setNewPurpose] = useState("");
+  const [editPurposeIdx, setEditPurposeIdx] = useState(null);
+  const [editPurposeVal, setEditPurposeVal] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function saveToFirestore(failedR, activityP) {
+    setSaving(true);
+    try {
+      await setDoc(doc(db, "settings", "app_settings"), {
+        failedReasons: failedR,
+        activityPurposes: activityP,
+        updatedAt: new Date().toISOString()
+      });
+      setDone("✅ Settings saved to Firestore!");
+    } catch(e) { setDone("❌ Save error: "+e.message); }
+    setSaving(false);
+  }
+
+  function addReason() {
+    if(!newReason.trim())return;
+    const updated=[...failedReasons,newReason.trim()];
+    setFailedReasons(updated);
+    setNewReason("");
+    saveToFirestore(updated, activityPurposes);
+  }
+
+  function saveReasonEdit(idx) {
+    if(!editReasonVal.trim())return;
+    const updated=failedReasons.map((r,i)=>i===idx?editReasonVal.trim():r);
+    setFailedReasons(updated);
+    setEditReasonIdx(null);
+    saveToFirestore(updated, activityPurposes);
+  }
+
+  function deleteReason(idx) {
+    if(!window.confirm("Delete this reason?"))return;
+    const updated=failedReasons.filter((_,i)=>i!==idx);
+    setFailedReasons(updated);
+    saveToFirestore(updated, activityPurposes);
+  }
+
+  function addPurpose() {
+    if(!newPurpose.trim())return;
+    const updated=[...activityPurposes,newPurpose.trim()];
+    setActivityPurposes(updated);
+    setNewPurpose("");
+    saveToFirestore(failedReasons, updated);
+  }
+
+  function savePurposeEdit(idx) {
+    if(!editPurposeVal.trim())return;
+    const updated=activityPurposes.map((p,i)=>i===idx?editPurposeVal.trim():p);
+    setActivityPurposes(updated);
+    setEditPurposeIdx(null);
+    saveToFirestore(failedReasons, updated);
+  }
+
+  function deletePurpose(idx) {
+    if(!window.confirm("Delete this purpose?"))return;
+    const updated=activityPurposes.filter((_,i)=>i!==idx);
+    setActivityPurposes(updated);
+    saveToFirestore(failedReasons, updated);
+  }
+
+  const ItemRow = ({items, editIdx, editVal, onEdit, onSave, onDelete, onEditChange}) => (
+    <div>
+      {items.map((item,idx)=>(
+        <div key={idx} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 0", borderBottom:"1px solid #f1f5f9" }}>
+          {editIdx===idx?(
+            <>
+              <input value={editVal} onChange={e=>onEditChange(e.target.value)}
+                style={{ flex:1, border:"1.5px solid #6366f1", borderRadius:7, padding:"6px 10px", fontSize:14, outline:"none" }}
+                onKeyDown={e=>e.key==="Enter"&&onSave(idx)} autoFocus />
+              <Btn small onClick={()=>onSave(idx)} color="#10b981">✅</Btn>
+              <Btn small onClick={()=>onEdit(null)} color="#64748b">✕</Btn>
+            </>
+          ):(
+            <>
+              <div style={{ flex:1, fontSize:14, color:"#0f172a" }}>• {item}</div>
+              <Btn small onClick={()=>{onEdit(idx);onEditChange(item);}} color="#6366f1">✎</Btn>
+              <Btn small onClick={()=>onDelete(idx)} color="#ef4444">🗑</Btn>
+            </>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div>
+      {/* SECTION 1: FAILED DELIVERY REASONS */}
+      <Card>
+        <CardTitle>❌ Failed Delivery Reasons</CardTitle>
+        <div style={{ background:"#f0f9ff", borderLeft:"4px solid #0ea5e9", padding:"8px 12px", borderRadius:"0 8px 8px 0", fontSize:13, color:"#0369a1", marginBottom:12 }}>
+          ℹ️ These reasons appear in the Delivery Partner app when a delivery fails. Changes reflect instantly.
+        </div>
+        <ItemRow
+          items={failedReasons} editIdx={editReasonIdx} editVal={editReasonVal}
+          onEdit={setEditReasonIdx} onSave={saveReasonEdit} onDelete={deleteReason}
+          onEditChange={setEditReasonVal}
+        />
+        <div style={{ display:"flex", gap:8, marginTop:12 }}>
+          <input value={newReason} onChange={e=>setNewReason(e.target.value)} placeholder="New reason..."
+            style={{ flex:1, border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none" }}
+            onKeyDown={e=>e.key==="Enter"&&addReason()} />
+          <Btn onClick={addReason} color="#10b981" disabled={saving}>➕ Add</Btn>
+        </div>
+      </Card>
+
+      {/* SECTION 2: ADDITIONAL ACTIVITY PURPOSES */}
+      <Card>
+        <CardTitle>🗂️ Additional Activity Purposes</CardTitle>
+        <div style={{ background:"#f0f9ff", borderLeft:"4px solid #0ea5e9", padding:"8px 12px", borderRadius:"0 8px 8px 0", fontSize:13, color:"#0369a1", marginBottom:12 }}>
+          ℹ️ These purposes appear in the Delivery Partner app when submitting an Additional Activity. Changes reflect instantly.
+        </div>
+        <ItemRow
+          items={activityPurposes} editIdx={editPurposeIdx} editVal={editPurposeVal}
+          onEdit={setEditPurposeIdx} onSave={savePurposeEdit} onDelete={deletePurpose}
+          onEditChange={setEditPurposeVal}
+        />
+        <div style={{ display:"flex", gap:8, marginTop:12 }}>
+          <input value={newPurpose} onChange={e=>setNewPurpose(e.target.value)} placeholder="New activity purpose..."
+            style={{ flex:1, border:"1.5px solid #e2e8f0", borderRadius:8, padding:"9px 12px", fontSize:14, outline:"none" }}
+            onKeyDown={e=>e.key==="Enter"&&addPurpose()} />
+          <Btn onClick={addPurpose} color="#10b981" disabled={saving}>➕ Add</Btn>
+        </div>
+      </Card>
+    </div>
   );
 }

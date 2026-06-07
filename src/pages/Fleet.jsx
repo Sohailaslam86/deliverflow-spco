@@ -116,12 +116,37 @@ export default function Fleet({ user, vehicles: masterVehicles, setVehicles: set
   const myDrivers = dc ? allDrivers.filter(d=>d.dc===dc) : allDrivers;
 
   async function sendMaint(vehicle, maintForm) {
-    const updateData = { status:"Maintenance", maintHistory:[...(vehicle.maintHistory||[]), {...maintForm, date:new Date().toLocaleDateString(), addedBy:user.name}] };
+    const maintRecord = { ...maintForm, date: new Date().toLocaleDateString(), addedBy: user.name };
+    const updateData = { status:"Maintenance", maintHistory:[...(vehicle.maintHistory||[]), maintRecord] };
     if (vehicle.firestoreId) {
       try { await updateDoc(doc(db,"vehicles",vehicle.firestoreId), updateData); } catch(e) { console.error(e); }
     }
     setFsVehicles(prev=>prev.map(v=>v.firestoreId===vehicle.firestoreId?{...v,...updateData}:v));
-    flash(vehicle.plate+" sent to maintenance");
+
+    // TASK 5: Auto-save vehicleOffDays when maintenance record is saved
+    // This avoids double-entry in System Config → Vehicle Off Days tab
+    if (maintForm.startDate && maintForm.returnDate) {
+      try {
+        await addDoc(collection(db, "vehicleOffDays"), {
+          vehiclePlate: vehicle.plate,
+          reason: maintForm.type || "Maintenance",
+          from: maintForm.startDate,
+          to: maintForm.returnDate,
+          dc: vehicle.dc,
+          source: "fleet_maintenance",
+          cost: maintForm.cost || "",
+          notes: maintForm.notes || "",
+          addedBy: user.name,
+          createdAt: new Date().toISOString()
+        });
+        flash(vehicle.plate + " sent to maintenance ✅ Off Days auto-saved");
+      } catch(e) {
+        console.error("VehicleOffDays save error:", e);
+        flash(vehicle.plate + " sent to maintenance");
+      }
+    } else {
+      flash(vehicle.plate + " sent to maintenance");
+    }
   }
 
   async function reactivate(vehicle) {
