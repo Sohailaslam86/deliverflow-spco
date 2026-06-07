@@ -3,6 +3,7 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, collection, getDocs } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import Login from "./components/Login.jsx";
+import { SettingsProvider } from "./context/SettingsContext.jsx";
 import Shell from "./components/Shell.jsx";
 import Dashboard  from "./pages/Dashboard.jsx";
 import Invoices   from "./pages/Invoices.jsx";
@@ -191,16 +192,18 @@ export default function App() {
   };
 
   return (
-    <Shell
-      user={user}
-      lang={lang}
-      setLang={setLang}
-      page={page}
-      setPage={setPage}
-      onLogout={()=>{ signOut(auth); setUser(null); setPage("dashboard"); }}
-      alerts={alerts}
-    >
-      {pages[page] || pages.dashboard}
-    </Shell>
+    <SettingsProvider>
+      <Shell
+        user={user}
+        lang={lang}
+        setLang={setLang}
+        page={page}
+        setPage={setPage}
+        onLogout={()=>{ signOut(auth); setUser(null); setPage("dashboard"); }}
+        alerts={alerts}
+      >
+        {pages[page] || pages.dashboard}
+      </Shell>
+    </SettingsProvider>
   );
 }
