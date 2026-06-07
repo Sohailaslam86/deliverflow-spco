@@ -66,6 +66,31 @@ export const FAILED_REASONS = [
   "Insufficient Stock (System Mismatch)",
 ];
 
+// Additional Activity Purposes — used in Driver.jsx activity form
+export const ADDITIONAL_ACTIVITY_PURPOSES = [
+  "Document Delivery — Head Office",
+  "Document Delivery — Government Entity",
+  "Document Delivery — Other",
+  "SFDA Sample Submission",
+  "Market Purchasing",
+  "Market Survey",
+  "Maintenance Drop-off",
+  "Bank / Finance Visit",
+  "Supplier Visit",
+  "Training / Meeting",
+  "Other (specify in notes)"
+];
+
+// Leave types — used in MasterData Driver Leaves tab
+export const LEAVE_TYPES = [
+  "Annual Leave",
+  "Sick Leave",
+  "Emergency Leave",
+  "Compensatory Leave",
+  "Unpaid Leave",
+  "Other"
+];
+
 export const DC_GPS = {
   Riyadh:  { lat: "24.7136", lng: "46.6753" },
   Jeddah:  { lat: "21.4858", lng: "39.1925" },
@@ -150,15 +175,8 @@ export const STATUS_STYLES = {
 export const DEMO_USERS = [];
 
 export const INITIAL_INVOICES = [];
-export const INITIAL_VEHICLES = [
-  { plate:"Dyna 5784", type:"Dyna", dc:"Riyadh", brand:"Toyota", model:"Dyna 300", chassis:"JK8AB59E90K012345", year:"2020", fahas:"2026-08-15", istimara:"2026-09-01", insurance:"2026-12-31", fuelCapacity:80, fuelLevel:45, mileage:12, totalKM:45230, nextOilKM:47000, nextOilDate:"2026-07-01", status:"Active", maintHistory:[], photos:[] },
-  { plate:"BUS 2632",  type:"Bus",  dc:"Riyadh", brand:"Toyota", model:"Coaster",  chassis:"JK8AB59E90K012346", year:"2019", fahas:"2026-07-20", istimara:"2026-08-15", insurance:"2026-11-30", fuelCapacity:100,fuelLevel:70, mileage:10, totalKM:62100, nextOilKM:63000, nextOilDate:"2026-06-15", status:"Active", maintHistory:[], photos:[] },
-  { plate:"BUS 2630",  type:"Bus",  dc:"Riyadh", brand:"Toyota", model:"Coaster",  chassis:"JK8AB59E90K012347", year:"2019", fahas:"2026-09-10", istimara:"2026-10-01", insurance:"2027-01-31", fuelCapacity:100,fuelLevel:90, mileage:10, totalKM:55400, nextOilKM:57000, nextOilDate:"2026-08-01", status:"Active", maintHistory:[], photos:[] },
-  { plate:"BUS 2629",  type:"Bus",  dc:"Riyadh", brand:"Toyota", model:"Coaster",  chassis:"JK8AB59E90K012348", year:"2018", fahas:"2026-06-30", istimara:"2026-07-15", insurance:"2026-10-31", fuelCapacity:100,fuelLevel:30, mileage:10, totalKM:78900, nextOilKM:80000, nextOilDate:"2026-06-30", status:"Maintenance", maintHistory:[{type:"Brake Service",date:"2026-05-20",startDate:"2026-05-20",returnDate:"2026-05-27",cost:"3200",notes:"Front brake pads replaced",addedBy:"AlWaleed Qahtani"}], photos:[] },
-  { plate:"Dyna 5789", type:"Dyna", dc:"Jeddah", brand:"Toyota", model:"Dyna 200", chassis:"JK8AB59E90K012349", year:"2021", fahas:"2026-11-01", istimara:"2026-12-01", insurance:"2027-03-31", fuelCapacity:80, fuelLevel:60, mileage:12, totalKM:31200, nextOilKM:33000, nextOilDate:"2026-09-01", status:"Active", maintHistory:[], photos:[] },
-  { plate:"Dyna 1217", type:"Dyna", dc:"Jeddah", brand:"Toyota", model:"Dyna 200", chassis:"JK8AB59E90K012350", year:"2020", fahas:"2026-10-15", istimara:"2026-11-01", insurance:"2027-02-28", fuelCapacity:80, fuelLevel:55, mileage:12, totalKM:38700, nextOilKM:40000, nextOilDate:"2026-08-15", status:"Active", maintHistory:[], photos:[] },
-  { plate:"BUS 4472",  type:"Bus",  dc:"Dammam", brand:"Toyota", model:"Coaster",  chassis:"JK8AB59E90K012351", year:"2022", fahas:"2026-12-01", istimara:"2027-01-01", insurance:"2027-06-30", fuelCapacity:100,fuelLevel:80, mileage:11, totalKM:18500, nextOilKM:20000, nextOilDate:"2026-10-01", status:"Active", maintHistory:[], photos:[] },
-];
+// TASK 1A: All vehicles will be added via Fleet form — start empty
+export const INITIAL_VEHICLES = [];
 export const INITIAL_TRIPS = [];
 export const INITIAL_FUEL_LOGS = [];
 export const INITIAL_UPLOADS = [];
