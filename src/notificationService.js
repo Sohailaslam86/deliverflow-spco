@@ -39,6 +39,7 @@ export async function sendNotification({
       ...(title   ? { title }   : {}),
       ...(message ? { message } : {}),
       link:      link || null,
+      schema_version: 1,  // v1 = type+data pattern. Legacy = no schema_version field.
       read:      false,
       createdAt: new Date().toISOString(),
     });
