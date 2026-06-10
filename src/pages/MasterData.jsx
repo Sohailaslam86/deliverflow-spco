@@ -162,10 +162,10 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
       {done && <SuccessMsg msg={done} />}
       <TabBar tabs={tabs} active={tab} onChange={setTab} />
 
-      {tab === "dcs" && <DCsTab dcList={dcList} setDcList={setDcList} setDone={flash} t={t} isAdmin={isAdmin} />}
-      {tab === "storage" && <StorageTab storageList={storageList} setStorageList={setStorageList} setDone={flash} t={t} isAdmin={isAdmin} />}
-      {tab === "cities" && <CitiesTab cityList={cityList} setCityList={setCityList} setDone={flash} t={t} isAdmin={isAdmin} />}
-      {tab === "departments" && <DepartmentsTab deptList={deptList} setDeptList={setDeptList} setDone={flash} t={t} isAdmin={isAdmin} loading={deptLoading} reload={loadDepartments} />}
+      {tab === "dcs" && <DCsTab dcList={dcList} setDcList={setDcList} setDone={flash} t={t} isAdmin={isAdmin} user={user} />}
+      {tab === "storage" && <StorageTab storageList={storageList} setStorageList={setStorageList} setDone={flash} t={t} isAdmin={isAdmin} user={user} />}
+      {tab === "cities" && <CitiesTab cityList={cityList} setCityList={setCityList} setDone={flash} t={t} isAdmin={isAdmin} user={user} />}
+      {tab === "departments" && <DepartmentsTab deptList={deptList} setDeptList={setDeptList} setDone={flash} t={t} isAdmin={isAdmin} loading={deptLoading} reload={loadDepartments} user={user} />}
       {tab === "driverleaves" && <DriverLeavesTab leaves={driverLeaves} setLeaves={setDriverLeaves} users={users} setDone={flash} t={t} isAdmin={isAdmin} isManager={isManager} isLogistic={isLogistic} user={user} reload={loadDriverLeaves} />}
       {tab === "vehicleoff" && <VehicleOffTab offDays={vehicleOffDays} isAdmin={isAdmin} user={user} />}
       {tab === "workingcal" && isAdmin && <WorkingCalendarTab holidays={holidays} setHolidays={setHolidays} shifts={shifts} setShifts={setShifts} setDone={flash} t={t} reload={loadHolidays} />}
@@ -175,25 +175,59 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
 }
 
 // ── DC LOCATIONS TAB ──────────────────────────────────────────────────────────
-function DCsTab({ dcList, setDcList, setDone, t, isAdmin }) {
+function DCsTab({ dcList, setDcList, setDone, t, isAdmin, user }) {
+  const isManager = user?.role === "manager";
+  // DC Manager sees only own DC — Admin sees all
+  const myDcList = isAdmin ? dcList : dcList.filter(d => d.dc === user?.dc);
   const [showAdd, setShowAdd] = useState(false);
-  const [editIdx, setEditIdx] = useState(null);
+  const [editId, setEditId] = useState(null);
   const [f, setF] = useState({ dc:"",city:"",manager:"",lat:"",lng:"",addrEn:"",addrAr:"" });
 
-  function save() {
+  async function save() {
     if (!f.dc||!f.city) return;
-    if (editIdx!==null) { setDcList(prev=>prev.map((d,i)=>i===editIdx?{...f}:d)); setDone(f.dc+" updated!"); }
-    else { setDcList(prev=>[...prev,{...f}]); setDone(f.dc+" added!"); }
-    setShowAdd(false); setEditIdx(null); setF({ dc:"",city:"",manager:"",lat:"",lng:"",addrEn:"",addrAr:"" });
+    try {
+      if (editId) {
+        await updateDoc(doc(db,"dcLocations",editId), f);
+        setDcList(prev=>prev.map(d=>d.firestoreId===editId?{...d,...f}:d));
+        setDone(f.dc+" updated!");
+      } else {
+        const ref = await addDoc(collection(db,"dcLocations"), f);
+        setDcList(prev=>[...prev,{firestoreId:ref.id,...f}]);
+        setDone(f.dc+" added!");
+      }
+    } catch(e) { setDone("❌ Error: "+e.message); }
+    setShowAdd(false); setEditId(null); setF({ dc:"",city:"",manager:"",lat:"",lng:"",addrEn:"",addrAr:"" });
   }
-  function startEdit(dc,idx) { setEditIdx(idx); setF({...dc}); setShowAdd(true); }
-  function deleteDC(idx) { if (window.confirm("Delete this DC?")) { setDcList(prev=>prev.filter((_,i)=>i!==idx)); setDone("DC deleted."); } }
+
+  async function deleteDC(item) {
+    if (!window.confirm("Delete "+item.dc+" DC?")) return;
+    try {
+      if (item.firestoreId) await deleteDoc(doc(db,"dcLocations",item.firestoreId));
+      setDcList(prev=>prev.filter(d=>d.firestoreId!==item.firestoreId));
+      setDone("DC deleted.");
+    } catch(e) { setDone("❌ Error: "+e.message); }
+  }
+
+  const [managerEditId, setManagerEditId] = useState(null);
+  const [managerF, setManagerF] = useState({ manager:"",lat:"",lng:"",addrEn:"",addrAr:"" });
+
+  function startEdit(item) { setEditId(item.firestoreId||null); setF({dc:item.dc,city:item.city,manager:item.manager||"",lat:item.lat||"",lng:item.lng||"",addrEn:item.addrEn||"",addrAr:item.addrAr||""}); setShowAdd(true); }
+
+  async function saveManagerEdit() {
+    if (!managerEditId) return;
+    try {
+      await updateDoc(doc(db,"dcLocations",managerEditId), managerF);
+      setDcList(prev=>prev.map(d=>d.firestoreId===managerEditId?{...d,...managerF}:d));
+      setDone("DC updated!");
+    } catch(e) { setDone("❌ "+e.message); }
+    setManagerEditId(null);
+  }
 
   return (
     <Card>
       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16 }}>
         <CardTitle style={{ margin:0 }}>📍 {t.dcLocs}</CardTitle>
-        {isAdmin&&<Btn small onClick={()=>{setShowAdd(!showAdd);setEditIdx(null);setF({ dc:"",city:"",manager:"",lat:"",lng:"",addrEn:"",addrAr:"" });}}>➕ {t.addDC}</Btn>}
+        {isAdmin&&<Btn small onClick={()=>{setShowAdd(!showAdd);setEditId(null);setF({ dc:"",city:"",manager:"",lat:"",lng:"",addrEn:"",addrAr:"" });}}>➕ {t.addDC}</Btn>}
       </div>
       {showAdd&&isAdmin&&(
         <div style={{ background:"#f8fafc",borderRadius:8,padding:14,marginBottom:16,border:"1px solid #e2e8f0" }}>
@@ -208,20 +242,24 @@ function DCsTab({ dcList, setDcList, setDone, t, isAdmin }) {
             <div style={{ gridColumn:"1/-1" }}><Input label={t.dcAddrAr} value={f.addrAr} onChange={v=>setF({...f,addrAr:v})} /></div>
           </div>
           <div style={{ display:"flex",gap:8 }}>
-            <Btn onClick={save} color="#10b981" style={{ flex:1 }}>✅ {editIdx!==null?t.save:t.addBtn}</Btn>
-            <Btn onClick={()=>{setShowAdd(false);setEditIdx(null);}} color="#64748b">{t.cancel}</Btn>
+            <Btn onClick={save} color="#10b981" style={{ flex:1 }}>✅ {editId?t.save:t.addBtn}</Btn>
+            <Btn onClick={()=>{setShowAdd(false);setEditId(null);}} color="#64748b">{t.cancel}</Btn>
           </div>
         </div>
       )}
-      {dcList.map((d,idx)=>(
-        <div key={d.dc} style={{ border:"1px solid #e2e8f0",borderRadius:8,padding:14,marginBottom:8 }}>
+      {myDcList.length===0&&<div style={{ textAlign:"center",padding:24,color:"#94a3b8" }}>No DC locations found</div>}
+      {myDcList.map((d)=>(
+        <div key={d.firestoreId||d.dc} style={{ border:"1px solid #e2e8f0",borderRadius:8,padding:14,marginBottom:8 }}>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8 }}>
             <div style={{ fontWeight:700,fontSize:15 }}>📍 Distribution Center - {d.dc}</div>
             {isAdmin&&(
               <div style={{ display:"flex",gap:6 }}>
-                <Btn small onClick={()=>startEdit(d,idx)} color="#6366f1">✎ {t.edit}</Btn>
-                <Btn small onClick={()=>deleteDC(idx)} color="#ef4444">🗑</Btn>
+                <Btn small onClick={()=>startEdit(d)} color="#6366f1">✎ {t.edit}</Btn>
+                <Btn small onClick={()=>deleteDC(d)} color="#ef4444">🗑</Btn>
               </div>
+            )}
+            {isManager&&d.dc===user?.dc&&managerEditId!==d.firestoreId&&(
+              <Btn small onClick={()=>{setManagerEditId(d.firestoreId);setManagerF({manager:d.manager||"",lat:d.lat||"",lng:d.lng||"",addrEn:d.addrEn||"",addrAr:d.addrAr||""});}} color="#6366f1">✎ Edit My DC Info</Btn>
             )}
           </div>
           <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:6,fontSize:14,color:"#374151",marginBottom:8 }}>
@@ -232,6 +270,24 @@ function DCsTab({ dcList, setDcList, setDone, t, isAdmin }) {
           {d.addrEn&&<div style={{ background:"#f8fafc",borderRadius:6,padding:"6px 10px",marginBottom:4,fontSize:14 }}>🇬🇧 {d.addrEn}</div>}
           {d.addrAr&&<div style={{ background:"#f0f9ff",borderRadius:6,padding:"6px 10px",marginBottom:8,direction:"rtl",fontSize:14,color:"#0369a1" }}>🇸🇦 {d.addrAr}</div>}
           {d.lat&&d.lng&&<a href={"https://maps.google.com/?q="+d.lat+","+d.lng} target="_blank" rel="noreferrer" style={{ fontSize:13,color:"#6366f1",fontWeight:600 }}>📍 {t.viewMap} →</a>}
+          {/* Manager inline edit form — own DC only */}
+          {isManager&&d.dc===user?.dc&&managerEditId===d.firestoreId&&(
+            <div style={{ background:"#f0f9ff",borderRadius:8,padding:14,marginTop:12,border:"1px solid #bae6fd" }}>
+              <div style={{ fontWeight:700,fontSize:13,color:"#0369a1",marginBottom:10 }}>✎ Edit My DC Information</div>
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px" }}>
+                <Input label="Manager Name" value={managerF.manager} onChange={v=>setManagerF({...managerF,manager:v})} />
+                <div />
+                <Input label="GPS Latitude" value={managerF.lat} onChange={v=>setManagerF({...managerF,lat:v})} placeholder="24.7136" />
+                <Input label="GPS Longitude" value={managerF.lng} onChange={v=>setManagerF({...managerF,lng:v})} placeholder="46.6753" />
+                <div style={{ gridColumn:"1/-1" }}><Input label="Address (English)" value={managerF.addrEn} onChange={v=>setManagerF({...managerF,addrEn:v})} /></div>
+                <div style={{ gridColumn:"1/-1" }}><Input label="العنوان (عربي)" value={managerF.addrAr} onChange={v=>setManagerF({...managerF,addrAr:v})} /></div>
+              </div>
+              <div style={{ display:"flex",gap:8,marginTop:8 }}>
+                <Btn onClick={saveManagerEdit} color="#10b981" style={{ flex:1 }}>✅ Save Changes</Btn>
+                <Btn onClick={()=>setManagerEditId(null)} color="#64748b">Cancel</Btn>
+              </div>
+            </div>
+          )}
         </div>
       ))}
     </Card>
@@ -239,23 +295,43 @@ function DCsTab({ dcList, setDcList, setDone, t, isAdmin }) {
 }
 
 // ── STORAGE CONDITIONS TAB ────────────────────────────────────────────────────
-function StorageTab({ storageList, setStorageList, setDone, t, isAdmin }) {
+function StorageTab({ storageList, setStorageList, setDone, t, isAdmin, user }) {
+  const isManager = user?.role === "manager";
   const [showAdd, setShowAdd] = useState(false);
-  const [editIdx, setEditIdx] = useState(null);
+  const [editId, setEditId] = useState(null);
   const [f, setF] = useState({ name:"",range:"",color:"#10b981" });
 
-  function save() {
+  async function save() {
     if (!f.name||!f.range) return;
-    if (editIdx!==null) { setStorageList(prev=>prev.map((s,i)=>i===editIdx?{...f}:s)); setDone(f.name+" updated!"); }
-    else { setStorageList(prev=>[...prev,{...f}]); setDone(f.name+" added!"); }
-    setShowAdd(false); setEditIdx(null); setF({ name:"",range:"",color:"#10b981" });
+    try {
+      if (editId) {
+        await updateDoc(doc(db,"storage",editId), f);
+        setStorageList(prev=>prev.map(s=>s.firestoreId===editId?{...s,...f}:s));
+        setDone(f.name+" updated!");
+      } else {
+        const ref = await addDoc(collection(db,"storage"), f);
+        setStorageList(prev=>[...prev,{firestoreId:ref.id,...f}]);
+        setDone(f.name+" added!");
+      }
+    } catch(e) { setDone("❌ "+e.message); }
+    setShowAdd(false); setEditId(null); setF({ name:"",range:"",color:"#10b981" });
+  }
+
+  async function deleteStorage(s) {
+    if (!window.confirm("Delete "+s.name+"?")) return;
+    try {
+      if (s.firestoreId) await deleteDoc(doc(db,"storage",s.firestoreId));
+      setStorageList(prev=>prev.filter(x=>x.firestoreId!==s.firestoreId));
+      setDone("Deleted.");
+    } catch(e) { setDone("❌ "+e.message); }
   }
 
   return (
     <Card>
       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16 }}>
         <CardTitle style={{ margin:0 }}>🌡️ {t.storage}</CardTitle>
-        {isAdmin&&<Btn small onClick={()=>{setShowAdd(!showAdd);setEditIdx(null);setF({ name:"",range:"",color:"#10b981" });}}>➕ {t.addStorage}</Btn>}
+        {isAdmin&&<Btn small onClick={()=>{setShowAdd(!showAdd);setEditId(null);setF({ name:"",range:"",color:"#10b981" });}}>➕ {t.addStorage}</Btn>}
+        {isManager&&<div style={{ fontSize:12,color:"#64748b",fontStyle:"italic" }}>🔒 Read Only</div>}
       </div>
       {showAdd&&isAdmin&&(
         <div style={{ background:"#f8fafc",borderRadius:8,padding:14,marginBottom:12,border:"1px solid #e2e8f0" }}>
@@ -268,19 +344,19 @@ function StorageTab({ storageList, setStorageList, setDone, t, isAdmin }) {
             </div>
           </div>
           <div style={{ display:"flex",gap:8 }}>
-            <Btn onClick={save} color="#10b981" style={{ flex:1 }}>✅ {editIdx!==null?t.save:t.addBtn}</Btn>
-            <Btn onClick={()=>{setShowAdd(false);setEditIdx(null);}} color="#64748b">{t.cancel}</Btn>
+            <Btn onClick={save} color="#10b981" style={{ flex:1 }}>✅ {editId?t.save:t.addBtn}</Btn>
+            <Btn onClick={()=>{setShowAdd(false);setEditId(null);}} color="#64748b">{t.cancel}</Btn>
           </div>
         </div>
       )}
-      {storageList.map((s,idx)=>(
-        <div key={idx} style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 0",borderBottom:"1px solid #f1f5f9" }}>
+      {storageList.map((s)=>(
+        <div key={s.firestoreId||s.name} style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 0",borderBottom:"1px solid #f1f5f9" }}>
           <div style={{ width:14,height:14,borderRadius:"50%",background:s.color,flexShrink:0 }} />
           <div style={{ flex:1 }}><div style={{ fontWeight:600,fontSize:14 }}>{s.name} <span style={{ fontSize:14,color:"#64748b",fontWeight:400 }}>({s.range})</span></div></div>
           {isAdmin&&(
             <div style={{ display:"flex",gap:4 }}>
-              <Btn small onClick={()=>{setEditIdx(idx);setF({...s});setShowAdd(true);}} color="#6366f1">✎</Btn>
-              <Btn small onClick={()=>{if(window.confirm("Delete?"))setStorageList(prev=>prev.filter((_,i)=>i!==idx));}} color="#ef4444">🗑</Btn>
+              <Btn small onClick={()=>{setEditId(s.firestoreId||null);setF({name:s.name,range:s.range||"",color:s.color||"#10b981"});setShowAdd(true);}} color="#6366f1">✎</Btn>
+              <Btn small onClick={()=>deleteStorage(s)} color="#ef4444">🗑</Btn>
             </div>
           )}
         </div>
@@ -290,41 +366,72 @@ function StorageTab({ storageList, setStorageList, setDone, t, isAdmin }) {
 }
 
 // ── CITIES TAB ────────────────────────────────────────────────────────────────
-function CitiesTab({ cityList, setCityList, setDone, t, isAdmin }) {
+function CitiesTab({ cityList, setCityList, setDone, t, isAdmin, user }) {
+  const isManager = user?.role === "manager";
   const [showAdd, setShowAdd] = useState(false);
   const [newCity, setNewCity] = useState("");
-  const [editIdx, setEditIdx] = useState(null);
+  const [editId, setEditId] = useState(null);
   const [editVal, setEditVal] = useState("");
+
+  async function addCity() {
+    if (!newCity.trim()) return;
+    try {
+      const ref = await addDoc(collection(db,"cities"), {name:newCity.trim()});
+      setCityList(prev=>[...prev,{firestoreId:ref.id,name:newCity.trim()}]);
+      setDone(newCity+" added!");
+    } catch(e) { setDone("❌ "+e.message); }
+    setNewCity(""); setShowAdd(false);
+  }
+
+  async function saveEdit(c) {
+    if (!editVal.trim()) return;
+    try {
+      if (c.firestoreId) await updateDoc(doc(db,"cities",c.firestoreId), {name:editVal.trim()});
+      setCityList(prev=>prev.map(x=>x.firestoreId===c.firestoreId?{...x,name:editVal.trim()}:x));
+      setDone(editVal+" updated!");
+    } catch(e) { setDone("❌ "+e.message); }
+    setEditId(null);
+  }
+
+  async function deleteCity(c) {
+    if (!window.confirm("Delete "+(c.name||c)+"?")) return;
+    try {
+      if (c.firestoreId) await deleteDoc(doc(db,"cities",c.firestoreId));
+      setCityList(prev=>prev.filter(x=>(x.firestoreId||x)!==(c.firestoreId||c)));
+      setDone("Deleted.");
+    } catch(e) { setDone("❌ "+e.message); }
+  }
 
   return (
     <Card>
       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16 }}>
         <CardTitle style={{ margin:0 }}>🌆 {t.cities}</CardTitle>
         {isAdmin&&<Btn small onClick={()=>setShowAdd(!showAdd)}>➕ {t.addCity}</Btn>}
+        {isManager&&<div style={{ fontSize:12,color:"#64748b",fontStyle:"italic" }}>🔒 Read Only</div>}
       </div>
       {showAdd&&isAdmin&&(
         <div style={{ display:"flex",gap:8,marginBottom:12 }}>
           <input value={newCity} onChange={e=>setNewCity(e.target.value)} placeholder={t.cityName}
             style={{ flex:1,border:"1.5px solid #e2e8f0",borderRadius:8,padding:"11px 14px",fontSize:14,outline:"none" }} />
-          <Btn onClick={()=>{if(!newCity.trim())return;setCityList(prev=>[...prev,newCity.trim()]);setDone(newCity+" added!");setNewCity("");setShowAdd(false);}} color="#10b981">✅</Btn>
+          <Btn onClick={addCity} color="#10b981">✅</Btn>
           <Btn onClick={()=>setShowAdd(false)} color="#64748b">{t.cancel}</Btn>
         </div>
       )}
       <div style={{ display:"flex",flexWrap:"wrap",gap:8 }}>
-        {cityList.map((c,idx)=>(
-          <div key={idx} style={{ display:"flex",alignItems:"center",gap:4,background:"#f1f5f9",borderRadius:8,padding:"6px 12px" }}>
-            {editIdx===idx?(
+        {cityList.map((c)=>(
+          <div key={c.firestoreId||c} style={{ display:"flex",alignItems:"center",gap:4,background:"#f1f5f9",borderRadius:8,padding:"6px 12px" }}>
+            {editId===c.firestoreId?(
               <>
                 <input value={editVal} onChange={e=>setEditVal(e.target.value)} style={{ border:"1px solid #6366f1",borderRadius:6,padding:"3px 8px",fontSize:14,outline:"none",width:100 }} />
-                <button onClick={()=>{setCityList(prev=>prev.map((x,i)=>i===idx?editVal:x));setDone(editVal+" updated!");setEditIdx(null);}} style={{ background:"#10b981",border:"none",color:"white",borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:12 }}>✓</button>
-                <button onClick={()=>setEditIdx(null)} style={{ background:"#64748b",border:"none",color:"white",borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:12 }}>✕</button>
+                <button onClick={()=>saveEdit(c)} style={{ background:"#10b981",border:"none",color:"white",borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:12 }}>✓</button>
+                <button onClick={()=>setEditId(null)} style={{ background:"#64748b",border:"none",color:"white",borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:12 }}>✕</button>
               </>
             ):(
               <>
-                <span style={{ fontSize:14,fontWeight:600,color:"#374151" }}>📍 {c}</span>
+                <span style={{ fontSize:14,fontWeight:600,color:"#374151" }}>📍 {c.name||c}</span>
                 {isAdmin&&<>
-                  <button onClick={()=>{setEditIdx(idx);setEditVal(c);}} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#6366f1",padding:"0 2px" }}>✎</button>
-                  <button onClick={()=>{if(window.confirm("Delete "+c+"?"))setCityList(prev=>prev.filter((_,i)=>i!==idx));}} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#ef4444",padding:"0 2px" }}>✕</button>
+                  <button onClick={()=>{setEditId(c.firestoreId||null);setEditVal(c.name||c);}} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#6366f1",padding:"0 2px" }}>✎</button>
+                  <button onClick={()=>deleteCity(c)} style={{ background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#ef4444",padding:"0 2px" }}>✕</button>
                 </>}
               </>
             )}

@@ -112,9 +112,9 @@ function canApprove(role) {
 }
 
 function canSubmitDirect(role) {
-  // Manager fuel entry removed — drivers submit from their own screen
-  // Admin retains direct entry for emergency/manual corrections
-  return ["admin"].includes(role);
+  // Admin, Logistic, DC Manager — direct add (no approval needed)
+  // Driver — submits request, Manager or Logistic approves
+  return ["admin", "logistic", "manager"].includes(role);
 }
 
 // ─── Fleet Summary Card (BUS or Dyna) ────────────────────────────────────────

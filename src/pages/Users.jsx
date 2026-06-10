@@ -138,8 +138,9 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
   const rl = ROLE_LABELS[lang]||ROLE_LABELS.en;
   const isAdmin = user.role==="admin";
   const isManager = user.role==="manager";
+  const isLogistic = user.role==="logistic";
   const isPlanning = user.role==="planning";
-  const canSubmit = isAdmin||isManager||isPlanning;
+  const canSubmit = isAdmin||isManager||isPlanning||isLogistic;
 
   const adminTabs = [["users","👥",t.userDir],["requests","📝",t.accessReq],["matrix","🔐",t.authMatrix]];
   const otherTabs = [["requests","📝",t.accessReq]];
@@ -224,8 +225,14 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
     const updated = {...form, [key]:val};
     if (key==="location") updated.dc = LOCATION_TO_DC[val]||"Head Office";
     if (key==="empType"&&val==="driver"&&isManager) {
+      // DC Manager — lock to own DC
       updated.location = user.location||"Head Office";
       updated.dc = user.dc||"";
+    }
+    if (key==="empType"&&val==="driver"&&isLogistic) {
+      // Logistic — keep location selectable (they choose which DC the driver belongs to)
+      updated.location = updated.location||"Distribution Center - Riyadh";
+      updated.dc = LOCATION_TO_DC[updated.location]||"Riyadh";
     }
     setForm(updated);
   }
@@ -254,7 +261,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
       reqId:genId("REQ"), empType:form.empType, name:form.name,
       empId:form.empId||"", mobile:form.mobile, email, loginId:form.loginId.trim().toLowerCase(),
       location:isManager?(user.location||form.location):form.location,
-      dc:isManager?(user.dc||form.dc):form.dc,
+      dc:isManager?(user.dc||form.dc):(LOCATION_TO_DC[form.location]||form.dc),
       dept:form.empType==="driver"?"Logistics":form.dept,
       role:form.empType==="driver"?"driver":form.role,
       reason:form.reason, licNo:form.licNo||"", licExp:form.licExp||"",
@@ -590,7 +597,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
               <div style={{marginBottom:16}}>
                 <label style={{fontSize:13,fontWeight:600,color:"#374151",marginBottom:6,display:"block"}}>{t.empType} *</label>
                 <div style={{display:"flex",gap:8}}>
-                  {[["systemuser",t.systemUser],...(!isPlanning?[["driver",t.driverType]]:[])].map(([v,l])=>(
+                  {[["systemuser",t.systemUser],...(!isPlanning&&(isAdmin||isManager||isLogistic)?[["driver",t.driverType]]:[])].map(([v,l])=>(
                     <button key={v} onClick={()=>F("empType",v)}
                       style={{flex:1,border:`2px solid ${form.empType===v?"#6366f1":"#e2e8f0"}`,background:form.empType===v?"#eef2ff":"white",borderRadius:8,padding:10,cursor:"pointer",fontSize:13,fontWeight:600,color:form.empType===v?"#4338ca":"#64748b"}}>
                       {l}
@@ -623,6 +630,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
 
                 {/* Location */}
                 {isManager?(
+                  // DC Manager — location locked to own DC
                   <div style={{marginBottom:12}}>
                     <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>📍 Location</label>
                     <div style={{background:"#f8fafc",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,color:"#64748b"}}>

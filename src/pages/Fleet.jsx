@@ -382,18 +382,40 @@ function VehiclesTab({ vehicles, dc, t, canManage, user, onSendMaint, onReactiva
     if (!reqForm.plate||!reqForm.reason) { flash("❌ Plate number and reason are required!"); return; }
     setSubmitting(true);
     try {
-      const newReq = {
-        ...reqForm, dc: dc||user.dc,
-        requestedBy: user.name, requestedAt: new Date().toLocaleDateString(),
-        status: "pending"
-      };
-      const docRef = await addDoc(collection(db, "vehicleRequests"), newReq);
-      setVehicleRequests(prev=>[...prev, { id:docRef.id, ...newReq }]);
-      await sendNotification({
-        toRole:"admin", type:"vehicle",
-        data:{ driverName:user.name, dc:dc||user.dc, plate:reqForm.plate }
-      });
-      flash(t.reqSubmitted);
+      const targetDC = isLogistic ? (reqForm.selectedDC||"Riyadh") : (dc||user.dc);
+      if (isAdmin||isLogistic) {
+        // Admin — direct add, no approval needed
+        const vData = {
+          plate:reqForm.plate, type:reqForm.type, brand:reqForm.brand||"",
+          model:reqForm.model||"", year:reqForm.year||"", color:reqForm.color||"",
+          ownership:reqForm.ownership||"Owned", dc:targetDC,
+          fuelCapacity:reqForm.fuelCapacity||80, fuelLevel:reqForm.fuelCapacity||80,
+          kmpl:reqForm.kmpl||12, mileage:reqForm.kmpl||12,
+          engineNo:reqForm.engineNo||"", chassisNo:reqForm.chassisNo||"",
+          startOdometer:reqForm.startOdometer||0, totalKM:reqForm.startOdometer||0,
+          fahas:reqForm.fahas||"", insurance:reqForm.insurance||"", istimara:reqForm.istimara||"",
+          status:"Active", maintHistory:[], photos:[],
+          approvedBy:user.name, approvedAt:new Date().toISOString(),
+          createdAt:new Date().toISOString()
+        };
+        const vDocRef = await addDoc(collection(db, "vehicles"), vData);
+        setFsVehicles(prev=>[...prev, { firestoreId:vDocRef.id, ...vData }]);
+        flash("✅ Vehicle "+reqForm.plate+" added to "+(isLogistic?targetDC:"your DC")+"!");
+      } else {
+        // Manager — submit request for Admin approval
+        const newReq = {
+          ...reqForm, dc: targetDC,
+          requestedBy: user.name, requestedAt: new Date().toLocaleDateString(),
+          status: "pending"
+        };
+        const docRef = await addDoc(collection(db, "vehicleRequests"), newReq);
+        setVehicleRequests(prev=>[...prev, { id:docRef.id, ...newReq }]);
+        await sendNotification({
+          toRole:"admin", type:"vehicle",
+          data:{ driverName:user.name, dc:targetDC, plate:reqForm.plate }
+        });
+        flash(t.reqSubmitted);
+      }
       setShowReqForm(false);
       setReqForm({ plate:"", type:"Dyna", brand:"", model:"", year:"", color:"", ownership:"Owned", fuelCapacity:80, kmpl:12, engineNo:"", chassisNo:"", startOdometer:0, fahas:"", insurance:"", istimara:"", reason:"" });
     } catch(e) { flash("❌ Error: "+e.message); }
@@ -469,17 +491,31 @@ function VehiclesTab({ vehicles, dc, t, canManage, user, onSendMaint, onReactiva
   return (
     <div>
       {/* Manager — Request Button */}
-      {isManager&&!isAdmin&&(
+      {(isManager||isAdmin||isLogistic)&&(
         <div style={{ marginBottom:12 }}>
-          <Btn small onClick={()=>setShowReqForm(!showReqForm)} color="#7c3aed">🚗 {t.requestVehicle}</Btn>
+          <Btn small onClick={()=>setShowReqForm(!showReqForm)} color="#7c3aed">
+            🚗 {isAdmin?"Add Vehicle Directly":t.requestVehicle}
+          </Btn>
         </div>
       )}
 
       {/* Manager — Request Form (3 sections) */}
-      {showReqForm&&isManager&&!isAdmin&&(
+      {showReqForm&&(isManager||isAdmin||isLogistic)&&(
         <Card style={{ borderLeft:"4px solid #7c3aed", marginBottom:16 }}>
           <CardTitle>🚗 {t.requestVehicle}</CardTitle>
 
+          {/* DC Selector for Logistic — they choose which DC vehicle belongs to */}
+          {isLogistic&&(
+            <div style={{ marginBottom:14, padding:"10px 14px", background:"#f0f9ff", borderRadius:8, border:"1px solid #bae6fd" }}>
+              <label style={{ fontSize:13,fontWeight:600,color:"#0369a1",display:"block",marginBottom:6 }}>📍 Select Distribution Center *</label>
+              <select value={reqForm.selectedDC||"Riyadh"} onChange={e=>setReqForm({...reqForm,selectedDC:e.target.value})}
+                style={{ width:"100%",border:"1.5px solid #bae6fd",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box" }}>
+                <option value="Riyadh">Riyadh Distribution Center</option>
+                <option value="Jeddah">Jeddah Distribution Center</option>
+                <option value="Dammam">Dammam Distribution Center</option>
+              </select>
+            </div>
+          )}
           {/* Section 1 — Basic Info */}
           <div style={sectionLabel}>📋 {t.basicInfo}</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 12px" }}>
@@ -529,7 +565,7 @@ function VehiclesTab({ vehicles, dc, t, canManage, user, onSendMaint, onReactiva
       )}
 
       {/* Manager — My Pending Requests */}
-      {isManager&&!isAdmin&&myPendingReqs.length>0&&(
+      {isManager&&!isAdmin&&!isLogistic&&myPendingReqs.length>0&&(
         <Card style={{ borderLeft:"4px solid #f59e0b", marginBottom:16 }}>
           <CardTitle>⏳ {t.reqPending} ({myPendingReqs.length})</CardTitle>
           {myPendingReqs.map(req=>(
