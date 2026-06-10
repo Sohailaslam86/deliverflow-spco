@@ -177,8 +177,11 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
 // ── DC LOCATIONS TAB ──────────────────────────────────────────────────────────
 function DCsTab({ dcList, setDcList, setDone, t, isAdmin, user }) {
   const isManager = user?.role === "manager";
+  // Normalize user dc — handles "Distribution Center - Dammam" and "Dammam" both
+  const DC_NORMALIZE = { "Distribution Center - Riyadh":"Riyadh","Distribution Center - Jeddah":"Jeddah","Distribution Center - Dammam":"Dammam","Riyadh":"Riyadh","Jeddah":"Jeddah","Dammam":"Dammam" };
+  const userDCnorm = DC_NORMALIZE[user?.dc||""] || user?.dc || "";
   // DC Manager sees only own DC — Admin sees all
-  const myDcList = isAdmin ? dcList : dcList.filter(d => d.dc === user?.dc);
+  const myDcList = isAdmin ? dcList : dcList.filter(d => DC_NORMALIZE[d.dc]===userDCnorm || d.dc===userDCnorm);
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState(null);
   const [f, setF] = useState({ dc:"",city:"",manager:"",lat:"",lng:"",addrEn:"",addrAr:"" });
@@ -258,7 +261,7 @@ function DCsTab({ dcList, setDcList, setDone, t, isAdmin, user }) {
                 <Btn small onClick={()=>deleteDC(d)} color="#ef4444">🗑</Btn>
               </div>
             )}
-            {isManager&&d.dc===user?.dc&&managerEditId!==d.firestoreId&&(
+            {isManager&&(DC_NORMALIZE[d.dc]||d.dc)===userDCnorm&&managerEditId!==d.firestoreId&&(
               <Btn small onClick={()=>{setManagerEditId(d.firestoreId);setManagerF({manager:d.manager||"",lat:d.lat||"",lng:d.lng||"",addrEn:d.addrEn||"",addrAr:d.addrAr||""});}} color="#6366f1">✎ Edit My DC Info</Btn>
             )}
           </div>
@@ -271,7 +274,7 @@ function DCsTab({ dcList, setDcList, setDone, t, isAdmin, user }) {
           {d.addrAr&&<div style={{ background:"#f0f9ff",borderRadius:6,padding:"6px 10px",marginBottom:8,direction:"rtl",fontSize:14,color:"#0369a1" }}>🇸🇦 {d.addrAr}</div>}
           {d.lat&&d.lng&&<a href={"https://maps.google.com/?q="+d.lat+","+d.lng} target="_blank" rel="noreferrer" style={{ fontSize:13,color:"#6366f1",fontWeight:600 }}>📍 {t.viewMap} →</a>}
           {/* Manager inline edit form — own DC only */}
-          {isManager&&d.dc===user?.dc&&managerEditId===d.firestoreId&&(
+          {isManager&&(DC_NORMALIZE[d.dc]||d.dc)===userDCnorm&&managerEditId===d.firestoreId&&(
             <div style={{ background:"#f0f9ff",borderRadius:8,padding:14,marginTop:12,border:"1px solid #bae6fd" }}>
               <div style={{ fontWeight:700,fontSize:13,color:"#0369a1",marginBottom:10 }}>✎ Edit My DC Information</div>
               <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px" }}>

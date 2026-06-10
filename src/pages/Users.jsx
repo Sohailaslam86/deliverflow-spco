@@ -19,63 +19,59 @@ const LOCATION_TO_DC = { "Distribution Center - Riyadh":"Riyadh","Distribution C
 const SPCO_DOMAIN = "@spco.sa";
 
 const ROLE_LABELS = {
-  en:{ admin:"System Administrator",planning:"Planning",manager:"DC Manager",logistic:"Logistics Manager",management:"Management",driver:"Delivery Partner",viewonly:"View Only" },
-  ar:{ admin:"مدير النظام",planning:"التخطيط",manager:"مدير مركز التوزيع",logistic:"مدير اللوجستيات",management:"الإدارة",driver:"شريك التوصيل",viewonly:"عرض فقط" }
+  en:{ admin:"System Administrator",planning:"Planning",manager:"DC Manager",driver:"Delivery Driver",viewonly:"View Only" },
+  ar:{ admin:"مدير النظام",planning:"التخطيط",manager:"مدير مركز التوزيع",driver:"سائق التسليم",viewonly:"عرض فقط" }
 };
 
 const DEFAULT_PERMISSIONS = {
   "Data Entry":{
-    "Upload Invoice CSV":              { admin:true, planning:true,  manager:false, logistic:false, management:false, driver:false, viewonly:false },
-    "View All DC Invoices":            { admin:true, planning:true,  manager:false, logistic:true,  management:true,  driver:false, viewonly:true  },
-    "View Own DC Invoices":            { admin:true, planning:true,  manager:true,  logistic:true,  management:true,  driver:false, viewonly:true  },
-    "Search Invoice / Customer":       { admin:true, planning:true,  manager:true,  logistic:true,  management:true,  driver:true,  viewonly:true  },
-    "View Own Assigned Invoices":      { admin:false,planning:false, manager:false, logistic:false, management:false, driver:true,  viewonly:false },
+    "Upload Invoice CSV":{ admin:true,planning:true,manager:false,driver:false,viewonly:false },
+    "View All DC Invoices":{ admin:true,planning:true,manager:false,driver:false,viewonly:true },
+    "View Own DC Invoices":{ admin:true,planning:true,manager:true,driver:false,viewonly:true },
+    "Search Invoice / Customer":{ admin:true,planning:true,manager:true,driver:true,viewonly:true },
+    "View Own Assigned Invoices":{ admin:false,planning:false,manager:false,driver:true,viewonly:false },
   },
   "Assignment":{
-    "Assign Delivery Partner to Invoice":{ admin:true,planning:false,manager:true, logistic:false, management:false, driver:false, viewonly:false },
-    "Assign Vehicle to Invoice":         { admin:true,planning:false,manager:true, logistic:false, management:false, driver:false, viewonly:false },
-    "Select Delivery City":              { admin:true,planning:false,manager:true, logistic:false, management:false, driver:false, viewonly:false },
-    "Re-assign Failed Invoice":          { admin:true,planning:false,manager:true, logistic:false, management:false, driver:false, viewonly:false },
-    "Schedule Hold on Invoice":          { admin:true,planning:false,manager:true, logistic:false, management:false, driver:false, viewonly:false },
+    "Assign Driver to Invoice":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
+    "Assign Vehicle to Invoice":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
+    "Select Delivery City":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
+    "Re-assign Failed Invoice":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
+    "Schedule Hold on Invoice":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
   },
   "Trip Management":{
-    "Create Trip":                     { admin:true, planning:false, manager:true,  logistic:false, management:false, driver:false, viewonly:false },
-    "Receive Relay Trip + POD":        { admin:true, planning:false, manager:true,  logistic:false, management:false, driver:false, viewonly:false },
+    "Create Trip":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
+    "Receive Relay Trip + POD":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
   },
   "POD Management":{
-    "Upload POD (Own Invoices)":              { admin:false,planning:false,manager:false,logistic:false,management:false,driver:true, viewonly:false },
-    "Upload POD on Delivery Partner Behalf":  { admin:true, planning:false,manager:true, logistic:false,management:false,driver:false,viewonly:false },
-    "View POD Image":                         { admin:true, planning:true, manager:true, logistic:true, management:true, driver:true, viewonly:true  },
-    "Bulk Download POD":                      { admin:true, planning:true, manager:true, logistic:true, management:true, driver:false,viewonly:false },
+    "Upload POD (Own Invoices)":{ admin:false,planning:false,manager:false,driver:true,viewonly:false },
+    "Upload POD on Driver Behalf":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
+    "View POD Image":{ admin:true,planning:true,manager:true,driver:true,viewonly:true },
+    "Bulk Download POD":{ admin:true,planning:true,manager:true,driver:false,viewonly:false },
   },
   "Fleet Management":{
-    "Mark Vehicle in Maintenance":     { admin:true, planning:false, manager:true,  logistic:true,  management:false, driver:false, viewonly:false },
-    "View Fleet Overview":             { admin:true, planning:false, manager:true,  logistic:true,  management:true,  driver:false, viewonly:false },
-    "Approve Fuel Entry":              { admin:true, planning:false, manager:true,  logistic:true,  management:false, driver:false, viewonly:false },
-    "Submit Fuel Entry":               { admin:false,planning:false, manager:false, logistic:false, management:false, driver:true,  viewonly:false },
-    "Upload Odometer Photo":           { admin:false,planning:false, manager:false, logistic:false, management:false, driver:true,  viewonly:false },
+    "Mark Vehicle in Maintenance":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
+    "Upload Fuel Fill Record":{ admin:true,planning:false,manager:true,driver:true,viewonly:false },
+    "Upload Odometer Photo":{ admin:false,planning:false,manager:false,driver:true,viewonly:false },
   },
   "User Management":{
-    "Submit User / Delivery Partner Request":{ admin:true,planning:true,manager:true,logistic:true,management:false,driver:false,viewonly:false },
-    "Approve / Reject Requests":             { admin:true,planning:false,manager:false,logistic:false,management:false,driver:false,viewonly:false },
-    "Edit User Role / DC":                   { admin:true,planning:false,manager:false,logistic:false,management:false,driver:false,viewonly:false },
+    "Submit User / Driver Request":{ admin:true,planning:true,manager:true,driver:false,viewonly:false },
+    "Approve / Reject Requests":{ admin:true,planning:false,manager:false,driver:false,viewonly:false },
+    "Edit User Role / DC":{ admin:true,planning:false,manager:false,driver:false,viewonly:false },
   },
   "Reports":{
-    "Daily Delivery Status":           { admin:true, planning:true,  manager:true,  logistic:false, management:true,  driver:false, viewonly:true  },
-    "Delivery Partner Performance":    { admin:true, planning:false, manager:true,  logistic:false, management:true,  driver:false, viewonly:false },
-    "Vehicle Utilization":             { admin:true, planning:false, manager:true,  logistic:true,  management:true,  driver:false, viewonly:false },
-    "Fuel Analytics":                  { admin:true, planning:false, manager:true,  logistic:true,  management:true,  driver:false, viewonly:false },
-    "Ledger (Driver + Vehicle)":       { admin:true, planning:false, manager:true,  logistic:true,  management:true,  driver:false, viewonly:false },
-    "Monthly Closing":                 { admin:true, planning:false, manager:false, logistic:false, management:false, driver:false, viewonly:false },
+    "Daily Delivery Status":{ admin:true,planning:true,manager:true,driver:false,viewonly:true },
+    "Driver Performance":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
+    "Vehicle Utilization":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
+    "Monthly Closing":{ admin:true,planning:false,manager:false,driver:false,viewonly:false },
   },
 };
 
-const ROLES_ORDER = ["admin","planning","manager","logistic","management","driver","viewonly"];
+const ROLES_ORDER = ["admin","planning","manager","driver","viewonly"];
 
 const T = {
   en:{
     userDir:"User Directory", accessReq:"Access Requests", authMatrix:"Authorization Matrix",
-    empType:"Employee Type", systemUser:"🏢 System User", driverType:"🚚 Delivery Partner",
+    empType:"Employee Type", systemUser:"🏢 System User", driverType:"🚚 Delivery Driver",
     fullName:"Full Name *", empId:"Employee ID (Optional)",
     mobile:"Mobile Number *", loginId:"Login ID *", location:"Location *",
     dept:"Department *", role:"Role *", licNo:"License Number *",
@@ -100,7 +96,7 @@ const T = {
   },
   ar:{
     userDir:"دليل المستخدمين", accessReq:"طلبات الوصول", authMatrix:"مصفوفة التفويض",
-    empType:"نوع الموظف", systemUser:"🏢 مستخدم النظام", driverType:"🚚 شريك التوصيل",
+    empType:"نوع الموظف", systemUser:"🏢 مستخدم النظام", driverType:"🚚 سائق التسليم",
     fullName:"الاسم الكامل *", empId:"رقم الموظف (اختياري)",
     mobile:"رقم الجوال *", loginId:"معرف الدخول *", location:"الموقع *",
     dept:"القسم *", role:"الدور *", licNo:"رقم الرخصة *",
@@ -138,9 +134,8 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
   const rl = ROLE_LABELS[lang]||ROLE_LABELS.en;
   const isAdmin = user.role==="admin";
   const isManager = user.role==="manager";
-  const isLogistic = user.role==="logistic";
   const isPlanning = user.role==="planning";
-  const canSubmit = isAdmin||isManager||isPlanning||isLogistic;
+  const canSubmit = isAdmin||isManager||isPlanning;
 
   const adminTabs = [["users","👥",t.userDir],["requests","📝",t.accessReq],["matrix","🔐",t.authMatrix]];
   const otherTabs = [["requests","📝",t.accessReq]];
@@ -225,14 +220,8 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
     const updated = {...form, [key]:val};
     if (key==="location") updated.dc = LOCATION_TO_DC[val]||"Head Office";
     if (key==="empType"&&val==="driver"&&isManager) {
-      // DC Manager — lock to own DC
       updated.location = user.location||"Head Office";
       updated.dc = user.dc||"";
-    }
-    if (key==="empType"&&val==="driver"&&isLogistic) {
-      // Logistic — keep location selectable (they choose which DC the driver belongs to)
-      updated.location = updated.location||"Distribution Center - Riyadh";
-      updated.dc = LOCATION_TO_DC[updated.location]||"Riyadh";
     }
     setForm(updated);
   }
@@ -261,7 +250,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
       reqId:genId("REQ"), empType:form.empType, name:form.name,
       empId:form.empId||"", mobile:form.mobile, email, loginId:form.loginId.trim().toLowerCase(),
       location:isManager?(user.location||form.location):form.location,
-      dc:isManager?(user.dc||form.dc):(LOCATION_TO_DC[form.location]||form.dc),
+      dc:isManager?(user.dc||form.dc):form.dc,
       dept:form.empType==="driver"?"Logistics":form.dept,
       role:form.empType==="driver"?"driver":form.role,
       reason:form.reason, licNo:form.licNo||"", licExp:form.licExp||"",
@@ -276,7 +265,8 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
     await sendNotification({
       toRole: "admin",
       type: "request",
-      data: { name: req.name, dc: req.dc },
+      title: "New Access Request",
+      message: `${user.name} has submitted a new access request for ${req.name} (${req.role} — ${req.dc}).`,
     });
 
     setRequests(prev=>[...prev,req]);
@@ -297,7 +287,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
       const newUID = userCredential.user.uid;
       const profileData = {
         name:req.name, email:req.email, mobile:req.mobile, empId:req.empId||"",
-        role:req.role, dept:req.dept, dc:LOCATION_TO_DC[req.location]||req.dc||"Head Office", location:req.location,
+        role:req.role, dept:req.dept, dc:LOCATION_TO_DC[req.location]||LOCATION_TO_DC[req.dc]||req.dc||"Head Office", location:req.location,
         status:"active", empType:req.empType, uniqueRef,
         approvedBy:user.name, approvedAt:new Date().toISOString(),
         createdAt:new Date().toISOString(),
@@ -324,7 +314,8 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
         await sendNotification({
           toUserId: requester.uid,
           type: "request_action",
-          data: { name: req.name, status: "approved", dc: req.dc },
+          title: "Access Request Approved ✅",
+          message: `Your request for ${req.name} (${getRoleLabel(req.role)} — ${req.dc}) has been approved by ${user.name}. Login: ${req.email}`,
         });
       }
 
@@ -358,7 +349,8 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
       await sendNotification({
         toUserId: requester.uid,
         type: "request_action",
-        data: { name: req.name, status: "rejected", dc: req.dc },
+        title: "Access Request Rejected ❌",
+        message: `Your request for ${req.name} (${req.role} — ${req.dc}) has been rejected by ${user.name}.`,
       });
     }
 
@@ -383,7 +375,12 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
     if (!editUserForm||!editUserId) return;
     setSavingUser(true);
     try {
-      await updateDoc(doc(db,"users",editUserId), editUserForm);
+      // Always normalize dc from location before saving
+      const normalizedEdit = {
+        ...editUserForm,
+        dc: LOCATION_TO_DC[editUserForm.location] || editUserForm.dc || "Head Office",
+      };
+      await updateDoc(doc(db,"users",editUserId), normalizedEdit);
       setUsers(prev=>prev.map(u=>u.uid===editUserId?{...u,...editUserForm}:u));
       flash(t.updated);
       setEditUserId(null);
@@ -481,7 +478,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
       {/* USER DIRECTORY */}
       {tab==="users"&&isAdmin&&(
         <div>
-          {["admin","planning","manager","logistic","management","driver","viewonly",...roles.filter(r=>!ROLES_ORDER.includes(r))].map(role=>{
+          {["admin","planning","manager","driver","viewonly",...roles.filter(r=>!ROLES_ORDER.includes(r))].map(role=>{
             const ru=users.filter(u=>u.role===role);
             if (!ru.length) return null;
             return (
@@ -502,7 +499,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                             <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>🎭 {t.role}</label>
                             <select value={editUserForm.role} onChange={e=>setEditUserForm({...editUserForm,role:e.target.value})}
                               style={{width:"100%",border:"1.5px solid #6366f1",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
-                              {["admin","planning","manager","logistic","management","driver","viewonly",...roles.filter(r=>!ROLES_ORDER.includes(r))].map(r=>(
+                              {["admin","planning","manager","driver","viewonly",...roles.filter(r=>!ROLES_ORDER.includes(r))].map(r=>(
                                 <option key={r} value={r}>{getRoleLabel(r)}</option>
                               ))}
                             </select>
@@ -597,7 +594,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
               <div style={{marginBottom:16}}>
                 <label style={{fontSize:13,fontWeight:600,color:"#374151",marginBottom:6,display:"block"}}>{t.empType} *</label>
                 <div style={{display:"flex",gap:8}}>
-                  {[["systemuser",t.systemUser],...(!isPlanning&&(isAdmin||isManager||isLogistic)?[["driver",t.driverType]]:[])].map(([v,l])=>(
+                  {[["systemuser",t.systemUser],...(!isPlanning?[["driver",t.driverType]]:[])].map(([v,l])=>(
                     <button key={v} onClick={()=>F("empType",v)}
                       style={{flex:1,border:`2px solid ${form.empType===v?"#6366f1":"#e2e8f0"}`,background:form.empType===v?"#eef2ff":"white",borderRadius:8,padding:10,cursor:"pointer",fontSize:13,fontWeight:600,color:form.empType===v?"#4338ca":"#64748b"}}>
                       {l}
@@ -630,7 +627,6 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
 
                 {/* Location */}
                 {isManager?(
-                  // DC Manager — location locked to own DC
                   <div style={{marginBottom:12}}>
                     <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>📍 Location</label>
                     <div style={{background:"#f8fafc",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,color:"#64748b"}}>
@@ -696,7 +692,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                       <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>{t.role}</label>
                       <select value={form.role} onChange={e=>F("role",e.target.value)}
                         style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
-                        {(isAdmin?["admin","planning","manager","logistic","management","driver","viewonly"]:["planning","manager","logistic","management","driver","viewonly"]).map(r=>(
+                        {(isAdmin?["admin","planning","manager","driver","viewonly"]:["planning","manager","driver","viewonly"]).map(r=>(
                           <option key={r} value={r}>{getRoleLabel(r)}</option>
                         ))}
                       </select>
@@ -754,7 +750,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                         <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>{t.role}</label>
                         <select value={editReqForm.role} onChange={e=>setEditReqForm({...editReqForm,role:e.target.value})}
                           style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
-                          {["admin","planning","manager","logistic","management","driver","viewonly"].map(r=>(
+                          {["admin","planning","manager","driver","viewonly"].map(r=>(
                             <option key={r} value={r}>{getRoleLabel(r)}</option>
                           ))}
                         </select>
@@ -771,7 +767,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8,marginBottom:8}}>
                     <div style={{flex:1}}>
                       <div style={{fontWeight:700,fontSize:15}}>{req.name}
-                        <span style={{fontSize:12,color:"#64748b",marginLeft:8,fontWeight:400}}>({req.empType==="driver"?"Delivery Partner":"System User"})</span>
+                        <span style={{fontSize:12,color:"#64748b",marginLeft:8,fontWeight:400}}>({req.empType==="driver"?"Driver":"System User"})</span>
                       </div>
                       <div style={{fontSize:13,color:"#1A3A5C",fontWeight:600}}>📧 {req.email}</div>
                       <div style={{fontSize:12,color:"#64748b"}}>📱 {req.mobile} | 📍 {req.dc} | {getRoleLabel(req.role)}</div>
@@ -846,7 +842,19 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
         <Card>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
             <CardTitle style={{margin:0}}>🔐 {t.authMatrix}</CardTitle>
-            <div style={{fontSize:12,color:"#64748b",fontStyle:"italic"}}>🔒 Read Only — Admin view only</div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {showAddRole?(
+                <>
+                  <input value={newRoleName} onChange={e=>setNewRoleName(e.target.value)} placeholder={t.newRolePlaceholder}
+                    style={{border:"1.5px solid #6366f1",borderRadius:8,padding:"6px 12px",fontSize:13,outline:"none",minWidth:150}}/>
+                  <Btn small onClick={addRole} color="#6366f1">✅ Add</Btn>
+                  <Btn small onClick={()=>{setShowAddRole(false);setNewRoleName("");}} color="#64748b">{t.cancel}</Btn>
+                </>
+              ):(
+                <Btn small onClick={()=>setShowAddRole(true)} color="#6366f1">{t.addRole}</Btn>
+              )}
+              <Btn small onClick={saveMatrixToFirestore} color="#10b981">💾 {t.saveMatrix}</Btn>
+            </div>
           </div>
           <div style={{overflowX:"auto"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
@@ -855,7 +863,20 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                   <th style={{padding:"12px 14px",textAlign:"left",color:"white",fontWeight:700,minWidth:200,position:"sticky",left:0,background:"#1A3A5C"}}>{t.permission}</th>
                   {roles.map(r=>(
                     <th key={r} style={{padding:"12px 10px",color:"white",fontWeight:700,textAlign:"center",minWidth:110}}>
-                      <div>{getRoleLabel(r)}</div>
+                      {editRoleName===r?(
+                        <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                          <input value={editRoleValue} onChange={e=>setEditRoleValue(e.target.value)}
+                            style={{border:"none",borderRadius:4,padding:"3px 6px",fontSize:12,width:80}}/>
+                          <button onClick={()=>{setRoleLabels(p=>({...p,[r]:editRoleValue}));setEditRoleName(null);}}
+                            style={{background:"#10b981",border:"none",color:"white",borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:11}}>✓</button>
+                        </div>
+                      ):(
+                        <div>
+                          <div>{getRoleLabel(r)}</div>
+                          <button onClick={()=>{setEditRoleName(r);setEditRoleValue(getRoleLabel(r));}}
+                            style={{background:"rgba(255,255,255,0.2)",border:"none",color:"white",borderRadius:4,padding:"2px 8px",cursor:"pointer",fontSize:10,marginTop:4}}>✎</button>
+                        </div>
+                      )}
                     </th>
                   ))}
                 </tr>
@@ -873,8 +894,8 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                         <td style={{padding:"10px 14px",color:"#374151",position:"sticky",left:0,background:i%2===0?"white":"#f8fafc",borderBottom:"1px solid #f1f5f9"}}>{perm}</td>
                         {roles.map(r=>(
                           <td key={r} style={{padding:"10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>
-                            <input type="checkbox" checked={rolePerms[r]||false} readOnly disabled
-                              style={{width:18,height:18,cursor:"not-allowed",accentColor:"#1A3A5C",opacity:0.85}}/>
+                            <input type="checkbox" checked={rolePerms[r]||false} onChange={()=>togglePerm(category,perm,r)}
+                              style={{width:18,height:18,cursor:"pointer",accentColor:"#1A3A5C"}}/>
                           </td>
                         ))}
                       </tr>

@@ -327,7 +327,16 @@ export default function Assign({ user, invoices, setInvoices, lang }) {
 
   const rtl = lang === "ar";
   const t = T[lang] || T.en;
-  const userDC = (user.dc && user.dc !== "Head Office") ? user.dc : "Riyadh";
+  // Normalize DC — handles both "Dammam" and "Distribution Center - Dammam"
+  const DC_NORMALIZE = {
+    "Distribution Center - Riyadh":"Riyadh",
+    "Distribution Center - Jeddah":"Jeddah",
+    "Distribution Center - Dammam":"Dammam",
+    "Riyadh":"Riyadh", "Jeddah":"Jeddah", "Dammam":"Dammam",
+    "Head Office":null,
+  };
+  const rawDC = user.dc || "";
+  const userDC = DC_NORMALIZE[rawDC] || (rawDC && rawDC !== "Head Office" ? rawDC : null);
   const canMoveBack = ["admin", "manager", "planning"].includes(user.role);
 
   useEffect(() => { loadData(); }, []);
@@ -338,11 +347,11 @@ export default function Assign({ user, invoices, setInvoices, lang }) {
       const uSnap = await getDocs(collection(db, "users"));
       const allUsers = uSnap.docs.map(d => ({ uid: d.id, ...d.data() }));
       // Delivery partners: active drivers, on-leave shown as greyed/disabled
-      setFsDrivers(allUsers.filter(u => u.role === "driver" && u.dc === userDC));
+      setFsDrivers(allUsers.filter(u => u.role === "driver" && (!userDC || DC_NORMALIZE[u.dc]===userDC || u.dc===userDC)));
 
       const vSnap = await getDocs(collection(db, "vehicles"));
       const allVehicles = vSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setFsVehicles(allVehicles.filter(v => v.dc === userDC));
+      setFsVehicles(allVehicles.filter(v => !userDC || DC_NORMALIZE[v.dc]===userDC || v.dc===userDC));
     } catch (e) { console.error("Dispatch load error:", e); }
     setLoading(false);
   }
@@ -359,19 +368,19 @@ export default function Assign({ user, invoices, setInvoices, lang }) {
 
   // Pending Allocations: unassigned + failed-returned + transit-received for this DC
   const pendingInvoices = applyDateFilter(invoices.filter(i =>
-    i.dc === userDC && i.uploadBatch &&
+    (!userDC || i.dc === userDC) && i.uploadBatch &&
     ["pending", "outstanding", "unassigned"].includes(i.status)
   ));
 
   // Processed Orders buckets
   const toBeAssignedInvoices = applyDateFilter(invoices.filter(i =>
-    i.dc === userDC && i.status === "to_be_assigned"
+    (!userDC || i.dc === userDC) && i.status === "to_be_assigned"
   ));
   const stagedInvoices = applyDateFilter(invoices.filter(i =>
-    i.dc === userDC && i.status === "assigned"
+    (!userDC || i.dc === userDC) && i.status === "assigned"
   ));
   const failedInvoices = applyDateFilter(invoices.filter(i =>
-    i.dc === userDC && i.status === "failed"
+    (!userDC || i.dc === userDC) && i.status === "failed"
   ));
 
   const processedCounts = {
@@ -382,7 +391,7 @@ export default function Assign({ user, invoices, setInvoices, lang }) {
 
   // Driver workload
   const driverLoad = {};
-  invoices.filter(i => i.dc === userDC && i.status === "assigned").forEach(i => {
+  invoices.filter(i => (!userDC || i.dc === userDC) && i.status === "assigned").forEach(i => {
     if (i.driverId) driverLoad[i.driverId] = (driverLoad[i.driverId] || 0) + 1;
   });
 
