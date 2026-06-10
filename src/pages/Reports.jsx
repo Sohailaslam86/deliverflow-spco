@@ -745,7 +745,7 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:10, marginBottom:16 }}>
               <StatCard icon="⛽" label={t.totalLiters} value={filteredFuelLogs.reduce((s,l)=>s+(l.liters||0),0)+"L"} color="#f59e0b" />
               <StatCard icon="💰" label={t.totalCost} value={"SAR "+filteredFuelLogs.reduce((s,l)=>s+(l.sar||0),0).toLocaleString()} color="#ef4444" />
-              <StatCard icon="🛣️" label={t.totalKM} value={filteredFuelLogs.reduce((s,l)=>s+(l.tripKM||0),0)+" km"} color="#6366f1" />
+              <StatCard icon="🛣️" label="Trip KM (at refuel)" value={filteredFuelLogs.reduce((s,l)=>s+(l.tripKM||0),0)+" km"} color="#6366f1" />
               <StatCard icon="📊" label={t.avgEff} value={filteredFuelLogs.reduce((s,l)=>s+(l.liters||0),0)>0?(filteredFuelLogs.reduce((s,l)=>s+(l.tripKM||0),0)/filteredFuelLogs.reduce((s,l)=>s+(l.liters||0),0)).toFixed(1)+" km/L":"-"} color="#10b981" />
             </div>
 

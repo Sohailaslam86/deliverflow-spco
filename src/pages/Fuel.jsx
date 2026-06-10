@@ -6,6 +6,7 @@ import {
   SuccessMsg, ErrorMsg, StatCard, TabBar, Modal, EmptyState, WarnBox
 } from "../components/Shared.jsx";
 import { genId } from "../data/masterData.js";
+import { sendNotification } from "../notificationService.js";
 
 // ─── Translations ────────────────────────────────────────────────────────────
 const T = {
@@ -254,6 +255,8 @@ export default function Fuel({ user, fuelLogs, setFuelLogs, vehicles, setVehicle
 
     const dc = activeDC || selVehicle?.dc || "Riyadh";
     const status = isDriver ? "pending_approval" : "approved";
+    // kmplAtTime: snapshot of vehicle KMPL at submission time — for accurate historical reporting
+    const kmplAtTime = selVehicle?.mileage || selVehicle?.kmpl || null;
     const entry = {
       id: genId("FUEL"),
       ...form,
@@ -262,6 +265,7 @@ export default function Fuel({ user, fuelLogs, setFuelLogs, vehicles, setVehicle
       tripKM:  Number(form.tripKM),
       dc,
       status,
+      kmplAtTime,  // stored so Reports always use KMPL value at the time of entry
       submittedBy: user.name,
       submittedRole: role,
       createdAt: new Date().toISOString(),
@@ -292,6 +296,13 @@ export default function Fuel({ user, fuelLogs, setFuelLogs, vehicles, setVehicle
   async function handleApproval(logId, action) {
     const log = fuelLogs.find(l => l.id === logId);
     if (!log) return;
+
+    // GUARD: prevent double-approval — if already processed, do nothing
+    if (log.status === "approved" || log.status === "rejected") {
+      setDone("⚠️ This entry has already been " + log.status + " by " + (log.approvedBy || "another approver") + ".");
+      setTimeout(() => setDone(""), 4000);
+      return;
+    }
 
     const newStatus = action === "approve" ? "approved" : "rejected";
     setFuelLogs(prev => prev.map(l => l.id === logId ? { ...l, status: newStatus, approvedBy: user.name } : l));

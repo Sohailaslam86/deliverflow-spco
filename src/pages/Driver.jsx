@@ -796,8 +796,10 @@ function FuelEntryTab({ user, t, lang, assignedVehicle, assignedVehiclePlate, fu
         station:     fuelForm.station||"",
         receiptNo:   fuelForm.receiptNo||"",
         notes:       fuelForm.notes||"",
-        // Approval flow — manager approves from Fuel Tracking screen
-        status:      "pending",
+        // kmplAtTime: snapshot of vehicle KMPL at submission — accurate historical reporting
+        kmplAtTime:  assignedVehicle?.mileage || assignedVehicle?.kmpl || null,
+        // FIXED: must be "pending_approval" to match Fuel.jsx approval queue filter
+        status:      "pending_approval",
         submittedAt: new Date().toISOString(),
         submittedBy: user.name,
         source:      "driver_entry",   // so Fuel.jsx can show driver-submitted entries
@@ -821,9 +823,9 @@ function FuelEntryTab({ user, t, lang, assignedVehicle, assignedVehiclePlate, fu
     setFuelSubmitting(false);
   }
 
-  const statusColor = { pending:"#f59e0b", approved:"#10b981", rejected:"#ef4444" };
-  const statusBg    = { pending:"#fef3c7", approved:"#d1fae5", rejected:"#fee2e2" };
-  const statusText  = { pending:t.fuelPending, approved:t.fuelApproved, rejected:t.fuelRejected };
+  const statusColor = { pending_approval:"#f59e0b", approved:"#10b981", rejected:"#ef4444" };
+  const statusBg    = { pending_approval:"#fef3c7", approved:"#d1fae5", rejected:"#fee2e2" };
+  const statusText  = { pending_approval:t.fuelPending, approved:t.fuelApproved, rejected:t.fuelRejected };
 
   return (
     <div>
