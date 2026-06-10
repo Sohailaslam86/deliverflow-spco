@@ -490,16 +490,16 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                     {editUserId===u.uid&&editUserForm?(
                       /* EDIT USER FORM */
                       <div style={{background:"#f8fafc",borderRadius:10,padding:16,marginBottom:8,border:"2px solid #6366f1"}}>
-                        <div style={{fontWeight:700,fontSize:14,marginBottom:12,color:"#6366f1"}}>✎ {t.editUser}: {u.name}</div>
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px"}}>
+                        <div style={{fontWeight:700,fontSize:14,marginBottom:8,color:"#6366f1"}}>✎ {t.editUser}: {u.name}</div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"0 8px"}}>
                           <Input label="Full Name" value={editUserForm.name} onChange={v=>setEditUserForm({...editUserForm,name:v})}/>
                           <Input label="Mobile" value={editUserForm.mobile||""} onChange={v=>setEditUserForm({...editUserForm,mobile:v})}/>
 
                           {/* Role */}
                           <div style={{marginBottom:12}}>
-                            <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>🎭 {t.role}</label>
+                            <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>🎭 {t.role}</label>
                             <select value={editUserForm.role} onChange={e=>setEditUserForm({...editUserForm,role:e.target.value})}
-                              style={{width:"100%",border:"1.5px solid #6366f1",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
+                              style={{width:"100%",border:"1.5px solid #6366f1",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
                               {["admin","planning","manager","driver","viewonly",...roles.filter(r=>!ROLES_ORDER.includes(r))].map(r=>(
                                 <option key={r} value={r}>{getRoleLabel(r)}</option>
                               ))}
@@ -508,18 +508,18 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
 
                           {/* DC */}
                           <div style={{marginBottom:12}}>
-                            <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>📍 {t.dcLabel}</label>
+                            <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>📍 {t.dcLabel}</label>
                             <select value={editUserForm.location||"Head Office"} onChange={e=>setEditUserForm({...editUserForm,location:e.target.value,dc:LOCATION_TO_DC[e.target.value]||"Head Office"})}
-                              style={{width:"100%",border:"1.5px solid #6366f1",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
+                              style={{width:"100%",border:"1.5px solid #6366f1",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
                               {LOCATIONS.map(l=><option key={l} value={l}>{l}</option>)}
                             </select>
                           </div>
 
                           {/* Department */}
                           <div style={{marginBottom:12}}>
-                            <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>🏢 {t.dept}</label>
+                            <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>🏢 {t.dept}</label>
                             <select value={editUserForm.dept||""} onChange={e=>setEditUserForm({...editUserForm,dept:e.target.value})}
-                              style={{width:"100%",border:"1.5px solid #6366f1",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
+                              style={{width:"100%",border:"1.5px solid #6366f1",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
                               <option value="">Select...</option>
                               {DEPARTMENTS.map(d=><option key={d} value={d}>{d}</option>)}
                             </select>
@@ -527,9 +527,9 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
 
                           {/* Status */}
                           <div style={{marginBottom:12}}>
-                            <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>🔘 {t.statusLabel}</label>
+                            <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>🔘 {t.statusLabel}</label>
                             <select value={editUserForm.status||"active"} onChange={e=>setEditUserForm({...editUserForm,status:e.target.value})}
-                              style={{width:"100%",border:"1.5px solid #6366f1",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
+                              style={{width:"100%",border:"1.5px solid #6366f1",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
                               <option value="active">Active</option>
                               <option value="inactive">Inactive</option>
                             </select>
@@ -544,8 +544,8 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                       </div>
                     ):(
                       /* USER ROW */
-                      <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 0",borderBottom:"1px solid #f1f5f9",flexWrap:"wrap"}}>
-                        <div style={{width:38,height:38,borderRadius:"50%",background:RC[role]||"#64748b",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontWeight:700,fontSize:15,flexShrink:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid #f1f5f9",flexWrap:"wrap"}}>
+                        <div style={{width:32,height:32,borderRadius:"50%",background:RC[role]||"#64748b",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontWeight:700,fontSize:15,flexShrink:0}}>
                           {u.name?.charAt(0)||"?"}
                         </div>
                         <div style={{flex:1,minWidth:180}}>
@@ -580,7 +580,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
         <div>
           {!showForm&&(
             <div style={{marginBottom:16}}>
-              <Btn onClick={()=>setShowForm(true)} color="#1A3A5C" style={{padding:"12px 24px"}}>
+              <Btn onClick={()=>setShowForm(true)} color="#1A3A5C" style={{padding:"8px 18px"}}>
                 {t.newRequest}
               </Btn>
             </div>
@@ -588,35 +588,35 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
 
           {/* REQUEST FORM */}
           {showForm&&(
-            <Card style={{borderTop:"4px solid #1A3A5C",marginBottom:20}}>
+            <Card style={{borderTop:"4px solid #1A3A5C",marginBottom:12}}>
               <CardTitle>📝 New Access Request</CardTitle>
 
               {/* Employee Type */}
               <div style={{marginBottom:16}}>
-                <label style={{fontSize:13,fontWeight:600,color:"#374151",marginBottom:6,display:"block"}}>{t.empType} *</label>
+                <label style={{fontSize:13,fontWeight:600,color:"#374151",marginBottom:4,display:"block"}}>{t.empType} *</label>
                 <div style={{display:"flex",gap:8}}>
                   {[["systemuser",t.systemUser],...(!isPlanning?[["driver",t.driverType]]:[])].map(([v,l])=>isLogistic&&v==="systemuser"?null:(
                     <button key={v} onClick={()=>F("empType",v)}
-                      style={{flex:1,border:`2px solid ${form.empType===v?"#6366f1":"#e2e8f0"}`,background:form.empType===v?"#eef2ff":"white",borderRadius:8,padding:10,cursor:"pointer",fontSize:13,fontWeight:600,color:form.empType===v?"#4338ca":"#64748b"}}>
+                      style={{flex:1,border:`2px solid ${form.empType===v?"#6366f1":"#e2e8f0"}`,background:form.empType===v?"#eef2ff":"white",borderRadius:8,padding:6,cursor:"pointer",fontSize:13,fontWeight:600,color:form.empType===v?"#4338ca":"#64748b"}}>
                       {l}
                     </button>
                   ))}
                 </div>
               </div>
 
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px"}}>
-                <div style={{gridColumn:"1/-1"}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"0 8px"}}>
+                <div style={{gridColumn:"span 3"}}>
                   <Input label={t.fullName} value={form.name} onChange={v=>F("name",v)}/>
                 </div>
 
                 {/* Login ID */}
-                <div style={{gridColumn:"1/-1",marginBottom:12}}>
+                <div style={{gridColumn:"1/-1",marginBottom:8}}>
                   <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>{t.loginId}</label>
                   <div style={{display:"flex",alignItems:"center"}}>
                     <input value={form.loginId} onChange={e=>F("loginId",e.target.value.replace(/\s/g,"").toLowerCase())}
                       placeholder="e.g. waleed.alqahtani"
-                      style={{flex:1,border:"1.5px solid #e2e8f0",borderRight:"none",borderRadius:"8px 0 0 8px",padding:"9px 12px",fontSize:14,outline:"none"}}/>
-                    <div style={{background:"#f1f5f9",border:"1.5px solid #e2e8f0",borderLeft:"none",borderRadius:"0 8px 8px 0",padding:"9px 12px",fontSize:14,color:"#64748b",fontWeight:600,whiteSpace:"nowrap"}}>
+                      style={{flex:1,border:"1.5px solid #e2e8f0",borderRight:"none",borderRadius:"8px 0 0 8px",padding:"6px 10px",fontSize:14,outline:"none"}}/>
+                    <div style={{background:"#f1f5f9",border:"1.5px solid #e2e8f0",borderLeft:"none",borderRadius:"0 8px 8px 0",padding:"6px 10px",fontSize:14,color:"#64748b",fontWeight:600,whiteSpace:"nowrap"}}>
                       @spco.sa
                     </div>
                   </div>
@@ -629,16 +629,16 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                 {/* Location */}
                 {isManager?(
                   <div style={{marginBottom:12}}>
-                    <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>📍 Location</label>
-                    <div style={{background:"#f8fafc",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,color:"#64748b"}}>
+                    <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>📍 Location</label>
+                    <div style={{background:"#f8fafc",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:14,color:"#64748b"}}>
                       🔒 {user.location||user.dc}
                     </div>
                   </div>
                 ):(
                   <div style={{marginBottom:12}}>
-                    <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>📍 {t.location}</label>
+                    <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>📍 {t.location}</label>
                     <select value={form.location} onChange={e=>F("location",e.target.value)}
-                      style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
+                      style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
                       {LOCATIONS.map(l=><option key={l} value={l}>{l}</option>)}
                     </select>
                   </div>
@@ -650,9 +650,9 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                     <div style={{marginBottom:12}}>
                       <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>{t.licExp}</label>
                       <input type="date" value={form.licExp} onChange={e=>F("licExp",e.target.value)}
-                        style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box"}}/>
+                        style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",boxSizing:"border-box"}}/>
                     </div>
-                    <div style={{gridColumn:"1/-1"}}>
+                    <div style={{gridColumn:"span 3"}}>
                       <CameraCapture
                         label={t.licPic}
                         value={form.licPicUrl}
@@ -666,9 +666,9 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                     <div style={{marginBottom:12}}>
                       <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>{t.driverCardExp}</label>
                       <input type="date" value={form.driverCardExp} onChange={e=>F("driverCardExp",e.target.value)}
-                        style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",boxSizing:"border-box"}}/>
+                        style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",boxSizing:"border-box"}}/>
                     </div>
-                    <div style={{gridColumn:"1/-1"}}>
+                    <div style={{gridColumn:"span 3"}}>
                       <CameraCapture
                         label={t.driverCardPic}
                         value={form.driverCardPicUrl}
@@ -684,15 +684,15 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                     <div style={{marginBottom:12}}>
                       <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>{t.dept}</label>
                       <select value={form.dept} onChange={e=>F("dept",e.target.value)}
-                        style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
+                        style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
                         <option value="">Select...</option>
                         {DEPARTMENTS.map(d=><option key={d} value={d}>{d}</option>)}
                       </select>
                     </div>
                     <div style={{marginBottom:12}}>
-                      <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>{t.role}</label>
+                      <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>{t.role}</label>
                       <select value={form.role} onChange={e=>F("role",e.target.value)}
-                        style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
+                        style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
                         {(isAdmin?["admin","planning","manager","driver","viewonly"]:["planning","manager","driver","viewonly"]).map(r=>(
                           <option key={r} value={r}>{getRoleLabel(r)}</option>
                         ))}
@@ -701,7 +701,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                   </>
                 )}
 
-                <div style={{gridColumn:"1/-1"}}>
+                <div style={{gridColumn:"span 3"}}>
                   <Textarea label={t.reason} value={form.reason} onChange={v=>F("reason",v)}/>
                 </div>
               </div>
@@ -734,23 +734,23 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
             <Card key={req.reqId} style={{borderLeft:"4px solid #f59e0b"}}>
               {editReqId===req.reqId&&editReqForm?(
                 <div>
-                  <div style={{fontWeight:700,fontSize:14,marginBottom:12,color:"#6366f1"}}>✎ Edit Request</div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 12px"}}>
+                  <div style={{fontWeight:700,fontSize:14,marginBottom:8,color:"#6366f1"}}>✎ Edit Request</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"0 8px"}}>
                     <Input label="Full Name" value={editReqForm.name} onChange={v=>setEditReqForm({...editReqForm,name:v})}/>
                     <Input label="Mobile" value={editReqForm.mobile||""} onChange={v=>setEditReqForm({...editReqForm,mobile:v})}/>
                     <div style={{marginBottom:12}}>
                       <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>Login ID</label>
                       <div style={{display:"flex",alignItems:"center"}}>
                         <input value={editReqForm.loginId||""} onChange={e=>setEditReqForm({...editReqForm,loginId:e.target.value})}
-                          style={{flex:1,border:"1.5px solid #e2e8f0",borderRight:"none",borderRadius:"8px 0 0 8px",padding:"9px 12px",fontSize:14,outline:"none"}}/>
-                        <div style={{background:"#f1f5f9",border:"1.5px solid #e2e8f0",borderLeft:"none",borderRadius:"0 8px 8px 0",padding:"9px 12px",fontSize:14,color:"#64748b",fontWeight:600}}>@spco.sa</div>
+                          style={{flex:1,border:"1.5px solid #e2e8f0",borderRight:"none",borderRadius:"8px 0 0 8px",padding:"6px 10px",fontSize:14,outline:"none"}}/>
+                        <div style={{background:"#f1f5f9",border:"1.5px solid #e2e8f0",borderLeft:"none",borderRadius:"0 8px 8px 0",padding:"6px 10px",fontSize:14,color:"#64748b",fontWeight:600}}>@spco.sa</div>
                       </div>
                     </div>
                     {req.empType!=="driver"&&(
                       <div style={{marginBottom:12}}>
-                        <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>{t.role}</label>
+                        <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>{t.role}</label>
                         <select value={editReqForm.role} onChange={e=>setEditReqForm({...editReqForm,role:e.target.value})}
-                          style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
+                          style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
                           {["admin","planning","manager","driver","viewonly"].map(r=>(
                             <option key={r} value={r}>{getRoleLabel(r)}</option>
                           ))}
@@ -861,9 +861,9 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
               <thead>
                 <tr style={{background:"#1A3A5C"}}>
-                  <th style={{padding:"12px 14px",textAlign:"left",color:"white",fontWeight:700,minWidth:200,position:"sticky",left:0,background:"#1A3A5C"}}>{t.permission}</th>
+                  <th style={{padding:"8px 10px",textAlign:"left",color:"white",fontWeight:700,minWidth:200,position:"sticky",left:0,background:"#1A3A5C"}}>{t.permission}</th>
                   {roles.map(r=>(
-                    <th key={r} style={{padding:"12px 10px",color:"white",fontWeight:700,textAlign:"center",minWidth:110}}>
+                    <th key={r} style={{padding:"8px 8px",color:"white",fontWeight:700,textAlign:"center",minWidth:110}}>
                       {editRoleName===r?(
                         <div style={{display:"flex",gap:4,alignItems:"center"}}>
                           <input value={editRoleValue} onChange={e=>setEditRoleValue(e.target.value)}
@@ -886,15 +886,15 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                 {Object.entries(permissions).map(([category,perms])=>(
                   <React.Fragment key={category}>
                     <tr>
-                      <td colSpan={roles.length+1} style={{padding:"10px 14px",background:"#f0f4ff",fontWeight:700,fontSize:13,color:"#1A3A5C",borderTop:"2px solid #e2e8f0"}}>
+                      <td colSpan={roles.length+1} style={{padding:"7px 10px",background:"#f0f4ff",fontWeight:700,fontSize:13,color:"#1A3A5C",borderTop:"2px solid #e2e8f0"}}>
                         — {category}
                       </td>
                     </tr>
                     {Object.entries(perms).map(([perm,rolePerms],i)=>(
                       <tr key={perm} style={{background:i%2===0?"white":"#f8fafc"}}>
-                        <td style={{padding:"10px 14px",color:"#374151",position:"sticky",left:0,background:i%2===0?"white":"#f8fafc",borderBottom:"1px solid #f1f5f9"}}>{perm}</td>
+                        <td style={{padding:"7px 10px",color:"#374151",position:"sticky",left:0,background:i%2===0?"white":"#f8fafc",borderBottom:"1px solid #f1f5f9"}}>{perm}</td>
                         {roles.map(r=>(
-                          <td key={r} style={{padding:"10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>
+                          <td key={r} style={{padding:"6px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>
                             <input type="checkbox" checked={rolePerms[r]||false} onChange={()=>togglePerm(category,perm,r)}
                               style={{width:18,height:18,cursor:"pointer",accentColor:"#1A3A5C"}}/>
                           </td>
