@@ -330,7 +330,7 @@ export default function Fleet({ user, vehicles: masterVehicles, setVehicles: set
         <VehiclesTab
           vehicles={myVehicles} dc={dc} t={t} canManage={canManage} user={user}
           onSendMaint={sendMaint} onReactivate={reactivate}
-          isAdmin={isAdmin} isManager={isManager}
+          isAdmin={isAdmin} isManager={isManager} isLogistic={isLogistic}
           vehicleRequests={vehicleRequests} setVehicleRequests={setVehicleRequests}
           setFsVehicles={setFsVehicles} flash={flash}
         />
@@ -352,7 +352,7 @@ export default function Fleet({ user, vehicles: masterVehicles, setVehicles: set
 // ─────────────────────────────────────────────
 // VEHICLES TAB
 // ─────────────────────────────────────────────
-function VehiclesTab({ vehicles, dc, t, canManage, user, onSendMaint, onReactivate, isAdmin, isManager, vehicleRequests, setVehicleRequests, setFsVehicles, flash }) {
+function VehiclesTab({ vehicles, dc, t, canManage, user, onSendMaint, onReactivate, isAdmin, isManager, isLogistic, vehicleRequests, setVehicleRequests, setFsVehicles, flash }) {
   const [showMaint, setShowMaint] = useState(null);
   const [maintForm, setMaintForm] = useState({ type:"Scheduled Service", startDate:"", returnDate:"", cost:"", notes:"" });
   const [showReqForm, setShowReqForm] = useState(false);
