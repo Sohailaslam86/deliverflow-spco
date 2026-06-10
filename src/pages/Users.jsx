@@ -323,7 +323,25 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
       flash(t.approvedMsg);
       await loadUsersFromFirestore();
     } catch(e) {
-      flash(e.code==="auth/email-already-in-use"?"❌ Email already exists!":"❌ Error: "+e.message);
+      if (e.code==="auth/email-already-in-use") {
+        try {
+          const allUsers = await loadUsersFromFirestore_silent();
+          const existingUser = allUsers.find(u=>u.email===req.email);
+          const existingUID = existingUser?.uid||null;
+          const uniqueRef = existingUser?.uniqueRef||genId("USR");
+          if (req.firestoreId) {
+            await updateDoc(doc(db,"requests",req.firestoreId), {
+              status:"approved", uniqueRef, firebaseUID:existingUID, approvedBy:user.name, approvedAt:new Date().toISOString()
+            });
+          }
+          setRequests(prev=>prev.map(r=>r.reqId===reqId?{...r,status:"approved",uniqueRef,firebaseUID:existingUID,approvedBy:user.name}:r));
+          setIssuedCredentials({name:req.name,email:req.email,password:"spco2026",role:getRoleLabel(req.role),dc:req.dc,ref:uniqueRef});
+          flash(t.approvedMsg);
+          await loadUsersFromFirestore();
+        } catch(e2) { flash("❌ Error: "+e2.message); }
+      } else {
+        flash("❌ Error: "+e.message);
+      }
     }
     setApproving(false);
   }
