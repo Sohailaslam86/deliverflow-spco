@@ -19,59 +19,63 @@ const LOCATION_TO_DC = { "Distribution Center - Riyadh":"Riyadh","Distribution C
 const SPCO_DOMAIN = "@spco.sa";
 
 const ROLE_LABELS = {
-  en:{ admin:"System Administrator",planning:"Planning",manager:"DC Manager",driver:"Delivery Driver",viewonly:"View Only" },
-  ar:{ admin:"مدير النظام",planning:"التخطيط",manager:"مدير مركز التوزيع",driver:"سائق التسليم",viewonly:"عرض فقط" }
+  en:{ admin:"System Administrator",planning:"Planning",manager:"DC Manager",logistic:"Logistics Manager",management:"Management",driver:"Delivery Partner",viewonly:"View Only" },
+  ar:{ admin:"مدير النظام",planning:"التخطيط",manager:"مدير مركز التوزيع",logistic:"مدير اللوجستيات",management:"الإدارة",driver:"شريك التوصيل",viewonly:"عرض فقط" }
 };
 
 const DEFAULT_PERMISSIONS = {
   "Data Entry":{
-    "Upload Invoice CSV":{ admin:true,planning:true,manager:false,driver:false,viewonly:false },
-    "View All DC Invoices":{ admin:true,planning:true,manager:false,driver:false,viewonly:true },
-    "View Own DC Invoices":{ admin:true,planning:true,manager:true,driver:false,viewonly:true },
-    "Search Invoice / Customer":{ admin:true,planning:true,manager:true,driver:true,viewonly:true },
-    "View Own Assigned Invoices":{ admin:false,planning:false,manager:false,driver:true,viewonly:false },
+    "Upload Invoice CSV":              { admin:true, planning:true,  manager:false, logistic:false, management:false, driver:false, viewonly:false },
+    "View All DC Invoices":            { admin:true, planning:true,  manager:false, logistic:true,  management:true,  driver:false, viewonly:true  },
+    "View Own DC Invoices":            { admin:true, planning:true,  manager:true,  logistic:true,  management:true,  driver:false, viewonly:true  },
+    "Search Invoice / Customer":       { admin:true, planning:true,  manager:true,  logistic:true,  management:true,  driver:true,  viewonly:true  },
+    "View Own Assigned Invoices":      { admin:false,planning:false, manager:false, logistic:false, management:false, driver:true,  viewonly:false },
   },
   "Assignment":{
-    "Assign Driver to Invoice":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
-    "Assign Vehicle to Invoice":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
-    "Select Delivery City":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
-    "Re-assign Failed Invoice":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
-    "Schedule Hold on Invoice":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
+    "Assign Delivery Partner to Invoice":{ admin:true,planning:false,manager:true, logistic:false, management:false, driver:false, viewonly:false },
+    "Assign Vehicle to Invoice":         { admin:true,planning:false,manager:true, logistic:false, management:false, driver:false, viewonly:false },
+    "Select Delivery City":              { admin:true,planning:false,manager:true, logistic:false, management:false, driver:false, viewonly:false },
+    "Re-assign Failed Invoice":          { admin:true,planning:false,manager:true, logistic:false, management:false, driver:false, viewonly:false },
+    "Schedule Hold on Invoice":          { admin:true,planning:false,manager:true, logistic:false, management:false, driver:false, viewonly:false },
   },
   "Trip Management":{
-    "Create Trip":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
-    "Receive Relay Trip + POD":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
+    "Create Trip":                     { admin:true, planning:false, manager:true,  logistic:false, management:false, driver:false, viewonly:false },
+    "Receive Relay Trip + POD":        { admin:true, planning:false, manager:true,  logistic:false, management:false, driver:false, viewonly:false },
   },
   "POD Management":{
-    "Upload POD (Own Invoices)":{ admin:false,planning:false,manager:false,driver:true,viewonly:false },
-    "Upload POD on Driver Behalf":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
-    "View POD Image":{ admin:true,planning:true,manager:true,driver:true,viewonly:true },
-    "Bulk Download POD":{ admin:true,planning:true,manager:true,driver:false,viewonly:false },
+    "Upload POD (Own Invoices)":              { admin:false,planning:false,manager:false,logistic:false,management:false,driver:true, viewonly:false },
+    "Upload POD on Delivery Partner Behalf":  { admin:true, planning:false,manager:true, logistic:false,management:false,driver:false,viewonly:false },
+    "View POD Image":                         { admin:true, planning:true, manager:true, logistic:true, management:true, driver:true, viewonly:true  },
+    "Bulk Download POD":                      { admin:true, planning:true, manager:true, logistic:true, management:true, driver:false,viewonly:false },
   },
   "Fleet Management":{
-    "Mark Vehicle in Maintenance":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
-    "Upload Fuel Fill Record":{ admin:true,planning:false,manager:true,driver:true,viewonly:false },
-    "Upload Odometer Photo":{ admin:false,planning:false,manager:false,driver:true,viewonly:false },
+    "Mark Vehicle in Maintenance":     { admin:true, planning:false, manager:true,  logistic:true,  management:false, driver:false, viewonly:false },
+    "View Fleet Overview":             { admin:true, planning:false, manager:true,  logistic:true,  management:true,  driver:false, viewonly:false },
+    "Approve Fuel Entry":              { admin:true, planning:false, manager:true,  logistic:true,  management:false, driver:false, viewonly:false },
+    "Submit Fuel Entry":               { admin:false,planning:false, manager:false, logistic:false, management:false, driver:true,  viewonly:false },
+    "Upload Odometer Photo":           { admin:false,planning:false, manager:false, logistic:false, management:false, driver:true,  viewonly:false },
   },
   "User Management":{
-    "Submit User / Driver Request":{ admin:true,planning:true,manager:true,driver:false,viewonly:false },
-    "Approve / Reject Requests":{ admin:true,planning:false,manager:false,driver:false,viewonly:false },
-    "Edit User Role / DC":{ admin:true,planning:false,manager:false,driver:false,viewonly:false },
+    "Submit User / Delivery Partner Request":{ admin:true,planning:true,manager:true,logistic:true,management:false,driver:false,viewonly:false },
+    "Approve / Reject Requests":             { admin:true,planning:false,manager:false,logistic:false,management:false,driver:false,viewonly:false },
+    "Edit User Role / DC":                   { admin:true,planning:false,manager:false,logistic:false,management:false,driver:false,viewonly:false },
   },
   "Reports":{
-    "Daily Delivery Status":{ admin:true,planning:true,manager:true,driver:false,viewonly:true },
-    "Driver Performance":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
-    "Vehicle Utilization":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
-    "Monthly Closing":{ admin:true,planning:false,manager:false,driver:false,viewonly:false },
+    "Daily Delivery Status":           { admin:true, planning:true,  manager:true,  logistic:false, management:true,  driver:false, viewonly:true  },
+    "Delivery Partner Performance":    { admin:true, planning:false, manager:true,  logistic:false, management:true,  driver:false, viewonly:false },
+    "Vehicle Utilization":             { admin:true, planning:false, manager:true,  logistic:true,  management:true,  driver:false, viewonly:false },
+    "Fuel Analytics":                  { admin:true, planning:false, manager:true,  logistic:true,  management:true,  driver:false, viewonly:false },
+    "Ledger (Driver + Vehicle)":       { admin:true, planning:false, manager:true,  logistic:true,  management:true,  driver:false, viewonly:false },
+    "Monthly Closing":                 { admin:true, planning:false, manager:false, logistic:false, management:false, driver:false, viewonly:false },
   },
 };
 
-const ROLES_ORDER = ["admin","planning","manager","driver","viewonly"];
+const ROLES_ORDER = ["admin","planning","manager","logistic","management","driver","viewonly"];
 
 const T = {
   en:{
     userDir:"User Directory", accessReq:"Access Requests", authMatrix:"Authorization Matrix",
-    empType:"Employee Type", systemUser:"🏢 System User", driverType:"🚚 Delivery Driver",
+    empType:"Employee Type", systemUser:"🏢 System User", driverType:"🚚 Delivery Partner",
     fullName:"Full Name *", empId:"Employee ID (Optional)",
     mobile:"Mobile Number *", loginId:"Login ID *", location:"Location *",
     dept:"Department *", role:"Role *", licNo:"License Number *",
@@ -96,7 +100,7 @@ const T = {
   },
   ar:{
     userDir:"دليل المستخدمين", accessReq:"طلبات الوصول", authMatrix:"مصفوفة التفويض",
-    empType:"نوع الموظف", systemUser:"🏢 مستخدم النظام", driverType:"🚚 سائق التسليم",
+    empType:"نوع الموظف", systemUser:"🏢 مستخدم النظام", driverType:"🚚 شريك التوصيل",
     fullName:"الاسم الكامل *", empId:"رقم الموظف (اختياري)",
     mobile:"رقم الجوال *", loginId:"معرف الدخول *", location:"الموقع *",
     dept:"القسم *", role:"الدور *", licNo:"رقم الرخصة *",
@@ -265,8 +269,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
     await sendNotification({
       toRole: "admin",
       type: "request",
-      title: "New Access Request",
-      message: `${user.name} has submitted a new access request for ${req.name} (${req.role} — ${req.dc}).`,
+      data: { name: req.name, dc: req.dc },
     });
 
     setRequests(prev=>[...prev,req]);
@@ -314,8 +317,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
         await sendNotification({
           toUserId: requester.uid,
           type: "request_action",
-          title: "Access Request Approved ✅",
-          message: `Your request for ${req.name} (${getRoleLabel(req.role)} — ${req.dc}) has been approved by ${user.name}. Login: ${req.email}`,
+          data: { name: req.name, status: "approved", dc: req.dc },
         });
       }
 
@@ -349,8 +351,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
       await sendNotification({
         toUserId: requester.uid,
         type: "request_action",
-        title: "Access Request Rejected ❌",
-        message: `Your request for ${req.name} (${req.role} — ${req.dc}) has been rejected by ${user.name}.`,
+        data: { name: req.name, status: "rejected", dc: req.dc },
       });
     }
 
@@ -473,7 +474,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
       {/* USER DIRECTORY */}
       {tab==="users"&&isAdmin&&(
         <div>
-          {["admin","planning","manager","driver","viewonly",...roles.filter(r=>!ROLES_ORDER.includes(r))].map(role=>{
+          {["admin","planning","manager","logistic","management","driver","viewonly",...roles.filter(r=>!ROLES_ORDER.includes(r))].map(role=>{
             const ru=users.filter(u=>u.role===role);
             if (!ru.length) return null;
             return (
@@ -494,7 +495,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                             <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>🎭 {t.role}</label>
                             <select value={editUserForm.role} onChange={e=>setEditUserForm({...editUserForm,role:e.target.value})}
                               style={{width:"100%",border:"1.5px solid #6366f1",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
-                              {["admin","planning","manager","driver","viewonly",...roles.filter(r=>!ROLES_ORDER.includes(r))].map(r=>(
+                              {["admin","planning","manager","logistic","management","driver","viewonly",...roles.filter(r=>!ROLES_ORDER.includes(r))].map(r=>(
                                 <option key={r} value={r}>{getRoleLabel(r)}</option>
                               ))}
                             </select>
@@ -687,7 +688,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                       <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>{t.role}</label>
                       <select value={form.role} onChange={e=>F("role",e.target.value)}
                         style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
-                        {(isAdmin?["admin","planning","manager","driver","viewonly"]:["planning","manager","driver","viewonly"]).map(r=>(
+                        {(isAdmin?["admin","planning","manager","logistic","management","driver","viewonly"]:["planning","manager","logistic","management","driver","viewonly"]).map(r=>(
                           <option key={r} value={r}>{getRoleLabel(r)}</option>
                         ))}
                       </select>
@@ -745,7 +746,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                         <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>{t.role}</label>
                         <select value={editReqForm.role} onChange={e=>setEditReqForm({...editReqForm,role:e.target.value})}
                           style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box"}}>
-                          {["admin","planning","manager","driver","viewonly"].map(r=>(
+                          {["admin","planning","manager","logistic","management","driver","viewonly"].map(r=>(
                             <option key={r} value={r}>{getRoleLabel(r)}</option>
                           ))}
                         </select>
@@ -762,7 +763,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8,marginBottom:8}}>
                     <div style={{flex:1}}>
                       <div style={{fontWeight:700,fontSize:15}}>{req.name}
-                        <span style={{fontSize:12,color:"#64748b",marginLeft:8,fontWeight:400}}>({req.empType==="driver"?"Driver":"System User"})</span>
+                        <span style={{fontSize:12,color:"#64748b",marginLeft:8,fontWeight:400}}>({req.empType==="driver"?"Delivery Partner":"System User"})</span>
                       </div>
                       <div style={{fontSize:13,color:"#1A3A5C",fontWeight:600}}>📧 {req.email}</div>
                       <div style={{fontSize:12,color:"#64748b"}}>📱 {req.mobile} | 📍 {req.dc} | {getRoleLabel(req.role)}</div>
@@ -837,19 +838,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
         <Card>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
             <CardTitle style={{margin:0}}>🔐 {t.authMatrix}</CardTitle>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              {showAddRole?(
-                <>
-                  <input value={newRoleName} onChange={e=>setNewRoleName(e.target.value)} placeholder={t.newRolePlaceholder}
-                    style={{border:"1.5px solid #6366f1",borderRadius:8,padding:"6px 12px",fontSize:13,outline:"none",minWidth:150}}/>
-                  <Btn small onClick={addRole} color="#6366f1">✅ Add</Btn>
-                  <Btn small onClick={()=>{setShowAddRole(false);setNewRoleName("");}} color="#64748b">{t.cancel}</Btn>
-                </>
-              ):(
-                <Btn small onClick={()=>setShowAddRole(true)} color="#6366f1">{t.addRole}</Btn>
-              )}
-              <Btn small onClick={saveMatrixToFirestore} color="#10b981">💾 {t.saveMatrix}</Btn>
-            </div>
+            <div style={{fontSize:12,color:"#64748b",fontStyle:"italic"}}>🔒 Read Only — Admin view only</div>
           </div>
           <div style={{overflowX:"auto"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
@@ -858,20 +847,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                   <th style={{padding:"12px 14px",textAlign:"left",color:"white",fontWeight:700,minWidth:200,position:"sticky",left:0,background:"#1A3A5C"}}>{t.permission}</th>
                   {roles.map(r=>(
                     <th key={r} style={{padding:"12px 10px",color:"white",fontWeight:700,textAlign:"center",minWidth:110}}>
-                      {editRoleName===r?(
-                        <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                          <input value={editRoleValue} onChange={e=>setEditRoleValue(e.target.value)}
-                            style={{border:"none",borderRadius:4,padding:"3px 6px",fontSize:12,width:80}}/>
-                          <button onClick={()=>{setRoleLabels(p=>({...p,[r]:editRoleValue}));setEditRoleName(null);}}
-                            style={{background:"#10b981",border:"none",color:"white",borderRadius:4,padding:"2px 6px",cursor:"pointer",fontSize:11}}>✓</button>
-                        </div>
-                      ):(
-                        <div>
-                          <div>{getRoleLabel(r)}</div>
-                          <button onClick={()=>{setEditRoleName(r);setEditRoleValue(getRoleLabel(r));}}
-                            style={{background:"rgba(255,255,255,0.2)",border:"none",color:"white",borderRadius:4,padding:"2px 8px",cursor:"pointer",fontSize:10,marginTop:4}}>✎</button>
-                        </div>
-                      )}
+                      <div>{getRoleLabel(r)}</div>
                     </th>
                   ))}
                 </tr>
@@ -889,8 +865,8 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                         <td style={{padding:"10px 14px",color:"#374151",position:"sticky",left:0,background:i%2===0?"white":"#f8fafc",borderBottom:"1px solid #f1f5f9"}}>{perm}</td>
                         {roles.map(r=>(
                           <td key={r} style={{padding:"10px",textAlign:"center",borderBottom:"1px solid #f1f5f9"}}>
-                            <input type="checkbox" checked={rolePerms[r]||false} onChange={()=>togglePerm(category,perm,r)}
-                              style={{width:18,height:18,cursor:"pointer",accentColor:"#1A3A5C"}}/>
+                            <input type="checkbox" checked={rolePerms[r]||false} readOnly disabled
+                              style={{width:18,height:18,cursor:"not-allowed",accentColor:"#1A3A5C",opacity:0.85}}/>
                           </td>
                         ))}
                       </tr>
