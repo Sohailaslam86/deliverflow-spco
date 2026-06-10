@@ -328,15 +328,20 @@ export default function Assign({ user, invoices, setInvoices, lang }) {
   const rtl = lang === "ar";
   const t = T[lang] || T.en;
   // Normalize DC — handles both "Dammam" and "Distribution Center - Dammam"
-  const DC_NORMALIZE = {
-    "Distribution Center - Riyadh":"Riyadh",
-    "Distribution Center - Jeddah":"Jeddah",
-    "Distribution Center - Dammam":"Dammam",
-    "Riyadh":"Riyadh", "Jeddah":"Jeddah", "Dammam":"Dammam",
-    "Head Office":null,
-  };
-  const rawDC = user.dc || "";
-  const userDC = DC_NORMALIZE[rawDC] || (rawDC && rawDC !== "Head Office" ? rawDC : null);
+  // Normalize any DC value to clean short form
+  function normalizeDC(val) {
+    if (!val) return null;
+    const v = String(val).trim();
+    const map = {
+      "distribution center - riyadh":"Riyadh", "riyadh":"Riyadh",
+      "distribution center - jeddah":"Jeddah", "jeddah":"Jeddah",
+      "distribution center - dammam":"Dammam", "dammam":"Dammam",
+      "head office":null,
+    };
+    return map[v.toLowerCase()] || (v.toLowerCase()==="head office" ? null : v);
+  }
+  const userDC = normalizeDC(user.dc);
+  console.log("[DeliverFlow] user.dc raw:", user.dc, "→ normalized:", userDC);
   const canMoveBack = ["admin", "manager", "planning"].includes(user.role);
 
   useEffect(() => { loadData(); }, []);
@@ -347,11 +352,11 @@ export default function Assign({ user, invoices, setInvoices, lang }) {
       const uSnap = await getDocs(collection(db, "users"));
       const allUsers = uSnap.docs.map(d => ({ uid: d.id, ...d.data() }));
       // Delivery partners: active drivers, on-leave shown as greyed/disabled
-      setFsDrivers(allUsers.filter(u => u.role === "driver" && (!userDC || DC_NORMALIZE[u.dc]===userDC || u.dc===userDC)));
+      setFsDrivers(allUsers.filter(u => u.role === "driver" && (!userDC || normalizeDC(u.dc)===userDC)));
 
       const vSnap = await getDocs(collection(db, "vehicles"));
       const allVehicles = vSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setFsVehicles(allVehicles.filter(v => !userDC || DC_NORMALIZE[v.dc]===userDC || v.dc===userDC));
+      setFsVehicles(allVehicles.filter(v => !userDC || normalizeDC(v.dc)===userDC));
     } catch (e) { console.error("Dispatch load error:", e); }
     setLoading(false);
   }
@@ -368,19 +373,19 @@ export default function Assign({ user, invoices, setInvoices, lang }) {
 
   // Pending Allocations: unassigned + failed-returned + transit-received for this DC
   const pendingInvoices = applyDateFilter(invoices.filter(i =>
-    (!userDC || i.dc === userDC) && i.uploadBatch &&
+    (!userDC || normalizeDC(i.dc) === userDC) && i.uploadBatch &&
     ["pending", "outstanding", "unassigned"].includes(i.status)
   ));
 
   // Processed Orders buckets
   const toBeAssignedInvoices = applyDateFilter(invoices.filter(i =>
-    (!userDC || i.dc === userDC) && i.status === "to_be_assigned"
+    (!userDC || normalizeDC(i.dc) === userDC) && i.status === "to_be_assigned"
   ));
   const stagedInvoices = applyDateFilter(invoices.filter(i =>
-    (!userDC || i.dc === userDC) && i.status === "assigned"
+    (!userDC || normalizeDC(i.dc) === userDC) && i.status === "assigned"
   ));
   const failedInvoices = applyDateFilter(invoices.filter(i =>
-    (!userDC || i.dc === userDC) && i.status === "failed"
+    (!userDC || normalizeDC(i.dc) === userDC) && i.status === "failed"
   ));
 
   const processedCounts = {
@@ -391,7 +396,7 @@ export default function Assign({ user, invoices, setInvoices, lang }) {
 
   // Driver workload
   const driverLoad = {};
-  invoices.filter(i => (!userDC || i.dc === userDC) && i.status === "assigned").forEach(i => {
+  invoices.filter(i => (!userDC || normalizeDC(i.dc) === userDC) && i.status === "assigned").forEach(i => {
     if (i.driverId) driverLoad[i.driverId] = (driverLoad[i.driverId] || 0) + 1;
   });
 
