@@ -135,7 +135,8 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
   const isAdmin = user.role==="admin";
   const isManager = user.role==="manager";
   const isPlanning = user.role==="planning";
-  const canSubmit = isAdmin||isManager||isPlanning;
+  const isLogistic = user.role==="logistic";
+  const canSubmit = isAdmin||isManager||isPlanning||isLogistic;
 
   const adminTabs = [["users","👥",t.userDir],["requests","📝",t.accessReq],["matrix","🔐",t.authMatrix]];
   const otherTabs = [["requests","📝",t.accessReq]];
@@ -594,7 +595,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
               <div style={{marginBottom:16}}>
                 <label style={{fontSize:13,fontWeight:600,color:"#374151",marginBottom:6,display:"block"}}>{t.empType} *</label>
                 <div style={{display:"flex",gap:8}}>
-                  {[["systemuser",t.systemUser],...(!isPlanning?[["driver",t.driverType]]:[])].map(([v,l])=>(
+                  {[["systemuser",t.systemUser],...(!isPlanning?[["driver",t.driverType]]:[])].map(([v,l])=>isLogistic&&v==="systemuser"?null:(
                     <button key={v} onClick={()=>F("empType",v)}
                       style={{flex:1,border:`2px solid ${form.empType===v?"#6366f1":"#e2e8f0"}`,background:form.empType===v?"#eef2ff":"white",borderRadius:8,padding:10,cursor:"pointer",fontSize:13,fontWeight:600,color:form.empType===v?"#4338ca":"#64748b"}}>
                       {l}
