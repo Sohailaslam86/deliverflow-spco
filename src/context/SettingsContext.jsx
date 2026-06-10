@@ -31,6 +31,7 @@ export function SettingsProvider({ children }) {
   const [cities, setCities] = useState([...CITIES]);
   const [storageConditions, setStorageConditions] = useState([...STORAGE_CONDITIONS]);
   const [loading, setLoading] = useState(true);
+  const [settingsError, setSettingsError] = useState(false); // true = Firestore failed, using fallback
 
   useEffect(() => {
     loadAllSettings();
@@ -69,9 +70,10 @@ export function SettingsProvider({ children }) {
       const fsStorage = storageSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       if (fsStorage.length > 0) setStorageConditions(fsStorage);
 
+      setSettingsError(false); // Firestore loaded successfully
     } catch (e) {
       console.error("SettingsContext load error:", e);
-      // App works fine with hardcoded fallback values
+      setSettingsError(true); // Using masterData.js fallback values
     }
     setLoading(false);
   }
@@ -142,6 +144,7 @@ export function SettingsProvider({ children }) {
       getShiftForDCAndDate,
       reloadSettings,
       loading,
+      settingsError, // consumers can show offline warning banner if true
     }}>
       {children}
     </SettingsContext.Provider>
