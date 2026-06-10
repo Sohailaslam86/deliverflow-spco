@@ -86,11 +86,12 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
 
   const { failedReasons, setFailedReasons, activityPurposes, setActivityPurposes, shifts, setShifts } = useSettings();
 
-  const [dcList, setDcList] = useState([
+  const DEFAULT_DC_LIST = [
     { dc:"Riyadh",city:"Riyadh",manager:"AlWaleed Qahtani",lat:"24.7136",lng:"46.6753",addrEn:"King Fahd Road, Al Olaya, Riyadh 12211",addrAr:"طريق الملك فهد، العليا، الرياض 12211" },
     { dc:"Jeddah",city:"Jeddah",manager:"Muhammad Anas",lat:"21.4858",lng:"39.1925",addrEn:"Prince Sultan Road, Al Hamra, Jeddah 23435",addrAr:"طريق الأمير سلطان، الحمراء، جدة 23435" },
     { dc:"Dammam",city:"Dammam",manager:"Muhammad Saleh",lat:"26.4207",lng:"50.0888",addrEn:"King Saud Road, Al Faisaliyah, Dammam 32232",addrAr:"طريق الملك سعود، الفيصلية، الدمام 32232" },
-  ]);
+  ];
+  const [dcList, setDcList] = useState([]);
   const [storageList, setStorageList] = useState(STORAGE_CONDITIONS.map(s=>({...s})));
   const [cityList, setCityList] = useState([...CITIES]);
 
@@ -101,11 +102,33 @@ export default function MasterData({ vehicles, setVehicles, users, setUsers, lan
   const [vehicleOffDays, setVehicleOffDays] = useState([]);
 
   useEffect(() => {
+    loadDCLocations();
     loadDepartments();
     loadHolidays();
     loadDriverLeaves();
     loadVehicleOffDays();
   }, []);
+
+  async function loadDCLocations() {
+    try {
+      const snap = await getDocs(collection(db, "dcLocations"));
+      if (snap.docs.length > 0) {
+        // Firestore mein data hai — load karo with firestoreId
+        setDcList(snap.docs.map(d => ({ firestoreId: d.id, ...d.data() })));
+      } else {
+        // Pehli baar — DEFAULT data Firestore mein save karo
+        const saved = [];
+        for (const dc of DEFAULT_DC_LIST) {
+          const ref = await addDoc(collection(db, "dcLocations"), dc);
+          saved.push({ firestoreId: ref.id, ...dc });
+        }
+        setDcList(saved);
+      }
+    } catch(e) {
+      console.error("loadDCLocations error:", e);
+      setDcList(DEFAULT_DC_LIST); // fallback
+    }
+  }
 
   async function loadDepartments() {
     setDeptLoading(true);

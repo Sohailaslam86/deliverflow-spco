@@ -342,6 +342,10 @@ export default function Assign({ user, invoices, setInvoices, lang }) {
   }
   const userDC = normalizeDC(user.dc);
   console.log("[DeliverFlow] user.dc raw:", user.dc, "→ normalized:", userDC);
+  // Log first 3 invoice dc values to debug
+  if (invoices.length > 0) {
+    console.log("[DeliverFlow] Sample invoice DCs:", invoices.slice(0,3).map(i => i.dc));
+  }
   const canMoveBack = ["admin", "manager", "planning"].includes(user.role);
 
   useEffect(() => { loadData(); }, []);
