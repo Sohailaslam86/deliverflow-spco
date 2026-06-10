@@ -19,7 +19,7 @@ const LOCATION_TO_DC = { "Distribution Center - Riyadh":"Riyadh","Distribution C
 const SPCO_DOMAIN = "@spco.sa";
 
 const ROLE_LABELS = {
-  en:{ admin:"System Administrator",planning:"Planning",manager:"DC Manager",driver:"Delivery Driver",viewonly:"View Only" },
+  en:{ admin:"System Administrator",planning:"Planning",manager:"DC Manager",driver:"Delivery Partner",viewonly:"View Only" },
   ar:{ admin:"مدير النظام",planning:"التخطيط",manager:"مدير مركز التوزيع",driver:"سائق التسليم",viewonly:"عرض فقط" }
 };
 
@@ -71,7 +71,7 @@ const ROLES_ORDER = ["admin","planning","manager","driver","viewonly"];
 const T = {
   en:{
     userDir:"User Directory", accessReq:"Access Requests", authMatrix:"Authorization Matrix",
-    empType:"Employee Type", systemUser:"🏢 System User", driverType:"🚚 Delivery Driver",
+    empType:"Employee Type", systemUser:"🏢 System User", driverType:"🚚 Delivery Partner",
     fullName:"Full Name *", empId:"Employee ID (Optional)",
     mobile:"Mobile Number *", loginId:"Login ID *", location:"Location *",
     dept:"Department *", role:"Role *", licNo:"License Number *",
