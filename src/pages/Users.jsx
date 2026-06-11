@@ -19,54 +19,54 @@ const LOCATION_TO_DC = { "Distribution Center - Riyadh":"Riyadh","Distribution C
 const SPCO_DOMAIN = "@spco.sa";
 
 const ROLE_LABELS = {
-  en:{ admin:"System Administrator",planning:"Planning",manager:"DC Manager",driver:"Delivery Partner",viewonly:"View Only" },
-  ar:{ admin:"مدير النظام",planning:"التخطيط",manager:"مدير مركز التوزيع",driver:"سائق التسليم",viewonly:"عرض فقط" }
+  en:{ admin:"System Administrator",planning:"Planning",manager:"DC Manager",logistic:"Logistic",driver:"Delivery Partner",management:"Management",viewonly:"View Only" },
+  ar:{ admin:"مدير النظام",planning:"التخطيط",manager:"مدير مركز التوزيع",logistic:"اللوجستي",driver:"سائق التسليم",management:"الإدارة",viewonly:"عرض فقط" }
 };
 
 const DEFAULT_PERMISSIONS = {
   "Data Entry":{
-    "Upload Invoice CSV":{ admin:true,planning:true,manager:false,driver:false,viewonly:false },
-    "View All DC Invoices":{ admin:true,planning:true,manager:false,driver:false,viewonly:true },
-    "View Own DC Invoices":{ admin:true,planning:true,manager:true,driver:false,viewonly:true },
-    "Search Invoice / Customer":{ admin:true,planning:true,manager:true,driver:true,viewonly:true },
-    "View Own Assigned Invoices":{ admin:false,planning:false,manager:false,driver:true,viewonly:false },
+    "Upload Invoice CSV":{ admin:true,planning:true,manager:false,logistic:false,driver:false,management:false,viewonly:false },
+    "View All DC Invoices":{ admin:true,planning:true,manager:false,logistic:true,driver:false,management:true,viewonly:true },
+    "View Own DC Invoices":{ admin:true,planning:true,manager:true,logistic:true,driver:false,management:true,viewonly:true },
+    "Search Invoice / Customer":{ admin:true,planning:true,manager:true,logistic:true,driver:true,management:true,viewonly:true },
+    "View Own Assigned Invoices":{ admin:false,planning:false,manager:false,logistic:false,driver:true,management:false,viewonly:false },
   },
   "Assignment":{
-    "Assign Driver to Invoice":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
-    "Assign Vehicle to Invoice":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
-    "Select Delivery City":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
-    "Re-assign Failed Invoice":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
-    "Schedule Hold on Invoice":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
+    "Assign Driver to Invoice":{ admin:true,planning:false,manager:true,logistic:false,driver:false,management:false,viewonly:false },
+    "Assign Vehicle to Invoice":{ admin:true,planning:false,manager:true,logistic:false,driver:false,management:false,viewonly:false },
+    "Select Delivery City":{ admin:true,planning:false,manager:true,logistic:false,driver:false,management:false,viewonly:false },
+    "Re-assign Failed Invoice":{ admin:true,planning:false,manager:true,logistic:false,driver:false,management:false,viewonly:false },
+    "Schedule Hold on Invoice":{ admin:true,planning:false,manager:true,logistic:false,driver:false,management:false,viewonly:false },
   },
   "Trip Management":{
-    "Create Trip":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
-    "Receive Relay Trip + POD":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
+    "Create Trip":{ admin:true,planning:false,manager:true,logistic:false,driver:false,management:false,viewonly:false },
+    "Receive Relay Trip + POD":{ admin:true,planning:false,manager:true,logistic:false,driver:false,management:false,viewonly:false },
   },
   "POD Management":{
-    "Upload POD (Own Invoices)":{ admin:false,planning:false,manager:false,driver:true,viewonly:false },
-    "Upload POD on Driver Behalf":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
-    "View POD Image":{ admin:true,planning:true,manager:true,driver:true,viewonly:true },
-    "Bulk Download POD":{ admin:true,planning:true,manager:true,driver:false,viewonly:false },
+    "Upload POD (Own Invoices)":{ admin:false,planning:false,manager:false,logistic:false,driver:true,management:false,viewonly:false },
+    "Upload POD on Driver Behalf":{ admin:true,planning:false,manager:true,logistic:false,driver:false,management:false,viewonly:false },
+    "View POD Image":{ admin:true,planning:true,manager:true,logistic:true,driver:true,management:true,viewonly:true },
+    "Bulk Download POD":{ admin:true,planning:true,manager:true,logistic:false,driver:false,management:false,viewonly:false },
   },
   "Fleet Management":{
-    "Mark Vehicle in Maintenance":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
-    "Upload Fuel Fill Record":{ admin:true,planning:false,manager:true,driver:true,viewonly:false },
-    "Upload Odometer Photo":{ admin:false,planning:false,manager:false,driver:true,viewonly:false },
+    "Mark Vehicle in Maintenance":{ admin:true,planning:false,manager:true,logistic:true,driver:false,management:false,viewonly:false },
+    "Upload Fuel Fill Record":{ admin:true,planning:false,manager:true,logistic:true,driver:true,management:false,viewonly:false },
+    "Upload Odometer Photo":{ admin:false,planning:false,manager:false,logistic:false,driver:true,management:false,viewonly:false },
   },
   "User Management":{
-    "Submit User / Driver Request":{ admin:true,planning:true,manager:true,driver:false,viewonly:false },
-    "Approve / Reject Requests":{ admin:true,planning:false,manager:false,driver:false,viewonly:false },
-    "Edit User Role / DC":{ admin:true,planning:false,manager:false,driver:false,viewonly:false },
+    "Submit User / Driver Request":{ admin:true,planning:true,manager:true,logistic:true,driver:false,management:false,viewonly:false },
+    "Approve / Reject Requests":{ admin:true,planning:false,manager:false,logistic:false,driver:false,management:false,viewonly:false },
+    "Edit User Role / DC":{ admin:true,planning:false,manager:false,logistic:false,driver:false,management:false,viewonly:false },
   },
   "Reports":{
-    "Daily Delivery Status":{ admin:true,planning:true,manager:true,driver:false,viewonly:true },
-    "Driver Performance":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
-    "Vehicle Utilization":{ admin:true,planning:false,manager:true,driver:false,viewonly:false },
-    "Monthly Closing":{ admin:true,planning:false,manager:false,driver:false,viewonly:false },
+    "Daily Delivery Status":{ admin:true,planning:true,manager:true,logistic:true,driver:false,management:true,viewonly:true },
+    "Driver Performance":{ admin:true,planning:false,manager:true,logistic:true,driver:false,management:true,viewonly:false },
+    "Vehicle Utilization":{ admin:true,planning:false,manager:true,logistic:true,driver:false,management:true,viewonly:false },
+    "Monthly Closing":{ admin:true,planning:false,manager:false,logistic:false,driver:false,management:true,viewonly:false },
   },
 };
 
-const ROLES_ORDER = ["admin","planning","manager","driver","viewonly"];
+const ROLES_ORDER = ["admin","planning","manager","logistic","driver","management","viewonly"];
 
 const T = {
   en:{
@@ -177,7 +177,11 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
       if (!snap.empty) {
         const data = snap.docs[0].data();
         if (data.permissions) setPermissions(data.permissions);
-        if (data.roles) setRoles(data.roles);
+        // Merge saved roles with ROLES_ORDER — ensures Logistic+Management always appear
+        if (data.roles) {
+          const merged = [...new Set([...ROLES_ORDER, ...data.roles])];
+          setRoles(merged);
+        }
         if (data.roleLabels) setRoleLabels(data.roleLabels);
       }
     } catch(e) { console.error("Matrix load error:", e); }
@@ -497,7 +501,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
       {/* USER DIRECTORY */}
       {tab==="users"&&isAdmin&&(
         <div>
-          {["admin","planning","manager","driver","viewonly",...roles.filter(r=>!ROLES_ORDER.includes(r))].map(role=>{
+          {["admin","planning","manager","logistic","driver","management","viewonly",...roles.filter(r=>!ROLES_ORDER.includes(r))].map(role=>{
             const ru=users.filter(u=>u.role===role);
             if (!ru.length) return null;
             return (
@@ -518,7 +522,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                             <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>🎭 {t.role}</label>
                             <select value={editUserForm.role} onChange={e=>setEditUserForm({...editUserForm,role:e.target.value})}
                               style={{width:"70%",border:"1.5px solid #6366f1",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box",width:"70%"}}>
-                              {["admin","planning","manager","driver","viewonly",...roles.filter(r=>!ROLES_ORDER.includes(r))].map(r=>(
+                              {["admin","planning","manager","logistic","driver","management","viewonly",...roles.filter(r=>!ROLES_ORDER.includes(r))].map(r=>(
                                 <option key={r} value={r}>{getRoleLabel(r)}</option>
                               ))}
                             </select>
