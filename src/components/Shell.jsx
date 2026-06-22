@@ -145,6 +145,34 @@ function getNotifText(n, lang) {
   return n.message || n.title || "🔔";
 }
 
+
+// ── Notification Deep Linking ─────────────────────────────────────────────────
+// Maps notification type + user role → destination page
+function getNotifDestPage(notif, userRole) {
+  const type = notif.type || "";
+  const map = {
+    upload:             { admin:"upload",       planning:"upload"                                          },
+    delivered:          { admin:"assign",        manager:"assign",    driver:"mydeliveries", logistic:"assign"   },
+    failed:             { admin:"assign",        manager:"assign",    driver:"mydeliveries", logistic:"assign"   },
+    staged:             { admin:"assign",        manager:"assign",    driver:"mydeliveries", planning:"assign"   },
+    invoice_assigned:   { admin:"assign",        manager:"assign",    driver:"mydeliveries", planning:"assign"   },
+    leave:              { admin:"masterdata",    manager:"masterdata", logistic:"masterdata"                },
+    leave_approved:     { driver:"masterdata"                                                              },
+    leave_rejected:     { driver:"masterdata"                                                              },
+    request:            { admin:"users",         manager:"users",     logistic:"users",     planning:"users" },
+    request_action:     { admin:"users",         manager:"users",     logistic:"users",     planning:"users" },
+    vehicle:            { admin:"fleet"                                                                    },
+    vehicle_approved:   { admin:"fleet",         manager:"fleet",     logistic:"fleet"                    },
+    vehicle_rejected:   { admin:"fleet",         manager:"fleet",     logistic:"fleet"                    },
+    activity_request:   { admin:"reports",       manager:"reports",   logistic:"reports"                  },
+    activity_approved:  { driver:"mydeliveries"                                                            },
+    activity_rejected:  { driver:"mydeliveries"                                                            },
+  };
+  const typeMap = map[type];
+  if (!typeMap) return null;
+  return typeMap[userRole] || null;
+}
+
 export default function Shell({ user, lang, setLang, page, setPage, onLogout, children, alerts }) {
   const [open, setOpen] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
@@ -401,7 +429,7 @@ export default function Shell({ user, lang, setLang, page, setPage, onLogout, ch
                   </div>
                 ) : (
                   notifications.slice(0, 20).map(n => (
-                    <div key={n.id} onClick={() => handleMarkRead(n.id)}
+                    <div key={n.id} onClick={() => { handleMarkRead(n.id); const dest = getNotifDestPage(n, user.role); if (dest) { setPage(dest); setShowNotif(false); } }}
                       style={{
                         padding:"12px 16px", borderBottom:"1px solid #f8fafc",
                         background:n.read ? "white" : "#f0f4ff",
