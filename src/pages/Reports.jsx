@@ -31,6 +31,8 @@ const T = {
     criticalAging:"Critical Aging",
     productivity:"Productivity", workingDays:"Working Days", activeDays:"Active Days",
     unassignedDays:"Unassigned Days",
+    heatmap:"SLA Heatmap", slaDriver:"Delivery Partner Heatmap", slaVehicle:"Vehicle Heatmap",
+    onTime:"On-Time", partialSla:"Partial / Ext. SLA", noActivity:"No Activity", incitySla:"In-City (<300km)", outcitySla:"Out-City (≥300km)", slaNote:"SLA Rule: In-City → same-day on-time | Out-City (≥300km) → next-day SLA", delivPart:"Delivery Partners", monthSummary:"Month Summary", onRoadDays:"On-Road Days", maintDays:"Maintenance Days",
   },
   ar: {
     daily:"الحالة اليومية", driver:"أداء السائقين", vehicle:"استخدام المركبات",
@@ -58,6 +60,8 @@ const T = {
     criticalAging:"فواتير حرجة",
     productivity:"الإنتاجية", workingDays:"أيام العمل", activeDays:"الأيام النشطة",
     unassignedDays:"الأيام غير المخصصة",
+    heatmap:"خريطة مستوى الخدمة", slaDriver:"خريطة شريك التوصيل", slaVehicle:"خريطة المركبة",
+    onTime:"في الوقت", partialSla:"جزئي", noActivity:"لا نشاط", incitySla:"داخل المدينة", outcitySla:"خارج المدينة", slaNote:"قاعدة الخدمة: داخلي → نفس اليوم | خارجي (300+ كم) → اليوم التالي", delivPart:"شركاء التوصيل", monthSummary:"ملخص الشهر", onRoadDays:"أيام العمل", maintDays:"أيام الصيانة",
   }
 };
 
@@ -253,7 +257,7 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
         ["daily","📊",t.daily],["driver","👤",t.driver],
         ["vehicle","🚗",t.vehicle],["fuel","⛽",t.fuel],
         ["aging","⏱️",t.aging],["unassigned","⚪",t.unassignedReport],
-        ["ledger","📒","Ledger"]
+        ["ledger","📒","Ledger"],["heatmap","🗺️","SLA Heatmap"]
       ];
 
   // Trip logs filtered by period + DC
@@ -918,6 +922,22 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
           getShiftForDCAndDate={getShiftForDCAndDate}
           userDC={userDC}
         />
+
+      {/* ══════════════════════════════════════
+          TAB: SLA HEATMAP
+      ══════════════════════════════════════ */}
+      {tab==="heatmap"&&(
+        <SlaHeatmap
+          invoices={invoices}
+          vehicles={myVeh}
+          users={myUsers}
+          user={user}
+          tripLogs={tripLogs}
+          vehicleOffDays={vehicleOffDays}
+          userDC={userDC}
+          t={t}
+          lang={lang}
+        />
       )}
     </div>
   );
@@ -1238,3 +1258,325 @@ function LedgerTab({ tripLogs, invoices, driverLeaves, fuelLogs, vehicleOffDays,
   );
 }
 
+
+// ── SLA HEATMAP ───────────────────────────────────────────────────────────────
+// Props: invoices, vehicles, users, user, tripLogs, vehicleOffDays, userDC, t, lang
+function SlaHeatmap({ invoices, vehicles, users, user, tripLogs, vehicleOffDays, userDC, t, lang }) {
+  const [hmView, setHmView]   = useState("driver"); // "driver" | "vehicle"
+  const [hmDC,   setHmDC]     = useState(userDC || "all");
+  const [tooltip, setTooltip] = useState(null);
+
+  const now = new Date();
+  const [hmMonth, setHmMonth] = useState(
+    `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`
+  );
+
+  const [hmYear, hmMon] = hmMonth.split("-").map(Number);
+  const daysInMonth = new Date(hmYear, hmMon, 0).getDate();
+  const days = Array.from({ length: daysInMonth }, (_, i) => {
+    const d = String(i+1).padStart(2,"0");
+    return `${hmMonth}-${d}`;
+  });
+
+  const rtl = lang === "ar";
+
+  // Filter invoices for this month + DC
+  const hmInv = invoices.filter(inv => {
+    if (!inv.date || !inv.date.startsWith(hmMonth)) return false;
+    if (hmDC !== "all" && inv.dc !== hmDC) return false;
+    return true;
+  });
+
+  // Driver + vehicle lists
+  const driverList  = (users||[]).filter(u => u.role === "driver" && (hmDC === "all" || u.dc === hmDC));
+  const vehicleList = vehicles.filter(v => hmDC === "all" || v.dc === hmDC);
+
+  // ── Cell status: driver ───────────────────────────────────────────────────
+  function getDriverCellStatus(driverId, dateStr) {
+    const dayInv = hmInv.filter(i => i.driverId === driverId && i.date === dateStr);
+    if (!dayInv.length) return "none";
+
+    const delivered      = dayInv.filter(i => i.status === "delivered");
+    const failed         = dayInv.filter(i => i.status === "failed");
+    const outcityPending = dayInv.filter(i =>
+      i.dtype === "outcity" &&
+      ["pending","assigned","intransit","outstanding"].includes(i.status)
+    );
+    const otherPending   = dayInv.filter(i =>
+      i.dtype !== "outcity" &&
+      ["pending","assigned","intransit","outstanding"].includes(i.status)
+    );
+
+    if (failed.length > 0 && delivered.length === 0 && outcityPending.length === 0) return "red";
+    if (delivered.length > 0 && failed.length === 0 && otherPending.length === 0) return "green";
+    if (outcityPending.length > 0 && failed.length === 0 && otherPending.length === 0) return "yellow";
+    return "yellow";
+  }
+
+  function driverCellColor(s) {
+    if (s === "green")  return "#10b981";
+    if (s === "yellow") return "#f59e0b";
+    if (s === "red")    return "#ef4444";
+    return "#f1f5f9";
+  }
+
+  function driverCellLabel(s) {
+    if (s === "green")  return t.onTime   || "On-Time";
+    if (s === "yellow") return t.partialSla || "Partial/Ext.SLA";
+    if (s === "red")    return "Failed";
+    return t.noActivity || "No Activity";
+  }
+
+  // ── Cell status: vehicle ──────────────────────────────────────────────────
+  function getVehicleCellStatus(plate, dateStr) {
+    const onRoad = tripLogs.some(tl =>
+      tl.vehiclePlate === plate &&
+      (tl.startDate === dateStr || tl.date === dateStr)
+    );
+    const inMaint = vehicleOffDays.some(od =>
+      od.vehiclePlate === plate &&
+      dateStr >= od.from && dateStr <= od.to
+    );
+    if (onRoad)  return "green";
+    if (inMaint) return "orange";
+    return "none";
+  }
+
+  function vehicleCellColor(s) {
+    if (s === "green")  return "#10b981";
+    if (s === "orange") return "#f97316";
+    return "#f1f5f9";
+  }
+
+  // ── Month summary counters ─────────────────────────────────────────────────
+  const driverAllCells   = driverList.flatMap(d => days.map(day => getDriverCellStatus(d.uid, day)));
+  const vehicleAllCells  = vehicleList.flatMap(v => days.map(day => getVehicleCellStatus(v.plate, day)));
+  const driverGreen      = driverAllCells.filter(s => s === "green").length;
+  const driverYellow     = driverAllCells.filter(s => s === "yellow").length;
+  const driverRed        = driverAllCells.filter(s => s === "red").length;
+  const driverActive     = driverAllCells.filter(s => s !== "none").length;
+  const vehicleOnRoad    = vehicleAllCells.filter(s => s === "green").length;
+  const vehicleMaint     = vehicleAllCells.filter(s => s === "orange").length;
+  const vehicleStandby   = vehicleAllCells.filter(s => s === "none").length;
+  const vehicleUtil      = vehicleAllCells.length > 0
+    ? Math.round(vehicleOnRoad / vehicleAllCells.length * 100) : 0;
+
+  const CELL_W = 26;
+  const LABEL_W = 150;
+
+  const inputSt = { border:"1.5px solid #e2e8f0", borderRadius:8, padding:"7px 10px", fontSize:13, outline:"none", cursor:"pointer", background:"white" };
+
+  return (
+    <div style={{ background:"white", borderRadius:12, padding:20, boxShadow:"0 1px 4px rgba(0,0,0,0.06)", borderTop:"4px solid #6366f1" }}>
+
+      {/* Title + controls */}
+      <div style={{ display:"flex", flexWrap:"wrap", gap:10, alignItems:"center", marginBottom:14 }}>
+        <span style={{ fontWeight:800, fontSize:16, color:"#0f172a" }}>🗺️ {t.heatmap || "SLA Heatmap"}</span>
+
+        {/* Month picker */}
+        <input type="month" value={hmMonth} onChange={e => setHmMonth(e.target.value)} style={inputSt} />
+
+        {/* DC filter — admin only */}
+        {!userDC && (
+          <select value={hmDC} onChange={e => setHmDC(e.target.value)} style={inputSt}>
+            <option value="all">All Distribution Centers</option>
+            <option value="Riyadh">Riyadh DC</option>
+            <option value="Jeddah">Jeddah DC</option>
+            <option value="Dammam">Dammam DC</option>
+          </select>
+        )}
+
+        {/* View toggle */}
+        <div style={{ display:"flex", borderRadius:8, overflow:"hidden", border:"1.5px solid #e2e8f0" }}>
+          {[["driver", `👤 ${t.delivPart||"Delivery Partners"}`], ["vehicle", `🚗 ${t.vehicle||"Vehicles"}`]].map(([v,l]) => (
+            <button key={v} onClick={() => setHmView(v)}
+              style={{ padding:"7px 14px", border:"none", cursor:"pointer", fontSize:13, fontWeight:600,
+                background: hmView===v ? "#1A3A5C" : "white", color: hmView===v ? "white" : "#374151" }}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        {/* Legend */}
+        <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginLeft:"auto" }}>
+          {(hmView === "driver"
+            ? [["#10b981", t.onTime||"On-Time ✅"], ["#f59e0b", t.partialSla||"Partial/Ext.SLA ⚠️"], ["#ef4444","Failed ❌"], ["#e2e8f0", t.noActivity||"No Activity"]]
+            : [["#10b981","On-Road 🚗"], ["#f97316","Maintenance 🔧"], ["#e2e8f0","Standby"]]
+          ).map(([c,l]) => (
+            <div key={l} style={{ display:"flex", alignItems:"center", gap:5, fontSize:11, color:"#64748b" }}>
+              <div style={{ width:13, height:13, borderRadius:3, background:c, border:"1px solid #e2e8f0" }} />
+              {l}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* SLA rule note */}
+      <div style={{ fontSize:12, color:"#64748b", background:"#f8fafc", borderRadius:8,
+        padding:"8px 12px", marginBottom:16, lineHeight:1.6 }}>
+        📌 {t.slaNote || "SLA Rule: In-City (<300km one-way) → same-day on-time | Out-City (≥300km) → next-day SLA applies"}
+      </div>
+
+      {/* Scrollable heatmap grid */}
+      <div style={{ overflowX:"auto" }}>
+
+        {/* Day number headers */}
+        <div style={{ display:"flex", minWidth: LABEL_W + days.length * (CELL_W+2), marginBottom:4 }}>
+          <div style={{ width:LABEL_W, flexShrink:0 }} />
+          {days.map(dateStr => {
+            const dayNum   = parseInt(dateStr.split("-")[2]);
+            const dow      = new Date(dateStr).getDay();
+            const isWeekend = dow === 5 || dow === 6;
+            return (
+              <div key={dateStr} style={{
+                width:CELL_W, flexShrink:0, textAlign:"center",
+                fontSize:9, fontWeight:700,
+                color: isWeekend ? "#94a3b8" : "#374151", paddingBottom:3
+              }}>
+                {dayNum}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Delivery Partner rows */}
+        {hmView === "driver" && (
+          driverList.length === 0
+            ? <div style={{ padding:"24px 0", textAlign:"center", color:"#94a3b8", fontSize:14 }}>No Delivery Partners found for this DC / month</div>
+            : driverList.map(driver => (
+                <div key={driver.uid} style={{ display:"flex", alignItems:"center", marginBottom:2, minWidth: LABEL_W + days.length * (CELL_W+2) }}>
+                  <div style={{ width:LABEL_W, flexShrink:0, fontSize:11, fontWeight:600, color:"#374151",
+                    paddingRight:8, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                    {driver.name}
+                    <span style={{ fontSize:9, color:"#94a3b8", marginLeft:4 }}>{driver.dc}</span>
+                  </div>
+                  {days.map(dateStr => {
+                    const status   = getDriverCellStatus(driver.uid, dateStr);
+                    const dow      = new Date(dateStr).getDay();
+                    const isWeekend = dow === 5 || dow === 6;
+                    const dayInv   = hmInv.filter(i => i.driverId === driver.uid && i.date === dateStr);
+                    const del      = dayInv.filter(i => i.status === "delivered").length;
+                    const fail     = dayInv.filter(i => i.status === "failed").length;
+                    const outcity  = dayInv.filter(i => i.dtype === "outcity").length;
+                    const incity   = dayInv.filter(i => i.dtype === "incity").length;
+
+                    return (
+                      <div key={dateStr}
+                        onMouseEnter={e => {
+                          if (dayInv.length) {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setTooltip({ type:"driver", x:rect.left, y:rect.top,
+                              name:driver.name, date:dateStr, total:dayInv.length,
+                              del, fail, outcity, incity, label:driverCellLabel(status) });
+                          }
+                        }}
+                        onMouseLeave={() => setTooltip(null)}
+                        style={{
+                          width:CELL_W-2, height:20, flexShrink:0, margin:1,
+                          borderRadius:4, cursor: dayInv.length ? "pointer" : "default",
+                          background: isWeekend && status==="none" ? "#f8fafc" : driverCellColor(status),
+                          opacity: isWeekend && status==="none" ? 0.35 : 1,
+                          border: isWeekend ? "1px dashed #e2e8f0" : "1px solid transparent",
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              ))
+        )}
+
+        {/* Vehicle rows */}
+        {hmView === "vehicle" && (
+          vehicleList.length === 0
+            ? <div style={{ padding:"24px 0", textAlign:"center", color:"#94a3b8", fontSize:14 }}>No vehicles found</div>
+            : vehicleList.map(v => (
+                <div key={v.plate} style={{ display:"flex", alignItems:"center", marginBottom:2, minWidth: LABEL_W + days.length * (CELL_W+2) }}>
+                  <div style={{ width:LABEL_W, flexShrink:0, fontSize:11, fontWeight:600, color:"#374151",
+                    paddingRight:8, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                    {v.plate}
+                    <span style={{ fontSize:9, color:"#94a3b8", marginLeft:4 }}>{v.dc}</span>
+                  </div>
+                  {days.map(dateStr => {
+                    const status    = getVehicleCellStatus(v.plate, dateStr);
+                    const dow       = new Date(dateStr).getDay();
+                    const isWeekend = dow === 5 || dow === 6;
+                    const label     = status==="green"?"On-Road":status==="orange"?"Maintenance":"Standby";
+                    return (
+                      <div key={dateStr}
+                        onMouseEnter={e => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setTooltip({ type:"vehicle", x:rect.left, y:rect.top, plate:v.plate, dc:v.dc, date:dateStr, label });
+                        }}
+                        onMouseLeave={() => setTooltip(null)}
+                        style={{
+                          width:CELL_W-2, height:20, flexShrink:0, margin:1,
+                          borderRadius:4,
+                          background: isWeekend && status==="none" ? "#f8fafc" : vehicleCellColor(status),
+                          opacity: isWeekend && status==="none" ? 0.35 : 1,
+                          border: isWeekend ? "1px dashed #e2e8f0" : "1px solid transparent",
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              ))
+        )}
+      </div>
+
+      {/* Tooltip */}
+      {tooltip && (
+        <div style={{
+          position:"fixed", left:tooltip.x + 10, top:tooltip.y - 10,
+          background:"#0f172a", color:"white", padding:"10px 14px",
+          borderRadius:8, fontSize:12, zIndex:9999, pointerEvents:"none",
+          minWidth:170, boxShadow:"0 4px 20px rgba(0,0,0,0.3)", lineHeight:1.7
+        }}>
+          {tooltip.type === "vehicle" ? (
+            <>
+              <div style={{ fontWeight:800 }}>{tooltip.plate}</div>
+              <div style={{ color:"#94a3b8", fontSize:11 }}>{tooltip.dc} · {tooltip.date}</div>
+              <div style={{ marginTop:4, fontWeight:700,
+                color: tooltip.label==="On-Road"?"#10b981" : tooltip.label==="Maintenance"?"#f97316":"#94a3b8" }}>
+                {tooltip.label==="On-Road"?"🚗":tooltip.label==="Maintenance"?"🔧":"⏸"} {tooltip.label}
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontWeight:800 }}>{tooltip.name}</div>
+              <div style={{ color:"#94a3b8", fontSize:11 }}>{tooltip.date}</div>
+              <div style={{ marginTop:4 }}>📦 {tooltip.total} invoice(s)</div>
+              <div style={{ color:"#10b981" }}>✅ {tooltip.del} delivered</div>
+              {tooltip.fail > 0 && <div style={{ color:"#ef4444" }}>❌ {tooltip.fail} failed</div>}
+              <div style={{ fontSize:11, color:"#94a3b8" }}>🏙️ In-City: {tooltip.incity} · 🛣️ Out-City: {tooltip.outcity}</div>
+              <div style={{ marginTop:4, fontWeight:700,
+                color: tooltip.label.includes("On-Time")?"#10b981": tooltip.label.includes("Partial")?"#f59e0b":"#ef4444" }}>
+                {tooltip.label}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Month summary cards */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:10, marginTop:20, paddingTop:16, borderTop:"1px solid #f1f5f9" }}>
+        {(hmView === "driver" ? [
+          { label: t.onTime||"On-Time Days",        val: driverGreen,  color:"#10b981" },
+          { label: t.partialSla||"Partial/Ext.SLA", val: driverYellow, color:"#f59e0b" },
+          { label: "Failed Days",                   val: driverRed,    color:"#ef4444" },
+          { label: "Active Driver-Days",             val: driverActive, color:"#6366f1" },
+        ] : [
+          { label: t.onRoadDays||"On-Road Days",    val: vehicleOnRoad,   color:"#10b981" },
+          { label: t.maintDays||"Maintenance Days", val: vehicleMaint,    color:"#f97316" },
+          { label: "Standby Days",                  val: vehicleStandby,  color:"#94a3b8" },
+          { label: "Fleet Utilization",             val: vehicleUtil+"%", color:"#6366f1" },
+        ]).map(s => (
+          <div key={s.label} style={{ background:"white", borderRadius:8, padding:"10px 12px",
+            borderLeft:`3px solid ${s.color}`, boxShadow:"0 1px 3px rgba(0,0,0,0.06)", border:`1px solid #f1f5f9` }}>
+            <div style={{ fontSize:11, color:"#64748b", marginBottom:3 }}>{s.label}</div>
+            <div style={{ fontSize:20, fontWeight:800, color:s.color }}>{s.val}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
