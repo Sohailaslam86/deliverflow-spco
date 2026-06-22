@@ -1,3 +1,4 @@
+// src/components/Shell.jsx
 import { useState, useEffect } from "react";
 import { RC, RA, RI, ROLE_LABELS } from "../data/masterData.js";
 import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
@@ -10,6 +11,7 @@ const T = {
     invoices:"All Invoices", dcinvoices:"Deliverables",
     upload:"Invoice Upload & Post",
     trips:"Trip Management",
+    calendar:"Dispatch Calendar",
     users:"User Management",
     masterdata:"System Configuration",
     fleet:"Fleet Management",
@@ -37,6 +39,7 @@ const T = {
     invoices:"جميع الفواتير", dcinvoices:"المستحقات",
     upload:"رفع وترحيل الفواتير",
     trips:"إدارة الرحلات",
+    calendar:"تقويم الإرسال",
     users:"إدارة المستخدمين",
     masterdata:"إعدادات النظام",
     fleet:"إدارة الأسطول",
@@ -62,10 +65,11 @@ const T = {
 };
 
 // Navigation per role
+// calendar added after trips for admin and manager
 const NAV = {
-  admin:      [["dashboard","📊"],["assign","🚚"],["upload","📤"],["trips","🔄"],["fleet","🚗"],["fuel","⛽"],["users","👥"],["masterdata","⚙️"],["reports","📈"],["download","📥"]],
+  admin:      [["dashboard","📊"],["assign","🚚"],["upload","📤"],["trips","🔄"],["calendar","📅"],["fleet","🚗"],["fuel","⛽"],["users","👥"],["masterdata","⚙️"],["reports","📈"],["download","📥"]],
   planning:   [["dashboard","📊"],["upload","📤"],["download","📥"],["users","👥"]],
-  manager:    [["dashboard","📊"],["assign","🚚"],["trips","🔄"],["fleet","🚗"],["fuel","⛽"],["reports","📈"],["users","👥"],["masterdata","⚙️"],["download","📥"]],
+  manager:    [["dashboard","📊"],["assign","🚚"],["trips","🔄"],["calendar","📅"],["fleet","🚗"],["fuel","⛽"],["reports","📈"],["users","👥"],["masterdata","⚙️"],["download","📥"]],
   logistic:   [["dashboard","📊"],["fleet","🚗"],["fuel","⛽"],["reports","📈"],["users","👥"],["download","📥"]],
   driver:     [["mydeliveries","📦"],["odometer","🔢"],["masterdata","⚙️"]],
   viewonly:   [["search","🔍"]],
