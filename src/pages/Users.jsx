@@ -521,7 +521,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                           <div style={{marginBottom:12}}>
                             <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>🎭 {t.role}</label>
                             <select value={editUserForm.role} onChange={e=>setEditUserForm({...editUserForm,role:e.target.value})}
-                              style={{width:"70%",border:"1.5px solid #6366f1",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box",width:"70%"}}>
+                              style={{width:"70%",border:"1.5px solid #6366f1",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box">}
                               {["admin","planning","manager","logistic","driver","management","viewonly",...roles.filter(r=>!ROLES_ORDER.includes(r))].map(r=>(
                                 <option key={r} value={r}>{getRoleLabel(r)}</option>
                               ))}
@@ -532,7 +532,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                           <div style={{marginBottom:12}}>
                             <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>📍 {t.dcLabel}</label>
                             <select value={editUserForm.location||"Head Office"} onChange={e=>setEditUserForm({...editUserForm,location:e.target.value,dc:LOCATION_TO_DC[e.target.value]||"Head Office"})}
-                              style={{width:"70%",border:"1.5px solid #6366f1",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box",width:"70%"}}>
+                              style={{width:"70%",border:"1.5px solid #6366f1",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box">}
                               {LOCATIONS.map(l=><option key={l} value={l}>{l}</option>)}
                             </select>
                           </div>
@@ -541,7 +541,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                           <div style={{marginBottom:12}}>
                             <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>🏢 {t.dept}</label>
                             <select value={editUserForm.dept||""} onChange={e=>setEditUserForm({...editUserForm,dept:e.target.value})}
-                              style={{width:"70%",border:"1.5px solid #6366f1",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box",width:"70%"}}>
+                              style={{width:"70%",border:"1.5px solid #6366f1",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box">}
                               <option value="">Select...</option>
                               {DEPARTMENTS.map(d=><option key={d} value={d}>{d}</option>)}
                             </select>
@@ -551,7 +551,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                           <div style={{marginBottom:12}}>
                             <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>🔘 {t.statusLabel}</label>
                             <select value={editUserForm.status||"active"} onChange={e=>setEditUserForm({...editUserForm,status:e.target.value})}
-                              style={{width:"70%",border:"1.5px solid #6366f1",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box",width:"70%"}}>
+                              style={{width:"70%",border:"1.5px solid #6366f1",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box">}
                               <option value="active">Active</option>
                               <option value="inactive">Inactive</option>
                             </select>
@@ -660,7 +660,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                   <div style={{marginBottom:12}}>
                     <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>📍 {t.location}</label>
                     <select value={form.location} onChange={e=>F("location",e.target.value)}
-                      style={{width:"70%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box",width:"70%"}}>
+                      style={{width:"70%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box">}
                       {LOCATIONS.map(l=><option key={l} value={l}>{l}</option>)}
                     </select>
                   </div>
@@ -706,7 +706,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                     <div style={{marginBottom:12}}>
                       <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:5}}>{t.dept}</label>
                       <select value={form.dept} onChange={e=>F("dept",e.target.value)}
-                        style={{width:"70%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box",width:"70%"}}>
+                        style={{width:"70%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box">}
                         <option value="">Select...</option>
                         {DEPARTMENTS.map(d=><option key={d} value={d}>{d}</option>)}
                       </select>
@@ -714,7 +714,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                     <div style={{marginBottom:12}}>
                       <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>{t.role}</label>
                       <select value={form.role} onChange={e=>F("role",e.target.value)}
-                        style={{width:"70%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box",width:"70%"}}>
+                        style={{width:"70%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box">}
                         {(isAdmin?["admin","planning","manager","driver","viewonly"]:["planning","manager","driver","viewonly"]).map(r=>(
                           <option key={r} value={r}>{getRoleLabel(r)}</option>
                         ))}
@@ -772,7 +772,7 @@ export default function Users({ user, users, setUsers, requests, setRequests, la
                       <div style={{marginBottom:12}}>
                         <label style={{fontSize:13,fontWeight:600,color:"#374151",display:"block",marginBottom:3}}>{t.role}</label>
                         <select value={editReqForm.role} onChange={e=>setEditReqForm({...editReqForm,role:e.target.value})}
-                          style={{width:"70%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box",width:"70%"}}>
+                          style={{width:"70%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:14,outline:"none",background:"white",boxSizing:"border-box">}
                           {["admin","planning","manager","driver","viewonly"].map(r=>(
                             <option key={r} value={r}>{getRoleLabel(r)}</option>
                           ))}
