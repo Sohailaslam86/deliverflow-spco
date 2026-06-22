@@ -215,7 +215,7 @@ export default function Login({ onLogin, lang, setLang }) {
 
           {/* Lang toggle — top right */}
           <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:10 }}>
-            <LangToggle dark />
+            {LangToggle({ dark: true })}
           </div>
 
           {/* Logo + names */}
@@ -248,7 +248,7 @@ export default function Login({ onLogin, lang, setLang }) {
 
         {/* ── LOGIN FORM ── */}
         <div style={{ flex:1, padding:"28px 24px", direction:rtl?"rtl":"ltr" }}>
-          <LoginForm />
+          {LoginForm()}
         </div>
 
         {/* ── FOOTER ── */}
@@ -270,7 +270,7 @@ export default function Login({ onLogin, lang, setLang }) {
 
       {/* Language Toggle */}
       <div style={{ position:"fixed", top:16, right:16, zIndex:100 }}>
-        <LangToggle dark />
+        {LangToggle({ dark: true })}
       </div>
 
       {OfflineBanner}
@@ -304,7 +304,7 @@ export default function Login({ onLogin, lang, setLang }) {
         {/* RIGHT PANEL */}
         <div style={{ flex:1, background:"#f8fafc", display:"flex", flexDirection:"column", justifyContent:"center", padding:"40px 40px", direction:rtl?"rtl":"ltr" }}>
           <div style={{ maxWidth:400, width:"100%", marginLeft:rtl?"auto":"0", marginRight:rtl?"0":"auto", flex:1, display:"flex", flexDirection:"column", justifyContent:"center" }}>
-            <LoginForm />
+            {LoginForm()}
           </div>
 
           <div style={{ textAlign:"center", fontSize:13, color:"#94a3b8", paddingBottom:8 }}>
