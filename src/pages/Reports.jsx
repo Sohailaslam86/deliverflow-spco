@@ -922,6 +922,7 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
           getShiftForDCAndDate={getShiftForDCAndDate}
           userDC={userDC}
         />
+      )}
 
       {/* ══════════════════════════════════════
           TAB: SLA HEATMAP
