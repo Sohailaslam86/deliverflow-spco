@@ -1,3 +1,4 @@
+// src/App.jsx
 import { useState, useEffect } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, collection, getDocs } from "firebase/firestore";
@@ -5,20 +6,21 @@ import { auth, db } from "./firebase";
 import Login from "./components/Login.jsx";
 import { SettingsProvider } from "./context/SettingsContext.jsx";
 import Shell from "./components/Shell.jsx";
-import Dashboard  from "./pages/Dashboard.jsx";
-import Invoices   from "./pages/Invoices.jsx";
-import Upload     from "./pages/Upload.jsx";
-import Assign     from "./pages/Assign.jsx";
-import Trips      from "./pages/Trips.jsx";
-import Users      from "./pages/Users.jsx";
-import MasterData from "./pages/MasterData.jsx";
-import Fleet      from "./pages/Fleet.jsx";
-import Fuel       from "./pages/Fuel.jsx";
-import Reports    from "./pages/Reports.jsx";
-import Driver     from "./pages/Driver.jsx";
-import Odometer   from "./pages/Odometer.jsx";
-import Search     from "./pages/Search.jsx";
-import Download   from "./pages/Download.jsx";
+import Dashboard        from "./pages/Dashboard.jsx";
+import Invoices         from "./pages/Invoices.jsx";
+import Upload           from "./pages/Upload.jsx";
+import Assign           from "./pages/Assign.jsx";
+import Trips            from "./pages/Trips.jsx";
+import DispatchCalendar from "./pages/DispatchCalendar.jsx";
+import Users            from "./pages/Users.jsx";
+import MasterData       from "./pages/MasterData.jsx";
+import Fleet            from "./pages/Fleet.jsx";
+import Fuel             from "./pages/Fuel.jsx";
+import Reports          from "./pages/Reports.jsx";
+import Driver           from "./pages/Driver.jsx";
+import Odometer         from "./pages/Odometer.jsx";
+import Search           from "./pages/Search.jsx";
+import Download         from "./pages/Download.jsx";
 import {
   INITIAL_INVOICES, INITIAL_VEHICLES,
   INITIAL_TRIPS, INITIAL_FUEL_LOGS, INITIAL_UPLOADS,
@@ -45,7 +47,7 @@ export default function App() {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          const docRef = doc(db, "users", firebaseUser.uid);
+          const docRef  = doc(db, "users", firebaseUser.uid);
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
             setUser({ uid: firebaseUser.uid, email: firebaseUser.email, ...docSnap.data() });
@@ -54,7 +56,7 @@ export default function App() {
               uid: firebaseUser.uid, email: firebaseUser.email,
               name: firebaseUser.email === ADMIN_EMAIL ? "Sohail Aslam" : firebaseUser.email,
               role: firebaseUser.email === ADMIN_EMAIL ? "admin" : "viewonly",
-              dc: firebaseUser.email === ADMIN_EMAIL ? "Head Office" : "All",
+              dc:   firebaseUser.email === ADMIN_EMAIL ? "Head Office" : "All",
               department: "Management", status: "active"
             });
           }
@@ -63,7 +65,7 @@ export default function App() {
             uid: firebaseUser.uid, email: firebaseUser.email,
             name: firebaseUser.email === ADMIN_EMAIL ? "Sohail Aslam" : firebaseUser.email,
             role: firebaseUser.email === ADMIN_EMAIL ? "admin" : "viewonly",
-            dc: firebaseUser.email === ADMIN_EMAIL ? "Head Office" : "All",
+            dc:   firebaseUser.email === ADMIN_EMAIL ? "Head Office" : "All",
             department: "Management", status: "active"
           });
         }
@@ -79,7 +81,7 @@ export default function App() {
   useEffect(() => {
     async function loadUsers() {
       try {
-        const snap = await getDocs(collection(db, "users"));
+        const snap    = await getDocs(collection(db, "users"));
         const fsUsers = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
         if (fsUsers.length > 0) setUsers(fsUsers);
       } catch(e) { console.error("Users load error:", e); }
@@ -101,7 +103,7 @@ export default function App() {
 
   if (!user) return (
     <Login
-      onLogin={u=>{setUser(u); setPage("dashboard");}}
+      onLogin={u => { setUser(u); setPage("dashboard"); }}
       lang={lang}
       setLang={setLang}
     />
@@ -115,55 +117,63 @@ export default function App() {
 
   // Role-based page guard
   function guardPage(role, allowedRoles, component, fallback = null) {
-    return allowedRoles.includes(role) ? component : (fallback || <div style={{ padding:40, textAlign:"center", color:"#94a3b8" }}>⛔ Access not permitted for your role.</div>);
+    return allowedRoles.includes(role)
+      ? component
+      : (fallback || <div style={{ padding:40, textAlign:"center", color:"#94a3b8" }}>⛔ Access not permitted for your role.</div>);
   }
 
   const pages = {
     // Dashboard — not for drivers (their home is mydeliveries) or viewonly
-    dashboard:    guardPage(user.role,
+    dashboard: guardPage(user.role,
       ["admin","manager","logistic","planning","management"],
       <Dashboard {...props} users={users} />,
       user.role === "driver" ? <Driver {...props} /> : null
     ),
 
     // Dispatch Management — admin, manager, planning
-    assign:       guardPage(user.role,
+    assign: guardPage(user.role,
       ["admin","manager","planning"],
       <Assign {...props} users={users} />
     ),
 
-    upload:       guardPage(user.role,
+    upload: guardPage(user.role,
       ["admin","planning"],
       <Upload {...props} />
     ),
 
-    trips:        guardPage(user.role,
+    trips: guardPage(user.role,
       ["admin","manager"],
       <Trips {...props} vehicles={vehicles} users={users} />
     ),
 
+    // Dispatch Calendar — admin + manager
+    calendar: guardPage(user.role,
+      ["admin","manager"],
+      <DispatchCalendar {...props} users={users} vehicles={vehicles} />
+    ),
+
     // Users — planning sees all DCs (uploads for all); manager/logistic see own
-    users:        guardPage(user.role,
+    users: guardPage(user.role,
       ["admin","manager","logistic","planning"],
       <Users {...props} />
     ),
 
-    masterdata:   guardPage(user.role,
+    masterdata: guardPage(user.role,
       ["admin","manager","driver"],
       <MasterData {...props} />
     ),
 
-    fleet:        guardPage(user.role,
+    fleet: guardPage(user.role,
       ["admin","manager","logistic","management"],
       <Fleet {...props} setUsers={setUsers} />
     ),
 
-    fuel:         guardPage(user.role,
+    fuel: guardPage(user.role,
       ["admin","manager","logistic","management"],
       <Fuel {...props} />
     ),
 
-    reports:      guardPage(user.role,
+    reports: guardPage(user.role,
       ["admin","manager","logistic","management"],
       <Reports {...props} users={users} />
     ),
@@ -173,19 +183,19 @@ export default function App() {
       <Driver {...props} />
     ),
 
-    odometer:     guardPage(user.role,
+    odometer: guardPage(user.role,
       ["driver"],
       <Odometer {...props} />
     ),
 
     // Search — driver cannot search all invoices
-    search:       guardPage(user.role,
+    search: guardPage(user.role,
       ["admin","manager","logistic","planning","viewonly","management"],
       <Search {...props} />
     ),
 
     // Download/POD — planning included (uploads for all DCs, needs POD access)
-    download:     guardPage(user.role,
+    download: guardPage(user.role,
       ["admin","manager","logistic","planning","viewonly","management"],
       <Download {...props} />
     ),
@@ -199,7 +209,7 @@ export default function App() {
         setLang={setLang}
         page={page}
         setPage={setPage}
-        onLogout={()=>{ signOut(auth); setUser(null); setPage("dashboard"); }}
+        onLogout={() => { signOut(auth); setUser(null); setPage("dashboard"); }}
         alerts={alerts}
       >
         {pages[page] || pages.dashboard}
