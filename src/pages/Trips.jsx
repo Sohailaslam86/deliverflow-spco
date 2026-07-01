@@ -1,3 +1,5 @@
+// src/pages/Trips.jsx
+// v10.0 — Feature 3A: Trip Timeline added as 3rd tab
 import { useState, useEffect } from "react";
 import { collection, getDocs, addDoc, updateDoc, doc } from "firebase/firestore";
 import { db } from "../firebase";
@@ -8,6 +10,7 @@ const T = {
   en: {
     newTrip:"+ New Trip", cancel:"Cancel",
     outgoingTrips:"Outgoing Trips", incomingTrips:"📥 Incoming Trips",
+    timeline:"Trip Timeline",
     tripNo:"Trip Number", tripDate:"Trip Date", destination:"Destination *",
     driver:"Driver *", vehicle:"Vehicle *", storage:"Storage Condition",
     notes:"Notes", createBtn:"Create & Dispatch Trip",
@@ -22,11 +25,22 @@ const T = {
     loadingVehicles:"Loading vehicles...", loading:"Loading...",
     assignedInv:"Assigned Invoices (Optional)",
     noHoldInv:"No pending shipment invoices for this route",
-    invoiceCount:"invoices attached"
+    invoiceCount:"invoices attached",
+    filterAll:"All Trips", filterDispatched:"Dispatched", filterReceived:"Received",
+    searchPlaceholder:"Search trip, driver, vehicle...",
+    noTimelineTrips:"No trips found",
+    tripDetail:"Trip Details", invoicesInTrip:"Invoices in this trip",
+    noInvoices:"No invoices attached",
+    created:"Created", dispatchedOn:"Dispatched", receivedOn:"Received",
+    tentDate:"Tentative Date", createdBy:"Created By", receivedBy:"Received By",
+    close:"Close", viewTimeline:"View Details",
+    slaBreached:"SLA Breached ⚠️", completed:"Completed ✅", dueToday:"Due Today",
+    daysLeft:"days left",
   },
   ar: {
     newTrip:"+ رحلة جديدة", cancel:"إلغاء",
     outgoingTrips:"الرحلات الصادرة", incomingTrips:"📥 الرحلات الواردة",
+    timeline:"الجدول الزمني",
     tripNo:"رقم الرحلة", tripDate:"تاريخ الرحلة", destination:"الوجهة *",
     driver:"السائق *", vehicle:"المركبة *", storage:"ظروف التخزين",
     notes:"ملاحظات", createBtn:"إنشاء وإرسال الرحلة",
@@ -41,12 +55,22 @@ const T = {
     loadingVehicles:"جاري تحميل المركبات...", loading:"جاري التحميل...",
     assignedInv:"الفواتير المخصصة (اختياري)",
     noHoldInv:"لا توجد فواتير شحن معلقة لهذا الطريق",
-    invoiceCount:"فاتورة مرفقة"
+    invoiceCount:"فاتورة مرفقة",
+    filterAll:"جميع الرحلات", filterDispatched:"تم الإرسال", filterReceived:"تم الاستلام",
+    searchPlaceholder:"ابحث عن رحلة، سائق، مركبة...",
+    noTimelineTrips:"لا توجد رحلات",
+    tripDetail:"تفاصيل الرحلة", invoicesInTrip:"الفواتير في هذه الرحلة",
+    noInvoices:"لا توجد فواتير مرفقة",
+    created:"تم الإنشاء", dispatchedOn:"تم الإرسال", receivedOn:"تم الاستلام",
+    tentDate:"التاريخ المتوقع", createdBy:"أنشأ بواسطة", receivedBy:"استلم بواسطة",
+    close:"إغلاق", viewTimeline:"عرض التفاصيل",
+    slaBreached:"خرق مستوى الخدمة ⚠️", completed:"مكتمل ✅", dueToday:"مستحق اليوم",
+    daysLeft:"يوم متبقي",
   }
 };
 
 const STATUS_COLOR = { dispatched:"#7c3aed", received:"#065f46" };
-const STATUS_BG = { dispatched:"#f5f3ff", received:"#d1fae5" };
+const STATUS_BG    = { dispatched:"#f5f3ff", received:"#d1fae5" };
 
 function printTripReport(trip) {
   const content = `<html><head><style>
@@ -82,6 +106,301 @@ function printTripReport(trip) {
   setTimeout(()=>w.print(), 500);
 }
 
+// ─── TRIP TIMELINE COMPONENT ──────────────────────────────────────────────────
+function TripTimeline({ trips, invoices, userDC, user, t, lang }) {
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedTrip, setSelectedTrip] = useState(null);
+  const rtl = lang === "ar";
+
+  const visibleTrips = trips.filter(tr => {
+    if (user.role === "admin") return true;
+    return tr.fromDC === userDC || tr.toCity?.replace("DC-","") === userDC;
+  });
+
+  const filtered = visibleTrips.filter(tr => {
+    const q = search.toLowerCase();
+    const matchSearch = !q ||
+      (tr.tripNumber||"").toLowerCase().includes(q) ||
+      (tr.driver||"").toLowerCase().includes(q) ||
+      (tr.vehicle||"").toLowerCase().includes(q) ||
+      (tr.fromDC||"").toLowerCase().includes(q) ||
+      (tr.toCityLabel||tr.toCity||"").toLowerCase().includes(q);
+    const matchStatus = statusFilter === "all" || tr.status === statusFilter;
+    return matchSearch && matchStatus;
+  }).sort((a,b) => (b.date||"").localeCompare(a.date||""));
+
+  function getTimelineSteps(trip) {
+    return [
+      {
+        key:"created", label:t.created, icon:"📋", color:"#6366f1",
+        done:true, timestamp:trip.createdAt||trip.date, by:trip.createdBy,
+        desc:`${trip.fromDC} DC → ${trip.toCityLabel||trip.toCity}`,
+      },
+      {
+        key:"dispatched", label:t.dispatchedOn, icon:"🚚", color:"#7c3aed",
+        done:trip.status==="dispatched"||trip.status==="received",
+        timestamp:trip.dispatchedAt||trip.createdAt||trip.date, by:trip.createdBy,
+        desc:`${trip.driver} · ${trip.vehicle}`,
+      },
+      {
+        key:"received", label:t.receivedOn, icon:"✅", color:"#10b981",
+        done:trip.status==="received",
+        timestamp:trip.receivedAt||null, by:trip.receivedBy||null,
+        desc:trip.receivedBy?`${trip.toCityLabel||trip.toCity}`:null,
+      },
+    ];
+  }
+
+  function getSLAStatus(trip) {
+    if (trip.status==="received") return { label:t.completed, color:"#10b981", bg:"#d1fae5" };
+    if (!trip.tentativeDate) return null;
+    const today = new Date().toISOString().split("T")[0];
+    if (trip.tentativeDate < today) return { label:t.slaBreached, color:"#991b1b", bg:"#fee2e2" };
+    const daysLeft = Math.ceil((new Date(trip.tentativeDate) - new Date()) / (1000*60*60*24));
+    if (daysLeft <= 1) return { label:t.dueToday, color:"#92400e", bg:"#fef3c7" };
+    return { label:`${daysLeft} ${t.daysLeft}`, color:"#065f46", bg:"#d1fae5" };
+  }
+
+  const tripInvoices = selectedTrip
+    ? (selectedTrip.invoiceIds||[]).map(id=>invoices.find(i=>i.id===id||i.firestoreId===id)).filter(Boolean)
+    : [];
+
+  return (
+    <div style={{ direction:rtl?"rtl":"ltr" }}>
+
+      {/* Search + Filter */}
+      <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap", alignItems:"center" }}>
+        <input value={search} onChange={e=>setSearch(e.target.value)}
+          placeholder={`🔍 ${t.searchPlaceholder}`}
+          style={{ flex:1, minWidth:200, border:"1.5px solid #e2e8f0", borderRadius:8, padding:"10px 14px", fontSize:14, outline:"none" }} />
+        <div style={{ display:"flex", gap:6 }}>
+          {[["all",t.filterAll],["dispatched",t.filterDispatched],["received",t.filterReceived]].map(([v,l])=>(
+            <button key={v} onClick={()=>setStatusFilter(v)}
+              style={{ padding:"9px 16px", borderRadius:8, border:"none",
+                background:statusFilter===v?"#1A3A5C":"#f1f5f9",
+                color:statusFilter===v?"white":"#374151",
+                cursor:"pointer", fontSize:13, fontWeight:600 }}>
+              {l}
+              <span style={{ marginLeft:6, fontSize:11, fontWeight:700,
+                background:statusFilter===v?"rgba(255,255,255,0.25)":"#e2e8f0",
+                color:statusFilter===v?"white":"#64748b",
+                padding:"1px 7px", borderRadius:99 }}>
+                {v==="all" ? visibleTrips.length : visibleTrips.filter(tr=>tr.status===v).length}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {filtered.length === 0 && (
+        <div style={{ textAlign:"center", padding:"48px 0", color:"#94a3b8" }}>
+          <div style={{ fontSize:48, marginBottom:12 }}>🗺️</div>
+          <div style={{ fontSize:15, fontWeight:600 }}>{t.noTimelineTrips}</div>
+        </div>
+      )}
+
+      {filtered.map(trip => {
+        const steps = getTimelineSteps(trip);
+        const sla = getSLAStatus(trip);
+        const tripId = trip.firestoreId||trip.id;
+        const invCount = (trip.invoiceIds||[]).length;
+        return (
+          <div key={tripId} style={{
+            background:"white", borderRadius:12, padding:"16px 20px",
+            boxShadow:"0 1px 4px rgba(0,0,0,0.07)", marginBottom:12,
+            borderLeft:`4px solid ${STATUS_COLOR[trip.status]||"#94a3b8"}`
+          }}>
+            {/* Header */}
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:8, marginBottom:14 }}>
+              <div>
+                <div style={{ fontWeight:800, fontSize:16, color:"#0f172a" }}>{trip.tripNumber||trip.id}</div>
+                <div style={{ fontSize:13, color:"#64748b", marginTop:2 }}>
+                  📍 {trip.fromDC} DC → {trip.toCityLabel||trip.toCity}
+                  {trip.date && <span style={{ marginLeft:10 }}>· 📅 {trip.date}</span>}
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                {sla && (
+                  <span style={{ fontSize:12, fontWeight:700, padding:"3px 10px", borderRadius:99, background:sla.bg, color:sla.color }}>
+                    {sla.label}
+                  </span>
+                )}
+                <span style={{ fontSize:12, fontWeight:700, padding:"3px 10px", borderRadius:99,
+                  background:STATUS_BG[trip.status]||"#f1f5f9",
+                  color:STATUS_COLOR[trip.status]||"#64748b" }}>
+                  {trip.status==="dispatched"?"🚚 Dispatched":"✅ Received"}
+                </span>
+              </div>
+            </div>
+
+            {/* Info row */}
+            <div style={{ display:"flex", gap:16, fontSize:13, color:"#64748b", marginBottom:14, flexWrap:"wrap" }}>
+              <span>👤 {trip.driver}</span>
+              <span>🚗 {trip.vehicle}</span>
+              {trip.storage && <span>🌡️ {trip.storage}</span>}
+              {invCount > 0 && <span>📋 {invCount} invoices</span>}
+              {trip.tentativeDate && <span>🎯 Due: {trip.tentativeDate}</span>}
+            </div>
+
+            {/* Mini Timeline steps */}
+            <div style={{ display:"flex", alignItems:"center", marginBottom:14 }}>
+              {steps.map((step, i) => (
+                <div key={step.key} style={{ display:"flex", alignItems:"center", flex: i < steps.length-1 ? 1 : "none" }}>
+                  <div style={{ display:"flex", flexDirection:"column", alignItems:"center", flexShrink:0 }}>
+                    <div style={{
+                      width:32, height:32, borderRadius:"50%",
+                      background:step.done ? step.color : "#e2e8f0",
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      fontSize:14, boxShadow:step.done ? `0 0 0 3px ${step.color}22` : "none"
+                    }}>
+                      {step.done ? step.icon : <span style={{ fontSize:12, color:"#94a3b8" }}>○</span>}
+                    </div>
+                    <div style={{ fontSize:10, fontWeight:600, color:step.done?step.color:"#94a3b8", marginTop:4, textAlign:"center", whiteSpace:"nowrap" }}>
+                      {step.label}
+                    </div>
+                    {step.timestamp && step.done && (
+                      <div style={{ fontSize:10, color:"#94a3b8", textAlign:"center", maxWidth:80 }}>
+                        {step.timestamp.length>10 ? step.timestamp.slice(0,10) : step.timestamp}
+                      </div>
+                    )}
+                  </div>
+                  {i < steps.length-1 && (
+                    <div style={{
+                      flex:1, height:2, marginBottom:24,
+                      background:steps[i+1].done
+                        ? `linear-gradient(90deg, ${step.color}, ${steps[i+1].color})`
+                        : "#e2e8f0"
+                    }} />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {trip.notes && (
+              <div style={{ fontSize:13, color:"#64748b", background:"#f8fafc", borderRadius:7, padding:"7px 12px", marginBottom:10 }}>
+                📝 {trip.notes}
+              </div>
+            )}
+
+            <button onClick={()=>setSelectedTrip(trip)}
+              style={{ background:"none", border:"1.5px solid #e2e8f0", borderRadius:7, padding:"7px 14px", fontSize:13, fontWeight:600, color:"#6366f1", cursor:"pointer" }}>
+              🔍 {t.viewTimeline}
+            </button>
+          </div>
+        );
+      })}
+
+      {/* DETAIL MODAL */}
+      {selectedTrip && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div style={{ background:"white", borderRadius:14, width:"100%", maxWidth:560, maxHeight:"90vh", overflowY:"auto", boxShadow:"0 20px 60px rgba(0,0,0,0.3)", direction:rtl?"rtl":"ltr" }}>
+
+            <div style={{ padding:"18px 22px", borderBottom:"1px solid #f1f5f9", display:"flex", justifyContent:"space-between", alignItems:"center", background:"#1A3A5C", borderRadius:"14px 14px 0 0" }}>
+              <div>
+                <div style={{ fontWeight:800, fontSize:17, color:"white" }}>{selectedTrip.tripNumber||selectedTrip.id}</div>
+                <div style={{ fontSize:13, color:"rgba(255,255,255,0.6)", marginTop:2 }}>{t.tripDetail}</div>
+              </div>
+              <button onClick={()=>setSelectedTrip(null)} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"white", width:32, height:32, borderRadius:"50%", cursor:"pointer", fontSize:16, fontWeight:700 }}>✕</button>
+            </div>
+
+            <div style={{ padding:"20px 22px" }}>
+
+              {/* Full Timeline */}
+              <div style={{ marginBottom:24 }}>
+                {getTimelineSteps(selectedTrip).map((step, i, arr) => (
+                  <div key={step.key} style={{ display:"flex", gap:14 }}>
+                    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", flexShrink:0 }}>
+                      <div style={{
+                        width:38, height:38, borderRadius:"50%",
+                        background:step.done?step.color:"#f1f5f9",
+                        display:"flex", alignItems:"center", justifyContent:"center",
+                        fontSize:16, flexShrink:0,
+                        boxShadow:step.done?`0 0 0 4px ${step.color}22`:"none"
+                      }}>
+                        {step.done ? step.icon : <span style={{ fontSize:18, color:"#cbd5e1" }}>○</span>}
+                      </div>
+                      {i < arr.length-1 && (
+                        <div style={{ width:2, flex:1, minHeight:32, background:step.done&&arr[i+1].done?step.color+"66":"#e2e8f0", margin:"4px 0" }} />
+                      )}
+                    </div>
+                    <div style={{ flex:1, paddingBottom:i < arr.length-1 ? 20 : 0 }}>
+                      <div style={{ fontWeight:700, fontSize:14, color:step.done?"#0f172a":"#94a3b8" }}>{step.label}</div>
+                      {step.done && step.desc && <div style={{ fontSize:13, color:"#64748b", marginTop:3 }}>{step.desc}</div>}
+                      {step.done && step.by && <div style={{ fontSize:12, color:"#94a3b8", marginTop:2 }}>By: {step.by}</div>}
+                      {step.done && step.timestamp && <div style={{ fontSize:12, color:"#94a3b8", marginTop:2 }}>🕐 {step.timestamp}</div>}
+                      {!step.done && <div style={{ fontSize:12, color:"#cbd5e1", marginTop:3 }}>Pending</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Trip Info Grid */}
+              <div style={{ background:"#f8fafc", borderRadius:10, padding:"14px 16px", marginBottom:20 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, fontSize:13 }}>
+                  {[
+                    ["📦 From", `${selectedTrip.fromDC} Distribution Center`],
+                    ["📍 To", selectedTrip.toCityLabel||selectedTrip.toCity],
+                    ["👤 Driver", selectedTrip.driver],
+                    ["🚗 Vehicle", selectedTrip.vehicle],
+                    ["🌡️ Storage", selectedTrip.storage||"-"],
+                    ["📅 Trip Date", selectedTrip.date],
+                    ["🎯 Tentative Date", selectedTrip.tentativeDate||"-"],
+                    ["✍️ Created By", selectedTrip.createdBy||"-"],
+                  ].map(([label,value]) => (
+                    <div key={label}>
+                      <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, marginBottom:2 }}>{label}</div>
+                      <div style={{ fontWeight:600, color:"#0f172a" }}>{value}</div>
+                    </div>
+                  ))}
+                  {selectedTrip.receivedBy && (
+                    <div style={{ gridColumn:"1/-1" }}>
+                      <div style={{ fontSize:11, color:"#94a3b8", fontWeight:600, marginBottom:2 }}>✅ {t.receivedBy}</div>
+                      <div style={{ fontWeight:600, color:"#10b981" }}>{selectedTrip.receivedBy} — {selectedTrip.receivedAt}</div>
+                    </div>
+                  )}
+                </div>
+                {selectedTrip.notes && (
+                  <div style={{ marginTop:10, paddingTop:10, borderTop:"1px solid #e2e8f0", fontSize:13, color:"#64748b" }}>
+                    📝 {selectedTrip.notes}
+                  </div>
+                )}
+              </div>
+
+              {/* Invoices */}
+              <div>
+                <div style={{ fontWeight:700, fontSize:14, color:"#0f172a", marginBottom:10 }}>📋 {t.invoicesInTrip}</div>
+                {tripInvoices.length === 0 ? (
+                  <div style={{ textAlign:"center", padding:"16px 0", color:"#94a3b8", fontSize:13 }}>📭 {t.noInvoices}</div>
+                ) : (
+                  tripInvoices.map(inv => (
+                    <div key={inv.id||inv.firestoreId} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", background:"#f8fafc", borderRadius:8, marginBottom:6 }}>
+                      <span style={{ fontWeight:700, fontSize:14, color:"#6366f1", minWidth:100 }}>{inv.id}</span>
+                      <span style={{ flex:1, fontSize:13, color:"#374151" }}>{inv.customer}</span>
+                      <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:99,
+                        background:inv.status==="delivered"?"#d1fae5":inv.status==="failed"?"#fee2e2":"#dbeafe",
+                        color:inv.status==="delivered"?"#065f46":inv.status==="failed"?"#991b1b":"#1e40af"
+                      }}>
+                        {inv.status==="delivered"?"✅ Delivered":inv.status==="failed"?"❌ Failed":"🚚 "+(inv.status||"In Transit")}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div style={{ display:"flex", gap:8, marginTop:20 }}>
+                <Btn small onClick={()=>printTripReport(selectedTrip)} color="#6366f1">{t.printTrip}</Btn>
+                <Btn small onClick={()=>setSelectedTrip(null)} color="#64748b">{t.close}</Btn>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export default function Trips({ user, invoices, setInvoices, trips, setTrips, lang }) {
   const [tab, setTab] = useState("outgoing");
   const [showForm, setShowForm] = useState(false);
@@ -103,7 +422,8 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
 
   const tabs = [
     ["outgoing","🚚",t.outgoingTrips],
-    ["incoming","📥",t.incomingTrips]
+    ["incoming","📥",t.incomingTrips],
+    ["timeline","🗺️",t.timeline],
   ];
 
   useEffect(() => { loadData(); }, []);
@@ -111,49 +431,32 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
   async function loadData() {
     setLoading(true);
     try {
-      // Firestore se drivers load
       const uSnap = await getDocs(collection(db, "users"));
       const allUsers = uSnap.docs.map(d=>({uid:d.id,...d.data()}));
       setFsDrivers(allUsers.filter(u=>u.role==="driver"&&u.dc===userDC&&(u.status==="active"||u.status==="Active")));
-
-      // Firestore se vehicles load
       const vSnap = await getDocs(collection(db, "vehicles"));
       const allVeh = vSnap.docs.map(d=>({id:d.id,...d.data()}));
       setFsVehicles(allVeh.filter(v=>v.dc===userDC&&v.status!=="Maintenance"));
-
-      // Firestore se trips load
       const tSnap = await getDocs(collection(db, "trips"));
       setTrips(tSnap.docs.map(d=>({firestoreId:d.id,...d.data()})));
     } catch(e) { console.error("Trips load error:", e); }
     setLoading(false);
   }
 
-  // Outgoing trips — is DC se bheje gaye
   const outgoingTrips = trips.filter(tr=>tr.fromDC===userDC);
-
-  // Incoming trips — is DC ko aa rahe hain (status: dispatched)
   const incomingTrips = trips.filter(tr=>{
     if (tr.status==="received") return false;
     const destDC = tr.toCity?.startsWith("DC-") ? tr.toCity.replace("DC-","") : null;
     return destDC === userDC && tr.status === "dispatched";
   });
-
-  // Trip number
   const tripNum = `TRIP-${new Date().getFullYear()}-${String(outgoingTrips.length+1).padStart(3,"0")}`;
-
-  // Destination select hone par — hold_ship invoices dhundho
   const destDC = form.toCity?.startsWith("DC-") ? form.toCity.replace("DC-","") : null;
-
-  // Assigned invoices in current DC
   const assignedInvs = invoices.filter(i=>i.dc===userDC&&i.uploadBatch&&i.status==="assigned");
-
-  // Hold_ship invoices — Jeddah/Dammam ne mark kiya, origin: Riyadh (current DC)
   const transitInvs = destDC ? invoices.filter(i=>
     i.status==="hold_ship" &&
     (i.holdOrigin===userDC||i.originDC===userDC) &&
     i.dc===destDC
   ) : [];
-
   const selVehicle = fsVehicles.find(v=>v.plate===form.vehicle);
   const selDriver = fsDrivers.find(d=>d.name===form.driver);
 
@@ -161,27 +464,16 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
     if (!form.toCity||!form.driver||!form.vehicle||!form.tentativeDate) { alert("Please fill all required fields including Tentative Completion Date"); return; }
     const dest = TRIP_DESTINATIONS?.find(d=>d.value===form.toCity);
     const newTrip = {
-      tripNumber:tripNum,
-      date:form.date,
-      fromDC:userDC,
-      toCity:form.toCity,
-      toCityLabel:dest?.label||form.toCity,
-      driver:form.driver,
-      vehicle:form.vehicle,
-      storage:form.storage,
-      notes:form.notes,
-      tentativeDate:form.tentativeDate||"",
-      status:"dispatched",
-      invoiceIds:selInv,
-      createdBy:user.name,
-      createdAt:new Date().toLocaleString(),
+      tripNumber:tripNum, date:form.date, fromDC:userDC,
+      toCity:form.toCity, toCityLabel:dest?.label||form.toCity,
+      driver:form.driver, vehicle:form.vehicle, storage:form.storage,
+      notes:form.notes, tentativeDate:form.tentativeDate||"",
+      status:"dispatched", invoiceIds:selInv,
+      createdBy:user.name, createdAt:new Date().toLocaleString(),
     };
-
     try {
       const docRef = await addDoc(collection(db,"trips"), newTrip);
       newTrip.firestoreId = docRef.id;
-
-      // Invoices ko intransit mark karo
       for (const invId of selInv) {
         const inv = invoices.find(i=>(i.id===invId||i.firestoreId===invId));
         if (inv?.firestoreId) {
@@ -190,10 +482,8 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
       }
       setInvoices(prev=>prev.map(i=>
         selInv.includes(i.id)||selInv.includes(i.firestoreId)
-          ? {...i,status:"intransit",tripId:tripNum}
-          : i
+          ? {...i,status:"intransit",tripId:tripNum} : i
       ));
-
       setTrips(prev=>[...prev,newTrip]);
       setDone(t.tripCreated);
       setShowForm(false);
@@ -204,106 +494,66 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
 
   async function receiveTrip(trip) {
     try {
-      const updateData = {
-        status:"received",
-        receivedBy:user.name,
-        receivedAt:new Date().toLocaleString()
-      };
-
-      // Trip update
-      if (trip.firestoreId) {
-        await updateDoc(doc(db,"trips",trip.firestoreId), updateData);
-      }
-
-      // Invoices update
+      const updateData = { status:"received", receivedBy:user.name, receivedAt:new Date().toLocaleString() };
+      if (trip.firestoreId) { await updateDoc(doc(db,"trips",trip.firestoreId), updateData); }
       for (const invId of (trip.invoiceIds||[])) {
         const inv = invoices.find(i=>i.id===invId||i.firestoreId===invId);
         if (!inv) continue;
-
         let invUpdate = {};
-        if (inv.status==="intransit") {
-          // Normal assigned invoice — pending
-          invUpdate = {status:"pending_trip",tripId:null};
-        } else if (inv.status==="hold_ship") {
-          // Transit invoice — DC change karo
-          const destDC = trip.toCity?.startsWith("DC-") ? trip.toCity.replace("DC-","") : userDC;
-          invUpdate = {
-            status:"pending_trip",
-            dc:destDC,
-            city:destDC,
-            holdType:null,
-            holdOrigin:null,
-            originDC:null,
-            holdReason:null,
-            tripId:null
-          };
+        if (inv.status==="intransit") { invUpdate = {status:"pending_trip",tripId:null}; }
+        else if (inv.status==="hold_ship") {
+          const destDCr = trip.toCity?.startsWith("DC-") ? trip.toCity.replace("DC-","") : userDC;
+          invUpdate = { status:"pending_trip", dc:destDCr, city:destDCr, holdType:null, holdOrigin:null, originDC:null, holdReason:null, tripId:null };
         }
-
         if (Object.keys(invUpdate).length>0 && inv.firestoreId) {
           try { await updateDoc(doc(db,"invoices",inv.firestoreId), invUpdate); } catch(e){console.error(e);}
         }
       }
-
       setInvoices(prev=>prev.map(i=>{
         if (!(trip.invoiceIds||[]).includes(i.id)&&!(trip.invoiceIds||[]).includes(i.firestoreId)) return i;
-        const destDC = trip.toCity?.startsWith("DC-") ? trip.toCity.replace("DC-","") : userDC;
+        const destDCr = trip.toCity?.startsWith("DC-") ? trip.toCity.replace("DC-","") : userDC;
         if (i.status==="intransit") return {...i,status:"pending_trip",tripId:null};
-        if (i.status==="hold_ship") return {...i,status:"pending_trip",dc:destDC,city:destDC,holdType:null,holdOrigin:null,originDC:null,holdReason:null,tripId:null};
+        if (i.status==="hold_ship") return {...i,status:"pending_trip",dc:destDCr,city:destDCr,holdType:null,holdOrigin:null,originDC:null,holdReason:null,tripId:null};
         return i;
       }));
-
       setTrips(prev=>prev.map(tr=>tr.firestoreId===trip.firestoreId?{...tr,...updateData}:tr));
       setDone(t.tripReceived);
     } catch(e) { setDone("❌ Error: "+e.message); }
   }
 
-  function toggleInv(id) {
-    setSelInv(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
-  }
-
+  function toggleInv(id) { setSelInv(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]); }
   const storageOptions = STORAGE_CONDITIONS?.map(s=>s.name+" ("+s.range+")")||["Ambient (15-25°C)","Refrigerated (2-8°C)","Frozen (-20°C)"];
 
   return (
     <div style={{direction:rtl?"rtl":"ltr"}}>
       {done&&<SuccessMsg msg={done}/>}
-
       <TabBar tabs={tabs} active={tab} onChange={setTab}/>
 
-      {/* ===== OUTGOING TRIPS ===== */}
+      {/* ===== OUTGOING ===== */}
       {tab==="outgoing"&&(
         <div>
           {canManage&&!showForm&&(
-            <Btn onClick={()=>setShowForm(true)} style={{marginBottom:16,padding:"12px 24px",fontSize:15}}>
-              🚀 {t.newTrip}
-            </Btn>
+            <Btn onClick={()=>setShowForm(true)} style={{marginBottom:16,padding:"12px 24px",fontSize:15}}>🚀 {t.newTrip}</Btn>
           )}
-
-          {/* New Trip Form */}
           {showForm&&(
             <Card style={{borderTop:"4px solid #10b981",marginBottom:16}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
                 <CardTitle style={{margin:0}}>🚚 New Trip — {userDC} Distribution Center</CardTitle>
                 <Btn small onClick={()=>setShowForm(false)} color="#64748b">{t.cancel}</Btn>
               </div>
-
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:"0 16px"}}>
-                {/* Trip Number */}
                 <div style={{marginBottom:14}}>
                   <label style={{display:"block",fontSize:14,fontWeight:600,color:"#374151",marginBottom:6}}>{t.tripNo}</label>
                   <div style={{background:"#f8fafc",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"11px 14px",fontSize:15,color:"#64748b"}}>{tripNum}</div>
                 </div>
-
-                {/* Trip Date */}
                 <div style={{marginBottom:14}}>
                   <label style={{display:"block",fontSize:14,fontWeight:600,color:"#374151",marginBottom:6}}>{t.tripDate}</label>
                   <input type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})}
                     style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"11px 14px",fontSize:15,outline:"none",boxSizing:"border-box"}}/>
                 </div>
-
-                {/* Destination */}
                 <div style={{gridColumn:"1/-1",marginBottom:14}}>
                   <label style={{display:"block",fontSize:14,fontWeight:600,color:"#374151",marginBottom:6}}>{t.destination}</label>
-                  <select value={form.toCity} onChange={e=>setForm({...form,toCity:e.target.value,})}
+                  <select value={form.toCity} onChange={e=>setForm({...form,toCity:e.target.value})}
                     style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"11px 14px",fontSize:15,outline:"none",background:"white",boxSizing:"border-box"}}>
                     <option value="">Select destination...</option>
                     <optgroup label="Distribution Centers">
@@ -318,17 +568,11 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
                     </optgroup>
                   </select>
                 </div>
-
-                {/* Driver */}
                 <div style={{marginBottom:14}}>
                   <label style={{display:"block",fontSize:14,fontWeight:600,color:"#374151",marginBottom:6}}>👤 {t.driver}</label>
-                  {loading?(
-                    <div style={{padding:"11px 14px",fontSize:14,color:"#94a3b8"}}>⏳ {t.loadingDrivers}</div>
-                  ):fsDrivers.length===0?(
-                    <div style={{padding:"11px 14px",fontSize:14,color:"#ef4444",background:"#fee2e2",borderRadius:8}}>
-                      ⚠️ No drivers found for {userDC} DC
-                    </div>
-                  ):(
+                  {loading?<div style={{padding:"11px 14px",fontSize:14,color:"#94a3b8"}}>⏳ {t.loadingDrivers}</div>
+                  :fsDrivers.length===0?<div style={{padding:"11px 14px",fontSize:14,color:"#ef4444",background:"#fee2e2",borderRadius:8}}>⚠️ No drivers found for {userDC} DC</div>
+                  :(
                     <select value={form.driver} onChange={e=>setForm({...form,driver:e.target.value})}
                       style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"11px 14px",fontSize:15,outline:"none",background:"white",boxSizing:"border-box"}}>
                       <option value="">Select driver...</option>
@@ -336,30 +580,18 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
                     </select>
                   )}
                 </div>
-
-                {/* Vehicle */}
                 <div style={{marginBottom:14}}>
                   <label style={{display:"block",fontSize:14,fontWeight:600,color:"#374151",marginBottom:6}}>🚗 {t.vehicle}</label>
-                  {loading?(
-                    <div style={{padding:"11px 14px",fontSize:14,color:"#94a3b8"}}>⏳ {t.loadingVehicles}</div>
-                  ):fsVehicles.length===0?(
-                    <div style={{padding:"11px 14px",fontSize:14,color:"#ef4444",background:"#fee2e2",borderRadius:8}}>
-                      ⚠️ No vehicles found for {userDC} DC
-                    </div>
-                  ):(
+                  {loading?<div style={{padding:"11px 14px",fontSize:14,color:"#94a3b8"}}>⏳ {t.loadingVehicles}</div>
+                  :fsVehicles.length===0?<div style={{padding:"11px 14px",fontSize:14,color:"#ef4444",background:"#fee2e2",borderRadius:8}}>⚠️ No vehicles found for {userDC} DC</div>
+                  :(
                     <select value={form.vehicle} onChange={e=>setForm({...form,vehicle:e.target.value})}
                       style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"11px 14px",fontSize:15,outline:"none",background:"white",boxSizing:"border-box"}}>
                       <option value="">Select vehicle...</option>
-                      {fsVehicles.map(v=>(
-                        <option key={v.plate||v.id} value={v.plate}>
-                          {v.plate} — {v.type} ({v.fuelLevel||0}L fuel)
-                        </option>
-                      ))}
+                      {fsVehicles.map(v=><option key={v.plate||v.id} value={v.plate}>{v.plate} — {v.type} ({v.fuelLevel||0}L fuel)</option>)}
                     </select>
                   )}
                 </div>
-
-                {/* Storage */}
                 <div style={{marginBottom:14}}>
                   <label style={{display:"block",fontSize:14,fontWeight:600,color:"#374151",marginBottom:6}}>🌡️ {t.storage}</label>
                   <select value={form.storage} onChange={e=>setForm({...form,storage:e.target.value})}
@@ -367,48 +599,39 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
                     {storageOptions.map(s=><option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
-
-                {/* Notes */}
+                <div style={{gridColumn:"1/-1",marginBottom:14}}>
+                  <label style={{display:"block",fontSize:14,fontWeight:600,color:"#374151",marginBottom:6}}>
+                    📅 Tentative Completion Date <span style={{color:"#ef4444"}}>*</span>
+                  </label>
+                  <input type="date" value={form.tentativeDate} onChange={e=>setForm({...form,tentativeDate:e.target.value})}
+                    style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"11px 14px",fontSize:15,outline:"none",boxSizing:"border-box"}}/>
+                  <div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>Required for SLA tracking</div>
+                </div>
                 <div style={{gridColumn:"1/-1",marginBottom:14}}>
                   <label style={{display:"block",fontSize:14,fontWeight:600,color:"#374151",marginBottom:6}}>📝 {t.notes}</label>
-                  <div style={{marginBottom:14}}>
-                    <label style={{display:"block",fontSize:14,fontWeight:600,color:"#374151",marginBottom:6}}>
-                      📅 Tentative Completion Date * <span style={{color:"#ef4444"}}>*</span>
-                    </label>
-                    <input type="date" value={form.tentativeDate} onChange={e=>setForm({...form,tentativeDate:e.target.value})}
-                      style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"11px 14px",fontSize:15,outline:"none",boxSizing:"border-box"}} />
-                    <div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>Required for SLA tracking</div>
-                  </div>
                   <textarea value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})} rows={2}
                     style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"11px 14px",fontSize:15,outline:"none",boxSizing:"border-box",resize:"vertical",fontFamily:"inherit"}}/>
                 </div>
               </div>
 
-              {/* Vehicle Detail */}
               {selVehicle&&(
                 <div style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:10,padding:"12px 16px",marginBottom:14}}>
                   <div style={{fontWeight:700,fontSize:14,color:"#0369a1",marginBottom:8}}>🚗 {selVehicle.plate} — {selVehicle.type}</div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,fontSize:14}}>
-                    <div style={{background:"white",borderRadius:8,padding:"8px 12px",textAlign:"center"}}>
-                      <div style={{fontSize:12,color:"#64748b"}}>⛽ Fuel</div>
-                      <div style={{fontWeight:800,fontSize:18,color:(selVehicle.fuelLevel||0)<20?"#ef4444":"#10b981"}}>{selVehicle.fuelLevel||0}L</div>
-                    </div>
-                    <div style={{background:"white",borderRadius:8,padding:"8px 12px",textAlign:"center"}}>
-                      <div style={{fontSize:12,color:"#64748b"}}>🛣️ KM</div>
-                      <div style={{fontWeight:800,fontSize:18,color:"#6366f1"}}>{(selVehicle.totalKM||0).toLocaleString()}</div>
-                    </div>
-                    <div style={{background:"white",borderRadius:8,padding:"8px 12px",textAlign:"center"}}>
-                      <div style={{fontSize:12,color:"#64748b"}}>📊 km/L</div>
-                      <div style={{fontWeight:800,fontSize:18,color:"#7c3aed"}}>{selVehicle.mileage||12}</div>
-                    </div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                    {[["⛽ Fuel",`${selVehicle.fuelLevel||0}L`,(selVehicle.fuelLevel||0)<20?"#ef4444":"#10b981"],
+                      ["🛣️ KM",(selVehicle.totalKM||0).toLocaleString(),"#6366f1"],
+                      ["📊 km/L",selVehicle.mileage||12,"#7c3aed"]
+                    ].map(([lbl,val,col])=>(
+                      <div key={lbl} style={{background:"white",borderRadius:8,padding:"8px 12px",textAlign:"center"}}>
+                        <div style={{fontSize:12,color:"#64748b"}}>{lbl}</div>
+                        <div style={{fontWeight:800,fontSize:18,color:col}}>{val}</div>
+                      </div>
+                    ))}
                   </div>
-                  {(selVehicle.fuelLevel||0)<20&&(
-                    <div style={{background:"#fee2e2",borderRadius:6,padding:"8px 12px",fontSize:13,color:"#991b1b",fontWeight:600,marginTop:8}}>⚠️ Low Fuel Warning!</div>
-                  )}
+                  {(selVehicle.fuelLevel||0)<20&&<div style={{background:"#fee2e2",borderRadius:6,padding:"8px 12px",fontSize:13,color:"#991b1b",fontWeight:600,marginTop:8}}>⚠️ Low Fuel Warning!</div>}
                 </div>
               )}
 
-              {/* Driver Detail */}
               {selDriver&&(
                 <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:10,padding:"12px 16px",marginBottom:14}}>
                   <div style={{fontWeight:700,fontSize:14,color:"#065f46"}}>👤 {selDriver.name}</div>
@@ -416,7 +639,6 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
                 </div>
               )}
 
-              {/* Assigned Invoices — Optional */}
               {assignedInvs.length>0&&(
                 <div style={{marginBottom:14}}>
                   <div style={{fontWeight:600,fontSize:14,color:"#374151",marginBottom:8}}>📋 {t.assignedInv}</div>
@@ -438,16 +660,11 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
                 </div>
               )}
 
-              {/* Transit Invoices — hold_ship */}
               {destDC&&(
                 <div style={{marginBottom:14}}>
-                  <div style={{fontWeight:700,fontSize:14,color:"#7c3aed",marginBottom:8}}>
-                    🚚 {t.pendingShipLabel} → {destDC} Distribution Center
-                  </div>
+                  <div style={{fontWeight:700,fontSize:14,color:"#7c3aed",marginBottom:8}}>🚚 {t.pendingShipLabel} → {destDC} Distribution Center</div>
                   {transitInvs.length===0?(
-                    <div style={{background:"#f5f3ff",border:"1px solid #c4b5fd",borderRadius:8,padding:"12px 16px",fontSize:14,color:"#6b21a8"}}>
-                      📭 {t.noHoldInv}
-                    </div>
+                    <div style={{background:"#f5f3ff",border:"1px solid #c4b5fd",borderRadius:8,padding:"12px 16px",fontSize:14,color:"#6b21a8"}}>📭 {t.noHoldInv}</div>
                   ):(
                     <div>
                       <div style={{background:"#f5f3ff",border:"1px solid #c4b5fd",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#6b21a8",marginBottom:10}}>
@@ -478,15 +695,13 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
                 </div>
               )}
 
-              <Btn onClick={createTrip} color="#10b981"
-                style={{width:"100%",padding:14,fontSize:15}}
+              <Btn onClick={createTrip} color="#10b981" style={{width:"100%",padding:14,fontSize:15}}
                 disabled={!form.toCity||!form.driver||!form.vehicle||!form.tentativeDate}>
                 🚀 {t.createBtn} {selInv.length>0?"("+selInv.length+" "+t.invoiceCount+")":""}
               </Btn>
             </Card>
           )}
 
-          {/* Outgoing Trips List */}
           <Card>
             <CardTitle>📋 {t.outgoingTrips} ({outgoingTrips.length})</CardTitle>
             {loading&&<div style={{textAlign:"center",padding:20,color:"#94a3b8"}}>⏳ {t.loading}</div>}
@@ -518,7 +733,7 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
         </div>
       )}
 
-      {/* ===== INCOMING TRIPS ===== */}
+      {/* ===== INCOMING ===== */}
       {tab==="incoming"&&(
         <div>
           <Card>
@@ -541,7 +756,6 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
                     </div>
                     <Btn small onClick={()=>printTripReport(trip)} color="#6366f1">{t.printTrip}</Btn>
                   </div>
-
                   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:8,fontSize:14,color:"#374151",marginBottom:12}}>
                     <div>📦 <b>{t.from}:</b> {trip.fromDC} Distribution Center</div>
                     <div>📍 <b>{t.to}:</b> {userDC} Distribution Center</div>
@@ -551,8 +765,6 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
                     <div>🌡️ {trip.storage}</div>
                     {tripInvoices.length>0&&<div>📋 {tripInvoices.length} invoices</div>}
                   </div>
-
-                  {/* Invoices in this trip */}
                   {tripInvoices.length>0&&(
                     <div style={{marginBottom:12}}>
                       <div style={{fontWeight:600,fontSize:13,color:"#374151",marginBottom:8}}>📋 Invoices in this trip:</div>
@@ -567,30 +779,18 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
                       ))}
                     </div>
                   )}
-
                   {trip.notes&&<div style={{fontSize:13,color:"#64748b",marginBottom:12}}>📝 {trip.notes}</div>}
-
                   {canManage&&(
-                    <Btn onClick={()=>receiveTrip(trip)} color="#10b981" style={{width:"100%",padding:12,fontSize:15}}>
-                      ✅ {t.confirmReceipt}
-                    </Btn>
+                    <Btn onClick={()=>receiveTrip(trip)} color="#10b981" style={{width:"100%",padding:12,fontSize:15}}>✅ {t.confirmReceipt}</Btn>
                   )}
                 </div>
               );
             })}
           </Card>
-
-          {/* Received trips history */}
-          {trips.filter(tr=>{
-            const destDC = tr.toCity?.startsWith("DC-") ? tr.toCity.replace("DC-","") : null;
-            return destDC===userDC&&tr.status==="received";
-          }).length>0&&(
+          {trips.filter(tr=>{ const d=tr.toCity?.startsWith("DC-")?tr.toCity.replace("DC-",""):null; return d===userDC&&tr.status==="received"; }).length>0&&(
             <Card>
               <CardTitle>✅ Recently Received</CardTitle>
-              {trips.filter(tr=>{
-                const destDC = tr.toCity?.startsWith("DC-") ? tr.toCity.replace("DC-","") : null;
-                return destDC===userDC&&tr.status==="received";
-              }).map(trip=>(
+              {trips.filter(tr=>{ const d=tr.toCity?.startsWith("DC-")?tr.toCity.replace("DC-",""):null; return d===userDC&&tr.status==="received"; }).map(trip=>(
                 <div key={trip.firestoreId||trip.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 0",borderBottom:"1px solid #f1f5f9",flexWrap:"wrap"}}>
                   <span style={{fontWeight:700,fontSize:14,color:"#6366f1"}}>{trip.tripNumber||trip.id}</span>
                   <span style={{fontSize:13,color:"#64748b",flex:1}}>From: {trip.fromDC} DC | {trip.date}</span>
@@ -601,6 +801,11 @@ export default function Trips({ user, invoices, setInvoices, trips, setTrips, la
             </Card>
           )}
         </div>
+      )}
+
+      {/* ===== TRIP TIMELINE ===== */}
+      {tab==="timeline"&&(
+        <TripTimeline trips={trips} invoices={invoices} userDC={userDC} user={user} t={t} lang={lang} />
       )}
     </div>
   );
