@@ -6,7 +6,7 @@ import { collection, getDocs, deleteDoc, doc } from "firebase/firestore";
 import { db } from "../firebase";
 import { Card, CardTitle, StatCard } from "../components/Shared.jsx";
 import { RC, RA } from "../data/masterData.js";
-import { ROLES } from "../constants/roles.js";
+import { ROLES } from "../roles.js";
 
 // ─── TRANSLATIONS ─────────────────────────────────────────────────────────────
 const T = {
