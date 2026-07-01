@@ -126,8 +126,15 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
   const [totalKM, setTotalKM] = useState(0);
   const [lastGPS, setLastGPS] = useState(null);
   const [view, setView] = useState("deliveries");
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const timerRef = useRef(null);
   const gpsWatchRef = useRef(null);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const [history, setHistory] = useState(() => {
     try { return JSON.parse(localStorage.getItem("driver_history_"+user.uid)||"[]"); } catch { return []; }
@@ -424,7 +431,12 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
             <div style={{ marginBottom:16 }}>
               <div style={{ fontWeight:700,fontSize:15,marginBottom:8,color:"#1A3A5C" }}>{t.gpsStep}</div>
               <button onClick={getGPS} disabled={locating}
-                style={{ background:gps?"#10b981":"#0ea5e9",color:"white",border:"none",padding:"12px 16px",borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:14,width:"100%" }}>
+                style={{
+                  background:gps?"#10b981":"#0ea5e9", color:"white", border:"none",
+                  padding: isMobile ? "16px" : "12px 16px",
+                  borderRadius:8, cursor:"pointer", fontWeight:700,
+                  fontSize: isMobile ? 15 : 14, width:"100%"
+                }}>
                 {locating?t.gettingGPS:gps?"✅ GPS: "+gps.lat.toFixed(4)+", "+gps.lng.toFixed(4):"📍 "+t.getGPS}
               </button>
             </div>
@@ -463,11 +475,21 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
               {!showFailForm?(
                 <>
                   <button onClick={()=>submit(inv,"delivered")}
-                    style={{ flex:1,background:"#10b981",color:"white",border:"none",padding:"12px 0",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:14 }}>
+                    style={{
+                      flex:1, background:"#10b981", color:"white", border:"none",
+                      padding: isMobile ? "16px 0" : "12px 0",
+                      borderRadius:8, fontWeight:700, cursor:"pointer",
+                      fontSize: isMobile ? 16 : 14
+                    }}>
                     ✅ {t.markDelivered}
                   </button>
                   <button onClick={()=>setShowFailForm(true)}
-                    style={{ flex:1,background:"#ef4444",color:"white",border:"none",padding:"12px 0",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:14 }}>
+                    style={{
+                      flex:1, background:"#ef4444", color:"white", border:"none",
+                      padding: isMobile ? "16px 0" : "12px 0",
+                      borderRadius:8, fontWeight:700, cursor:"pointer",
+                      fontSize: isMobile ? 16 : 14
+                    }}>
                     ❌ {t.markFailed}
                   </button>
                 </>
@@ -491,7 +513,14 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
           </div>
         ):(
           <button onClick={()=>{setActive(inv);setGps(null);setPod(null);setFailReason("");setShowFailForm(false);}}
-            style={{ background:"#1A3A5C",color:"white",border:"none",padding:"12px 20px",borderRadius:8,fontWeight:700,cursor:"pointer",fontSize:14,marginTop:8,width:"100%" }}>
+            style={{
+              background:"#1A3A5C", color:"white", border:"none",
+              padding: isMobile ? "16px 20px" : "12px 20px",
+              borderRadius:8, fontWeight:700, cursor:"pointer",
+              fontSize: isMobile ? 16 : 14,
+              marginTop:8, width:"100%",
+              boxShadow: isMobile ? "0 4px 12px rgba(26,58,92,0.3)" : "none"
+            }}>
             {t.startDelivery} →
           </button>
         )}
@@ -499,32 +528,88 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
     );
   }
 
+  const accentColor = "#b45309";
+
+  // Tab definitions
+  const tabDefs = [
+    { v:"deliveries", icon:"📦", label:`Staged (${pending.length})`, mobileIcon:"📦", mobileLabel:"Staged" },
+    { v:"delivered",  icon:"✅", label:`Delivered (${deliveredInv.length})`, mobileIcon:"✅", mobileLabel:"Delivered" },
+    { v:"failed",     icon:"❌", label:`Failed (${failedInv.length})`, mobileIcon:"❌", mobileLabel:"Failed" },
+    { v:"history",    icon:"📊", label:"Trip History", mobileIcon:"📊", mobileLabel:"History" },
+    { v:"fuel",       icon:"⛽", label:t.fuelTab, mobileIcon:"⛽", mobileLabel:"Fuel" },
+  ];
+
   return (
-    <div style={{ direction:rtl?"rtl":"ltr" }}>
+    <div style={{ direction:rtl?"rtl":"ltr", paddingBottom: isMobile ? 80 : 0 }}>
       {done&&<SuccessMsg msg={done} />}
 
-      {/* Tabs */}
-      <div style={{ display:"flex",gap:8,marginBottom:16,flexWrap:"wrap" }}>
-        {[
-          ["deliveries","📦",`Staged for Dispatch (${pending.length})`],
-          ["delivered","✅",`Delivered (${deliveredInv.length})`],
-          ["failed","❌",`Failed (${failedInv.length})`],
-          ["history","📊","Trip History"],
-          ["fuel","⛽",t.fuelTab]
-        ].map(([v,icon,label])=>(
-          <button key={v} onClick={()=>setView(v)}
-            style={{ padding:"10px 18px",borderRadius:8,border:"none",
-              background:view===v?"#1A3A5C":"#f1f5f9",
-              color:view===v?"white":"#374151",
-              cursor:"pointer",fontSize:14,fontWeight:600 }}>
-            {icon} {label}
-          </button>
-        ))}
-      </div>
+      {/* MOBILE: Sticky top summary bar */}
+      {isMobile && (
+        <div style={{
+          position:"sticky", top:0, zIndex:50,
+          background:"#1A3A5C", color:"white",
+          padding:"10px 16px", marginBottom:14, marginLeft:-20, marginRight:-20,
+          display:"flex", alignItems:"center", justifyContent:"space-between"
+        }}>
+          <div>
+            <div style={{ fontSize:11, opacity:0.7 }}>Today's Progress</div>
+            <div style={{ fontSize:16, fontWeight:800 }}>
+              {doneList.length} done · {pending.length} remaining
+            </div>
+          </div>
+          <div style={{ textAlign:"right" }}>
+            <div style={{ fontSize:11, opacity:0.7 }}>Trip Timer</div>
+            <div style={{ fontSize:18, fontWeight:900, fontFamily:"monospace", color: tripStarted?"#10b981":"rgba(255,255,255,0.6)" }}>
+              {formatTime(elapsed)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DESKTOP TABS */}
+      {!isMobile && (
+        <div style={{ display:"flex", gap:8, marginBottom:16, flexWrap:"wrap" }}>
+          {tabDefs.map(({v,icon,label})=>(
+            <button key={v} onClick={()=>setView(v)}
+              style={{ padding:"10px 18px", borderRadius:8, border:"none",
+                background:view===v?"#1A3A5C":"#f1f5f9",
+                color:view===v?"white":"#374151",
+                cursor:"pointer", fontSize:14, fontWeight:600 }}>
+              {icon} {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* MOBILE BOTTOM NAV */}
+      {isMobile && (
+        <div style={{
+          position:"fixed", bottom:0, left:0, right:0, zIndex:200,
+          background:"white", borderTop:"1px solid #e2e8f0",
+          display:"flex", alignItems:"stretch",
+          boxShadow:"0 -4px 16px rgba(0,0,0,0.1)"
+        }}>
+          {tabDefs.map(({v,mobileIcon,mobileLabel})=>(
+            <button key={v} onClick={()=>setView(v)}
+              style={{
+                flex:1, border:"none", background:"none",
+                padding:"10px 4px 14px",
+                display:"flex", flexDirection:"column", alignItems:"center", gap:3,
+                cursor:"pointer",
+                borderTop: view===v ? `3px solid ${accentColor}` : "3px solid transparent",
+                color: view===v ? accentColor : "#94a3b8",
+              }}>
+              <span style={{ fontSize:20 }}>{mobileIcon}</span>
+              <span style={{ fontSize:10, fontWeight:view===v?700:500 }}>{mobileLabel}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {view==="deliveries"&&(
         <div>
-          {/* Trip Timer */}
+          {/* Trip Timer — desktop only (mobile shows sticky top bar) */}
+          {!isMobile && (
           <Card style={{ borderTop:"4px solid #6366f1" }}>
             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10 }}>
               <div>
@@ -544,6 +629,35 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
               </div>
             </div>
           </Card>
+          )}
+
+          {/* Mobile Trip Start/End Button */}
+          {isMobile && (
+            <div style={{ marginBottom:14 }}>
+              {!tripStarted ? (
+                <button onClick={startTrip} style={{
+                  width:"100%", background:"#10b981", color:"white", border:"none",
+                  borderRadius:14, padding:"18px 0", fontSize:18, fontWeight:900,
+                  cursor:"pointer", boxShadow:"0 4px 16px rgba(16,185,129,0.35)"
+                }}>🚀 {t.startTrip}</button>
+              ) : (
+                <div>
+                  <div style={{ display:"flex", gap:10, alignItems:"center", background:"#f0fdf4", borderRadius:12, padding:"12px 16px", marginBottom:10 }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:11, color:"#64748b" }}>Trip Active</div>
+                      <div style={{ fontSize:22, fontWeight:900, color:"#6366f1", fontFamily:"monospace" }}>{formatTime(elapsed)}</div>
+                      <div style={{ fontSize:12, color:"#64748b" }}>📍 {totalKM} km · ⛽ ~{Math.round(totalKM/(assignedVehicle?.mileage||12)*10)/10}L</div>
+                    </div>
+                    <button onClick={handleEndTripClick} style={{
+                      background:"#ef4444", color:"white", border:"none",
+                      borderRadius:12, padding:"14px 20px", fontSize:15, fontWeight:800,
+                      cursor:"pointer", flexShrink:0
+                    }}>🏁 End Trip</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ODOMETER FORM MODAL — shown when End Trip clicked */}
           {showOdometerForm&&(
@@ -615,18 +729,18 @@ export default function Driver({ user, invoices, setInvoices, vehicles, lang }) 
           )}
 
           {/* Stats */}
-          <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:16 }}>
-            <div style={{ background:"white",borderRadius:10,padding:14,textAlign:"center",borderTop:"4px solid #f59e0b",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
-              <div style={{ fontSize:28,fontWeight:900,color:"#f59e0b" }}>{pending.length}</div>
-              <div style={{ fontSize:13,color:"#64748b" }}>{t.remaining}</div>
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap: isMobile ? 8 : 12,marginBottom:16 }}>
+            <div style={{ background:"white",borderRadius:10,padding: isMobile ? "12px 8px" : 14,textAlign:"center",borderTop:"4px solid #f59e0b",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
+              <div style={{ fontSize: isMobile ? 32 : 28,fontWeight:900,color:"#f59e0b" }}>{pending.length}</div>
+              <div style={{ fontSize: isMobile ? 11 : 13,color:"#64748b" }}>{t.remaining}</div>
             </div>
-            <div style={{ background:"white",borderRadius:10,padding:14,textAlign:"center",borderTop:"4px solid #10b981",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
-              <div style={{ fontSize:28,fontWeight:900,color:"#10b981" }}>{doneList.length}</div>
-              <div style={{ fontSize:13,color:"#64748b" }}>{t.completed}</div>
+            <div style={{ background:"white",borderRadius:10,padding: isMobile ? "12px 8px" : 14,textAlign:"center",borderTop:"4px solid #10b981",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
+              <div style={{ fontSize: isMobile ? 32 : 28,fontWeight:900,color:"#10b981" }}>{doneList.length}</div>
+              <div style={{ fontSize: isMobile ? 11 : 13,color:"#64748b" }}>{t.completed}</div>
             </div>
-            <div style={{ background:"white",borderRadius:10,padding:14,textAlign:"center",borderTop:"4px solid #6366f1",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
-              <div style={{ fontSize:28,fontWeight:900,color:"#6366f1" }}>{myInv.length}</div>
-              <div style={{ fontSize:13,color:"#64748b" }}>{t.pending}</div>
+            <div style={{ background:"white",borderRadius:10,padding: isMobile ? "12px 8px" : 14,textAlign:"center",borderTop:"4px solid #6366f1",boxShadow:"0 1px 3px rgba(0,0,0,0.06)" }}>
+              <div style={{ fontSize: isMobile ? 32 : 28,fontWeight:900,color:"#6366f1" }}>{myInv.length}</div>
+              <div style={{ fontSize: isMobile ? 11 : 13,color:"#64748b" }}>{t.pending}</div>
             </div>
           </div>
 

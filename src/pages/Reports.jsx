@@ -135,6 +135,33 @@ function downloadCSV(data, filename) {
   a.download = filename; a.click();
 }
 
+// Excel export using SheetJS — proper .xlsx with styled header row
+async function downloadExcel(data, filename, sheetName = "Report") {
+  if (!data.length) return;
+  try {
+    const XLSX = await import("https://cdn.sheetjs.com/xlsx-0.20.2/package/xlsx.mjs");
+    const ws = XLSX.utils.json_to_sheet(data);
+    // Bold header row
+    const range = XLSX.utils.decode_range(ws["!ref"]);
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const cell = ws[XLSX.utils.encode_cell({ r: 0, c: C })];
+      if (cell) { cell.s = { font: { bold: true }, fill: { fgColor: { rgb: "1A3A5C" } } }; }
+    }
+    // Auto column widths
+    const colWidths = Object.keys(data[0]).map(key => ({
+      wch: Math.max(key.length, ...data.map(r => String(r[key] || "").length)) + 2
+    }));
+    ws["!cols"] = colWidths;
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, filename);
+  } catch(e) {
+    console.error("Excel export error:", e);
+    // Fallback to CSV if SheetJS fails
+    downloadCSV(data, filename.replace(".xlsx", ".csv"));
+  }
+}
+
 function downloadPDF(elementId, filename) {
   const el = document.getElementById(elementId);
   if (!el) return;
@@ -257,7 +284,8 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
         ["daily","📊",t.daily],["driver","👤",t.driver],
         ["vehicle","🚗",t.vehicle],["fuel","⛽",t.fuel],
         ["aging","⏱️",t.aging],["unassigned","⚪",t.unassignedReport],
-        ["ledger","📒","Ledger"],["heatmap","🗺️","SLA Heatmap"]
+        ["ledger","📒","Ledger"],["heatmap","🗺️","SLA Heatmap"],
+        ["monthly","📅","Monthly Report"]
       ];
 
   // Trip logs filtered by period + DC
@@ -483,6 +511,10 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
               {driverList.map(d=><option key={d.uid} value={d.uid}>{d.name} — {d.dc}</option>)}
             </select>
             <div style={{ display:"flex", gap:8, marginLeft:"auto" }}>
+              <button onClick={()=>downloadExcel(filteredDriverStats.map(d=>({Driver:d.name,DC:d.dc,Total:d.total,Delivered:d.delivered,Failed:d.failed,"Rate (%)":d.rate,"KM Covered":d.totalKM,"Fuel Used (L)":d.fuelUsed,"Active Days":d.activeDays,"Working Days":d.workingDays,"Unassigned Days":d.unassignedDays,"Productivity (%)":d.productivity})),"driver_report.xlsx","Driver Report")}
+                style={{ background:"#1a7f37", color:"white", border:"none", padding:"8px 14px", borderRadius:7, cursor:"pointer", fontSize:13, fontWeight:600 }}>
+                📊 Excel
+              </button>
               <button onClick={()=>downloadCSV(filteredDriverStats.map(d=>({Driver:d.name,DC:d.dc,Total:d.total,Delivered:d.delivered,Failed:d.failed,Rate:d.rate+"%",KM:d.totalKM,Fuel:d.fuelUsed+"L",ActiveDays:d.activeDays,WorkingDays:d.workingDays,UnassignedDays:d.unassignedDays,Productivity:d.productivity+"%"})),"driver_report.csv")}
                 style={{ background:"#10b981", color:"white", border:"none", padding:"8px 14px", borderRadius:7, cursor:"pointer", fontSize:13, fontWeight:600 }}>
                 ⬇ {t.csvDownload}
@@ -594,6 +626,17 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
               {vehicleList.map(v=><option key={v.plate||v.id} value={v.plate}>{v.plate} — {v.dc}</option>)}
             </select>
             <div style={{ display:"flex", gap:8, marginLeft:"auto" }}>
+              <button onClick={()=>{
+                const data=filteredVehicles.map(v=>{
+                  const vTrips=myTripLogs.filter(tl=>tl.vehiclePlate===v.plate);
+                  const periodKM=vTrips.reduce((s,tl)=>s+(tl.totalKM||0),0);
+                  const activeDays=vTrips.reduce((s,tl)=>s+(tl.daysActive||1),0);
+                  return {Plate:v.plate,Type:v.type,DC:v.dc,Status:v.status,"Total KM":v.totalKM||0,"Period KM":Math.round(periodKM),"Active Days":Math.round(activeDays*2)/2,"Fuel Used (L)":Math.round(vTrips.reduce((s,tl)=>s+(tl.fuelUsed||0),0)*10)/10};
+                });
+                downloadExcel(data,"vehicle_report.xlsx","Vehicle Report");
+              }} style={{ background:"#1a7f37", color:"white", border:"none", padding:"8px 14px", borderRadius:7, cursor:"pointer", fontSize:13, fontWeight:600 }}>
+                📊 Excel
+              </button>
               <button onClick={()=>{
                 const data=filteredVehicles.map(v=>{
                   const vTrips=myTripLogs.filter(tl=>tl.vehiclePlate===v.plate);
@@ -736,6 +779,10 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
           <Card style={{ borderTop:"4px solid #f59e0b" }}>
             <CardTitle>⛽ {t.fuelRep} — {userDC?dcLabel(userDC,t):selDC==="all"?"All Distribution Centers":selDC}
               <div style={{ marginLeft:"auto", display:"flex", gap:8 }}>
+                <button onClick={()=>downloadExcel(filteredFuelLogs.map(l=>({Date:l.date,Vehicle:l.vehicle,Driver:l.driver,"Liters":l.liters,"Cost (SAR)":l.sar,"Trip KM":l.tripKM,"Efficiency (km/L)":l.liters>0?(l.tripKM/l.liters).toFixed(1):"-",DC:l.dc,Status:l.status||"approved"})),"fuel_report.xlsx","Fuel Report")}
+                  style={{ background:"#1a7f37", color:"white", border:"none", padding:"6px 14px", borderRadius:6, cursor:"pointer", fontSize:13, fontWeight:600 }}>
+                  📊 Excel
+                </button>
                 <button onClick={()=>downloadCSV(filteredFuelLogs.map(l=>({ID:l.id,Date:l.date,Vehicle:l.vehicle,Driver:l.driver,Liters:l.liters,SAR:l.sar,KM:l.tripKM,Efficiency:l.liters>0?(l.tripKM/l.liters).toFixed(1)+" km/L":"-",DC:l.dc})),"fuel_report.csv")}
                   style={{ background:"#10b981", color:"white", border:"none", padding:"6px 14px", borderRadius:6, cursor:"pointer", fontSize:13, fontWeight:600 }}>
                   ⬇ {t.csvDownload}
@@ -940,11 +987,437 @@ export default function Reports({ user, invoices, fuelLogs, vehicles, users, lan
           lang={lang}
         />
       )}
+
+      {/* ══════════════════════════════════════
+          TAB: MONTHLY REPORT
+      ══════════════════════════════════════ */}
+      {tab==="monthly"&&(
+        <MonthlyReport
+          invoices={invoices}
+          vehicles={myVeh}
+          users={myUsers}
+          fuelLogs={myLogs}
+          tripLogs={tripLogs}
+          userDC={userDC}
+          user={user}
+          lang={lang}
+        />
+      )}
     </div>
   );
 }
 
-// ── LEDGER TAB ────────────────────────────────────────────────────────────────
+// ── MONTHLY REPORT ────────────────────────────────────────────────────────────
+function MonthlyReport({ invoices, vehicles, users, fuelLogs, tripLogs, userDC, user, lang }) {
+  const now = new Date();
+  const [selMonth, setSelMonth] = useState(
+    `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`
+  );
+  const [selDC, setSelDC] = useState(userDC || "all");
+  const rtl = lang === "ar";
+
+  const [yr, mo] = selMonth.split("-").map(Number);
+  const monthFrom = `${selMonth}-01`;
+  const monthTo   = `${selMonth}-${String(new Date(yr, mo, 0).getDate()).padStart(2,"0")}`;
+  const monthName = new Date(yr, mo-1, 1).toLocaleString("en-US", { month:"long", year:"numeric" });
+
+  const rateColor = r => r >= 80 ? "#10b981" : r >= 50 ? "#f59e0b" : "#ef4444";
+
+  // Scoped data
+  const scopeInv = invoices.filter(i => {
+    if (!i.uploadBatch || !i.date) return false;
+    if (i.date < monthFrom || i.date > monthTo) return false;
+    if (selDC !== "all" && i.dc !== selDC) return false;
+    return true;
+  });
+  const scopeVeh = vehicles.filter(v => selDC === "all" || v.dc === selDC);
+  const scopeFuel = fuelLogs.filter(l => {
+    if (!l.date || l.date < monthFrom || l.date > monthTo) return false;
+    if (selDC !== "all" && l.dc !== selDC) return false;
+    return l.status !== "pending_approval" && l.status !== "rejected";
+  });
+  const scopeTrips = tripLogs.filter(tl => {
+    if (!tl.startDate || tl.startDate < monthFrom || tl.startDate > monthTo) return false;
+    if (selDC !== "all" && tl.dc !== selDC) return false;
+    return true;
+  });
+  const scopeDrivers = (users||[]).filter(u => u.role === "driver" && (selDC === "all" || u.dc === selDC));
+
+  // KPIs
+  const countable = scopeInv.filter(i => !["scheduled","hold_await","hold_ship","intransit","cancelled"].includes(i.status));
+  const delivered = scopeInv.filter(i => i.status === "delivered").length;
+  const failed    = scopeInv.filter(i => i.status === "failed").length;
+  const rate      = countable.length > 0 ? Math.round(delivered / countable.length * 100) : 0;
+  const totalFuelL   = scopeFuel.reduce((s,l) => s+(l.liters||0), 0);
+  const totalFuelSAR = scopeFuel.reduce((s,l) => s+(l.sar||0), 0);
+  const totalKM      = scopeTrips.reduce((s,t) => s+(t.totalKM||0), 0);
+  const activeVeh    = scopeVeh.filter(v => v.status === "Active").length;
+  const criticalAging= scopeInv.filter(i => {
+    if (!["pending","outstanding"].includes(i.status) || !i.date) return false;
+    return Math.floor((new Date() - new Date(i.date)) / (1000*60*60*24)) >= 3;
+  }).length;
+
+  // Top drivers
+  const driverMap = {};
+  scopeInv.filter(i => i.driverId).forEach(i => {
+    if (!driverMap[i.driverId]) driverMap[i.driverId] = { name:i.driverName||i.driverId, dc:i.dc||"", delivered:0, failed:0, total:0 };
+    driverMap[i.driverId].total++;
+    if (i.status === "delivered") driverMap[i.driverId].delivered++;
+    if (i.status === "failed")    driverMap[i.driverId].failed++;
+  });
+  const topDrivers = Object.values(driverMap)
+    .map(d => ({ ...d, rate: d.total > 0 ? Math.round(d.delivered/d.total*100) : 0 }))
+    .sort((a,b) => b.delivered - a.delivered)
+    .slice(0, 5);
+
+  // DC breakdown
+  const dcStats = ["Riyadh","Jeddah","Dammam"].map(dc => {
+    const inv = scopeInv.filter(i => i.dc === dc);
+    const cnt = inv.filter(i => !["scheduled","hold_await","hold_ship","intransit","cancelled"].includes(i.status));
+    const del = inv.filter(i => i.status === "delivered").length;
+    const r   = cnt.length > 0 ? Math.round(del/cnt.length*100) : 0;
+    return { dc, total:inv.length, delivered:del, failed:inv.filter(i=>i.status==="failed").length, rate:r };
+  });
+
+  // Fail reasons breakdown
+  const failReasonMap = {};
+  scopeInv.filter(i => i.status === "failed" && i.failReason).forEach(i => {
+    failReasonMap[i.failReason] = (failReasonMap[i.failReason]||0) + 1;
+  });
+  const failReasons = Object.entries(failReasonMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+  // Vehicle doc expiry this month + next month
+  const twoMonthsLater = new Date(yr, mo+1, 0).toISOString().split("T")[0];
+  const expiryAlerts = scopeVeh.filter(v => {
+    const checks = [v.fahas, v.insurance, v.istimara];
+    return checks.some(d => d && d >= monthFrom && d <= twoMonthsLater);
+  });
+
+  function daysUntil(d) { return d ? Math.ceil((new Date(d)-new Date())/(1000*60*60*24)) : null; }
+
+  // Export to Excel
+  async function exportToExcel() {
+    try {
+      const XLSX = await import("https://cdn.sheetjs.com/xlsx-0.20.2/package/xlsx.mjs");
+      const wb = XLSX.utils.book_new();
+
+      // Sheet 1 — Summary
+      const summaryData = [
+        { Metric:"Report Month", Value:monthName },
+        { Metric:"DC", Value:selDC==="all"?"All DCs":selDC },
+        { Metric:"Total Invoices", Value:scopeInv.length },
+        { Metric:"Delivered", Value:delivered },
+        { Metric:"Failed", Value:failed },
+        { Metric:"Delivery Rate (%)", Value:rate },
+        { Metric:"Total KM", Value:Math.round(totalKM) },
+        { Metric:"Fuel Used (L)", Value:Math.round(totalFuelL*10)/10 },
+        { Metric:"Fuel Cost (SAR)", Value:totalFuelSAR },
+        { Metric:"Active Vehicles", Value:activeVeh },
+        { Metric:"Total Vehicles", Value:scopeVeh.length },
+        { Metric:"Critical Aging", Value:criticalAging },
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryData), "Summary");
+
+      // Sheet 2 — DC Breakdown
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dcStats.map(d=>({
+        "DC":d.dc, "Total Invoices":d.total, "Delivered":d.delivered,
+        "Failed":d.failed, "Delivery Rate (%)":d.rate
+      }))), "DC Breakdown");
+
+      // Sheet 3 — Top Drivers
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(topDrivers.map(d=>({
+        "Driver":d.name, "DC":d.dc, "Total":d.total,
+        "Delivered":d.delivered, "Failed":d.failed, "Rate (%)":d.rate
+      }))), "Top Drivers");
+
+      // Sheet 4 — All Invoices
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(scopeInv.map(i=>({
+        "Invoice #":i.id, "Customer":i.customer, "DC":i.dc,
+        "Date":i.date, "Status":i.status, "Driver":i.driverName||"-",
+        "Vehicle":i.vehicle||"-", "City":i.city||"-",
+        "Type":i.dtype==="incity"?"In-City":"Out-City",
+        "Storage":i.storage||"-", "Fail Reason":i.failReason||"-"
+      }))), "Invoices");
+
+      // Sheet 5 — Fuel Summary
+      if (scopeFuel.length > 0) {
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(scopeFuel.map(l=>({
+          "Date":l.date, "Vehicle":l.vehicle, "Driver":l.driver,
+          "Liters":l.liters, "Cost (SAR)":l.sar, "Trip KM":l.tripKM, "DC":l.dc
+        }))), "Fuel");
+      }
+
+      XLSX.writeFile(wb, `DeliverFlow_Monthly_${selMonth}_${selDC==="all"?"AllDCs":selDC}.xlsx`);
+    } catch(e) {
+      console.error("Export error:", e);
+      alert("Export failed. Please try again.");
+    }
+  }
+
+  // Export to PDF
+  function exportToPDF() {
+    const el = document.getElementById("monthly-report-content");
+    if (!el) return;
+    const w = window.open("","_blank");
+    w.document.write(`<html><head><title>Monthly Report — ${monthName}</title>
+    <style>
+      body{font-family:Arial,sans-serif;font-size:13px;padding:24px;color:#1a1a1a;}
+      h1{color:#1A3A5C;font-size:22px;margin-bottom:4px;}
+      h2{color:#1A3A5C;font-size:15px;margin:20px 0 8px;border-bottom:2px solid #e2e8f0;padding-bottom:6px;}
+      .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+      .kpi{border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center;}
+      .kpi-num{font-size:24px;font-weight:900;margin-bottom:4px;}
+      .kpi-lbl{font-size:11px;color:#64748b;}
+      table{width:100%;border-collapse:collapse;margin-bottom:16px;}
+      th{background:#1A3A5C;color:white;padding:8px 10px;text-align:left;font-size:12px;}
+      td{padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;}
+      tr:nth-child(even){background:#f8fafc;}
+      .bar-wrap{background:#f1f5f9;border-radius:99px;height:8px;overflow:hidden;margin-top:4px;}
+      .bar{height:100%;border-radius:99px;}
+      @media print{button{display:none}}
+    </style></head><body>
+    <h1>📅 Monthly Report — ${monthName}</h1>
+    <p style="color:#64748b;margin-bottom:20px;">DC: ${selDC==="all"?"All Distribution Centers":selDC+" Distribution Center"} &nbsp;|&nbsp; Generated: ${new Date().toLocaleString()}</p>
+    ${el.innerHTML}
+    <br/><button onclick="window.print()" style="background:#1A3A5C;color:white;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:14px;">🖨️ Print / Save PDF</button>
+    </body></html>`);
+    w.document.close();
+  }
+
+  const DC_COLORS_MAP = { Riyadh:"#1A3A5C", Jeddah:"#0f766e", Dammam:"#7c3aed" };
+  const avatarColors  = ["#2471A3","#0d9488","#7c3aed","#b45309","#dc2626"];
+
+  return (
+    <div style={{ direction:rtl?"rtl":"ltr" }}>
+
+      {/* Controls */}
+      <div style={{ display:"flex", gap:10, marginBottom:20, flexWrap:"wrap", alignItems:"center" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <span style={{ fontSize:13, fontWeight:600, color:"#374151" }}>📅 Month:</span>
+          <input type="month" value={selMonth} onChange={e=>setSelMonth(e.target.value)}
+            style={{ border:"1.5px solid #e2e8f0", borderRadius:8, padding:"8px 12px", fontSize:13, outline:"none", cursor:"pointer" }} />
+        </div>
+        {!userDC && (
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{ fontSize:13, fontWeight:600, color:"#374151" }}>📍 DC:</span>
+            <select value={selDC} onChange={e=>setSelDC(e.target.value)}
+              style={{ border:"1.5px solid #e2e8f0", borderRadius:8, padding:"8px 12px", fontSize:13, outline:"none", background:"white", cursor:"pointer" }}>
+              <option value="all">All Distribution Centers</option>
+              <option value="Riyadh">Riyadh</option>
+              <option value="Jeddah">Jeddah</option>
+              <option value="Dammam">Dammam</option>
+            </select>
+          </div>
+        )}
+        <div style={{ display:"flex", gap:8, marginLeft:"auto" }}>
+          <button onClick={exportToExcel}
+            style={{ background:"#1a7f37", color:"white", border:"none", padding:"9px 18px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700 }}>
+            📊 Export Excel
+          </button>
+          <button onClick={exportToPDF}
+            style={{ background:"#6366f1", color:"white", border:"none", padding:"9px 18px", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:700 }}>
+            🖨️ Export PDF
+          </button>
+        </div>
+      </div>
+
+      {/* Report Content */}
+      <div id="monthly-report-content">
+
+        {/* Title */}
+        <div style={{ background:"linear-gradient(135deg,#1A3A5C,#2471A3)", borderRadius:12, padding:"20px 24px", marginBottom:20, color:"white" }}>
+          <div style={{ fontSize:22, fontWeight:900, marginBottom:4 }}>📅 Monthly Report — {monthName}</div>
+          <div style={{ fontSize:14, opacity:0.75 }}>
+            {selDC==="all"?"All Distribution Centers":selDC+" Distribution Center"}
+            &nbsp;·&nbsp; Saudi Pharmaceutical Co. (SPCO)
+            &nbsp;·&nbsp; Generated: {new Date().toLocaleDateString()}
+          </div>
+        </div>
+
+        {/* KPI Cards */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))", gap:12, marginBottom:20 }}>
+          {[
+            { icon:"📊", label:"Delivery Rate",    value:rate+"%",                    color:rateColor(rate) },
+            { icon:"✅", label:"Delivered",         value:delivered,                   color:"#10b981" },
+            { icon:"❌", label:"Failed",            value:failed,                      color:"#ef4444" },
+            { icon:"📋", label:"Total Invoices",    value:scopeInv.length,             color:"#6366f1" },
+            { icon:"🚗", label:"Active Vehicles",   value:`${activeVeh}/${scopeVeh.length}`, color:"#0891b2" },
+            { icon:"⛽", label:"Fuel Used",         value:Math.round(totalFuelL)+"L",  color:"#f59e0b" },
+            { icon:"💰", label:"Fuel Cost",         value:"SAR "+totalFuelSAR.toLocaleString(), color:"#ef4444" },
+            { icon:"🛣️", label:"Total KM",          value:Math.round(totalKM).toLocaleString(), color:"#7c3aed" },
+            { icon:"⏱️", label:"Critical Aging",   value:criticalAging,               color:criticalAging>0?"#ef4444":"#10b981" },
+          ].map((k,i) => (
+            <div key={i} style={{ background:"white", borderRadius:10, padding:"14px", borderLeft:`4px solid ${k.color}`, boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
+              <div style={{ fontSize:11, color:"#64748b", fontWeight:600, marginBottom:4 }}>{k.icon} {k.label}</div>
+              <div style={{ fontSize:22, fontWeight:900, color:k.color }}>{k.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Delivery Rate bar */}
+        <div style={{ background:"white", borderRadius:12, padding:"18px 20px", boxShadow:"0 1px 4px rgba(0,0,0,0.06)", marginBottom:16 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+            <div style={{ fontWeight:700, fontSize:15 }}>📊 Overall Delivery Rate</div>
+            <div style={{ fontSize:26, fontWeight:900, color:rateColor(rate) }}>{rate}%</div>
+          </div>
+          <div style={{ background:"#f1f5f9", borderRadius:99, height:14, overflow:"hidden" }}>
+            <div style={{ width:`${rate}%`, height:"100%", background:rateColor(rate), borderRadius:99, transition:"width 0.6s" }} />
+          </div>
+          <div style={{ fontSize:12, color:"#94a3b8", marginTop:6 }}>
+            {delivered} delivered · {failed} failed · {scopeInv.filter(i=>["pending","assigned","outstanding"].includes(i.status)).length} pending · {scopeInv.length} total
+          </div>
+        </div>
+
+        {/* DC Breakdown */}
+        {selDC === "all" && (
+          <div style={{ background:"white", borderRadius:12, padding:"18px 20px", boxShadow:"0 1px 4px rgba(0,0,0,0.06)", marginBottom:16 }}>
+            <div style={{ fontWeight:700, fontSize:15, marginBottom:14 }}>📍 Distribution Center Breakdown</div>
+            {dcStats.map(dc => (
+              <div key={dc.dc} style={{ marginBottom:14 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                  <div>
+                    <span style={{ fontWeight:700, fontSize:14, color:DC_COLORS_MAP[dc.dc]||"#1A3A5C" }}>📍 {dc.dc} DC</span>
+                    <span style={{ fontSize:12, color:"#64748b", marginLeft:10 }}>{dc.total} invoices · {dc.delivered} del · {dc.failed} fail</span>
+                  </div>
+                  <span style={{ fontWeight:800, fontSize:18, color:rateColor(dc.rate) }}>{dc.rate}%</span>
+                </div>
+                <div style={{ background:"#f1f5f9", borderRadius:99, height:10, overflow:"hidden" }}>
+                  <div style={{ width:`${dc.rate}%`, height:"100%", background:DC_COLORS_MAP[dc.dc]||"#1A3A5C", borderRadius:99 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 2-col: Top Drivers + Fail Reasons */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
+
+          {/* Top Drivers */}
+          <div style={{ background:"white", borderRadius:12, padding:"18px 20px", boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
+            <div style={{ fontWeight:700, fontSize:15, marginBottom:14 }}>🏆 Top Delivery Partners</div>
+            {topDrivers.length === 0 ? (
+              <div style={{ textAlign:"center", padding:"20px 0", color:"#94a3b8", fontSize:13 }}>No activity this month</div>
+            ) : topDrivers.map((d,i) => {
+              const initials = (d.name||"?").split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
+              return (
+                <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 0", borderBottom: i<topDrivers.length-1?"1px solid #f1f5f9":"none" }}>
+                  <div style={{ width:34, height:34, borderRadius:"50%", background:avatarColors[i%avatarColors.length], display:"flex", alignItems:"center", justifyContent:"center", color:"white", fontWeight:700, fontSize:13, flexShrink:0 }}>
+                    {initials}
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontWeight:700, fontSize:13, color:"#0f172a", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{d.name}</div>
+                    <div style={{ fontSize:11, color:"#94a3b8" }}>{d.dc} · {d.delivered} delivered</div>
+                  </div>
+                  <div style={{ textAlign:"right" }}>
+                    <div style={{ fontWeight:800, fontSize:16, color:rateColor(d.rate) }}>{d.rate}%</div>
+                    <div style={{ fontSize:10, color:"#94a3b8" }}>{d.total} total</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Fail Reasons */}
+          <div style={{ background:"white", borderRadius:12, padding:"18px 20px", boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
+            <div style={{ fontWeight:700, fontSize:15, marginBottom:14 }}>❌ Failed Delivery Reasons</div>
+            {failReasons.length === 0 ? (
+              <div style={{ textAlign:"center", padding:"20px 0", color:"#10b981", fontSize:13 }}>✅ No failed deliveries!</div>
+            ) : failReasons.map(([reason, count], i) => {
+              const pct = failed > 0 ? Math.round(count/failed*100) : 0;
+              return (
+                <div key={i} style={{ marginBottom:12 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:4 }}>
+                    <span style={{ color:"#374151", fontWeight:600 }}>{reason}</span>
+                    <span style={{ color:"#ef4444", fontWeight:700 }}>{count} ({pct}%)</span>
+                  </div>
+                  <div style={{ background:"#f1f5f9", borderRadius:99, height:7, overflow:"hidden" }}>
+                    <div style={{ width:`${pct}%`, height:"100%", background:"#ef4444", borderRadius:99 }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Fuel + Fleet Summary */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
+          <div style={{ background:"white", borderRadius:12, padding:"18px 20px", boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
+            <div style={{ fontWeight:700, fontSize:15, marginBottom:14 }}>⛽ Fuel Summary</div>
+            {[
+              ["Total Liters", Math.round(totalFuelL*10)/10+"L", "#f59e0b"],
+              ["Total Cost", "SAR "+totalFuelSAR.toLocaleString(), "#ef4444"],
+              ["Total KM", Math.round(totalKM).toLocaleString()+" km", "#6366f1"],
+              ["Avg Efficiency", totalFuelL>0?(totalKM/totalFuelL).toFixed(1)+" km/L":"-", "#10b981"],
+              ["Fuel Entries", scopeFuel.length, "#0891b2"],
+            ].map(([label, val, color]) => (
+              <div key={label} style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:"1px solid #f8fafc", fontSize:14 }}>
+                <span style={{ color:"#64748b" }}>{label}</span>
+                <span style={{ fontWeight:700, color }}>{val}</span>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ background:"white", borderRadius:12, padding:"18px 20px", boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
+            <div style={{ fontWeight:700, fontSize:15, marginBottom:14 }}>🚗 Fleet Summary</div>
+            {[
+              ["Total Vehicles",   scopeVeh.length, "#6366f1"],
+              ["Active",           scopeVeh.filter(v=>v.status==="Active").length, "#10b981"],
+              ["In Maintenance",   scopeVeh.filter(v=>v.status==="Maintenance").length, "#f59e0b"],
+              ["Total Drivers",    (users||[]).filter(u=>u.role==="driver"&&(selDC==="all"||u.dc===selDC)).length, "#0891b2"],
+              ["Expiry Alerts",    expiryAlerts.length, expiryAlerts.length>0?"#ef4444":"#10b981"],
+            ].map(([label, val, color]) => (
+              <div key={label} style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:"1px solid #f8fafc", fontSize:14 }}>
+                <span style={{ color:"#64748b" }}>{label}</span>
+                <span style={{ fontWeight:700, color }}>{val}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Document Expiry Alerts */}
+        {expiryAlerts.length > 0 && (
+          <div style={{ background:"white", borderRadius:12, padding:"18px 20px", boxShadow:"0 1px 4px rgba(0,0,0,0.06)", marginBottom:16 }}>
+            <div style={{ fontWeight:700, fontSize:15, marginBottom:14 }}>
+              📄 Vehicle Document Expiry Alerts
+              <span style={{ marginLeft:8, fontSize:12, fontWeight:700, padding:"2px 10px", borderRadius:99, background:"#fee2e2", color:"#991b1b" }}>
+                {expiryAlerts.length} vehicles
+              </span>
+            </div>
+            {expiryAlerts.map(v => {
+              const docs = [["Fahas",v.fahas],["Insurance",v.insurance],["Istimara",v.istimara]]
+                .filter(([,d])=>d && daysUntil(d) !== null && daysUntil(d) <= 60);
+              return docs.map(([docLabel, date]) => {
+                const days = daysUntil(date);
+                const isCrit = days < 0 || days <= 14;
+                return (
+                  <div key={v.plate+docLabel} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"9px 0", borderBottom:"1px solid #f1f5f9", flexWrap:"wrap", gap:6 }}>
+                    <div>
+                      <span style={{ fontWeight:700, fontSize:13 }}>🚗 {v.plate}</span>
+                      <span style={{ fontSize:12, color:"#64748b", marginLeft:8 }}>{v.type} · {v.dc}</span>
+                      <div style={{ fontSize:12, color:isCrit?"#991b1b":"#92400e", marginTop:2 }}>
+                        {docLabel}: {date} ({days < 0 ? `${Math.abs(days)} days ago` : `${days} days left`})
+                      </div>
+                    </div>
+                    <span style={{ fontSize:12, fontWeight:700, padding:"3px 10px", borderRadius:99,
+                      background:isCrit?"#fee2e2":"#fef3c7", color:isCrit?"#991b1b":"#92400e" }}>
+                      {days < 0 ? "EXPIRED" : isCrit ? "Critical" : "Warning"}
+                    </span>
+                  </div>
+                );
+              });
+            })}
+          </div>
+        )}
+
+        {/* Footer */}
+        <div style={{ textAlign:"center", padding:"16px 0", fontSize:12, color:"#94a3b8", borderTop:"1px solid #f1f5f9" }}>
+          DeliverFlow SPCO · Saudi Pharmaceutical Co. · Monthly Report {monthName} · Generated {new Date().toLocaleString()}
+        </div>
+
+      </div>
+    </div>
+  );
+}
 function LedgerTab({ tripLogs, invoices, driverLeaves, fuelLogs, vehicleOffDays, holidays, additionalActivities, vehicles, users, user, fromDate, toDate, setFromDate, setToDate, t, getShiftForDCAndDate, userDC }) {
   const [subTab, setSubTab] = useState("driver");
   const [selDriver, setSelDriver] = useState("all");
@@ -1051,6 +1524,7 @@ function LedgerTab({ tripLogs, invoices, driverLeaves, fuelLogs, vehicleOffDays,
           <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} style={inputStyle} />
           <span style={{fontSize:13,color:"#64748b"}}>→</span>
           <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} style={inputStyle} />
+          <button onClick={()=>downloadExcel(dailyRows,"driver_ledger.xlsx","Driver Ledger")} style={{padding:"7px 14px",borderRadius:7,border:"none",background:"#1a7f37",color:"white",cursor:"pointer",fontWeight:600,fontSize:13}}>📊 Excel</button>
           <button onClick={()=>downloadCSV(dailyRows,"driver_ledger")} style={{padding:"7px 14px",borderRadius:7,border:"1px solid #6366f1",background:"white",color:"#6366f1",cursor:"pointer",fontWeight:600,fontSize:13}}>📥 CSV</button>
         </div>
 
@@ -1178,6 +1652,7 @@ function LedgerTab({ tripLogs, invoices, driverLeaves, fuelLogs, vehicleOffDays,
           <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} style={inputStyle} />
           <span style={{fontSize:13,color:"#64748b"}}>→</span>
           <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} style={inputStyle} />
+          <button onClick={()=>downloadExcel(dailyRows,"vehicle_ledger.xlsx","Vehicle Ledger")} style={{padding:"7px 14px",borderRadius:7,border:"none",background:"#1a7f37",color:"white",cursor:"pointer",fontWeight:600,fontSize:13}}>📊 Excel</button>
           <button onClick={()=>downloadCSV(dailyRows,"vehicle_ledger")} style={{padding:"7px 14px",borderRadius:7,border:"1px solid #6366f1",background:"white",color:"#6366f1",cursor:"pointer",fontWeight:600,fontSize:13}}>📥 CSV</button>
         </div>
 
